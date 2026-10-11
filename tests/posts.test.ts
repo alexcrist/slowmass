@@ -31,6 +31,7 @@ beforeEach(async () => {
       displayName: id,
       bio: `Private ${id}`,
     });
+  await runtime.db.prepare('DELETE FROM follow').run(); // Independent users for permission tests.
   await runtime.request('alice', '/api/people/bob/request', 'POST');
   await runtime.request('bob', '/api/people/alice/accept', 'POST');
 });

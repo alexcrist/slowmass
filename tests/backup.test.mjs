@@ -27,7 +27,7 @@ it('restores an authenticated encrypted SQL/photo archive in quarantine and reje
       sql += await readFile(`migrations/${name}`, 'utf8');
     sql += `INSERT INTO user VALUES('alice','Alice','alice@example.com',1,NULL,1,1);
   INSERT INTO membership(user_id,joined_at) VALUES('alice',1);
-  INSERT INTO profile VALUES('alice','alice','Alice','Bio',1);
+  INSERT INTO profile(user_id,handle,display_name,bio,created_at) VALUES('alice','alice','Alice','Bio',1);
   INSERT INTO post VALUES('photo','alice','Caption','Alt',1,1,'published','posts/photo.webp',120,80);`;
     const bytes = await readFile('tests/fixtures/photos/still.webp'),
       filename =

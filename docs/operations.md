@@ -48,6 +48,8 @@ The latest verified snapshot defines recoverable data. With daily successful cop
 
 The automated exercise verifies an encrypted synthetic SQL/photo archive and rejects tampered ciphertext. The initial production archive contains no photos, so its successful restore establishes database recovery only; synthetic fixtures establish the media path. On October 10, 2026, a disposable hosted D1 database was written with a synthetic value, bookmarked, changed, and restored to that bookmark. A subsequent query returned the original value. The disposable database was then deleted; production was not restored. A complete application cutover after disaster remains an operator procedure, not an automated guarantee.
 
+On October 11, before migration 0011, a fresh encrypted production archive passed quarantined local restoration, SQL integrity checks, and checksum verification for two stored images. Sessions were cleared and memberships disabled only in the disposable restored copy; production was not restored. The owner confirmed copying the initial recovery kit off-device; fresh backups still require manual off-device copying.
+
 ## Release and rollback
 
 Run `npm run check`, create/verify a backup, and apply migrations before dependent code serves traffic. For storage-ledger initialization, deploy the checked code in maintenance mode first, allow existing requests to drain, apply migrations, and redeploy without maintenance. Trigger migrations may require the documented atomic file-import workaround; include their `d1_migrations` entries in the same import. Never edit an applied migration.

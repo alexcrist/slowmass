@@ -1,4 +1,6 @@
 import { useEffect, useId, useState, type FormEvent } from 'react';
+import { PersonLink } from '../../navigation/PersonLink';
+import { profileHref } from '../../navigation';
 import { api, jsonRequest } from '../../api';
 type Counts = { likeCount: number; commentCount: number; liked: number };
 type Comment = {
@@ -19,6 +21,7 @@ export function Interactions({
 }) {
   const [counts, setCounts] = useState(initial),
     [open, setOpen] = useState(false),
+    [likesOpen, setLikesOpen] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   async function refresh() {
@@ -41,18 +44,55 @@ export function Interactions({
   }
   return (
     <section aria-label="Likes and comments">
-      <div className="actions">
+      <div className="post-interactions">
         <button
+          className="icon-button"
           disabled={busy}
+          aria-label={counts.liked ? 'Unlike photo' : 'Like photo'}
           aria-pressed={Boolean(counts.liked)}
           onClick={() => void like()}
         >
-          {counts.liked ? 'Unlike' : 'Like'} ({counts.likeCount})
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill={counts.liked ? 'currentColor' : 'none'}
+            stroke="currentColor"
+            strokeWidth="1.8"
+          >
+            <path d="M20 5c-3-3-6-1-8 1-2-2-5-4-8-1-4 4 1 9 8 15 7-6 12-11 8-15Z" />
+          </svg>
         </button>
-        <button aria-expanded={open} onClick={() => setOpen(!open)}>
-          {open ? 'Hide comments' : 'Comments'} ({counts.commentCount})
+        {counts.likeCount > 0 && (
+          <button
+            className="count-button"
+            aria-label={`See ${counts.likeCount} likes`}
+            aria-expanded={likesOpen}
+            onClick={() => setLikesOpen(!likesOpen)}
+          >
+            {counts.likeCount}
+          </button>
+        )}
+        <button
+          className="icon-button"
+          aria-label={open ? 'Hide comments' : 'Show comments'}
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+          >
+            <path d="M21 11a9 9 0 0 1-9 9H4l-2 2V11a9 9 0 0 1 19 0Z" />
+          </svg>
+          {counts.commentCount > 0 && <span>{counts.commentCount}</span>}
         </button>
       </div>
+      {likesOpen && (
+        <Likes key={`${postId}:${counts.likeCount}`} postId={postId} />
+      )}
       {error && <p role="alert">{error}</p>}
       {open && <Comments postId={postId} onChange={refresh} />}
     </section>
@@ -81,6 +121,7 @@ function Comments({
       { signal: controller.signal },
     )
       .then((data) => {
+        if (controller.signal.aborted) return;
         setPage(data);
         setError('');
       })
@@ -131,8 +172,7 @@ function Comments({
       <ul className="comment-list">
         {page?.items.map((comment) => (
           <li key={comment.id}>
-            <strong>{comment.displayName}</strong>{' '}
-            <span className="handle">@{comment.handle}</span>
+            <a href={profileHref(comment.handle)}>@{comment.handle}</a>
             <p className="bio">{comment.body}</p>
             <time dateTime={new Date(comment.createdAt).toISOString()}>
               {new Date(comment.createdAt).toLocaleString()}
@@ -200,5 +240,68 @@ function Comments({
         </div>
       )}
     </div>
+  );
+}
+function Likes({ postId }: { postId: string }) {
+  const [page, setPage] = useState<{
+      items: { handle: string; hasAvatar: number }[];
+      next: string | null;
+    } | null>(null),
+    [history, setHistory] = useState(['']),
+    [error, setError] = useState('');
+  const after = history[history.length - 1];
+  useEffect(() => {
+    const controller = new AbortController();
+    api<NonNullable<typeof page>>(
+      `/api/interactions/${postId}/likes?after=${encodeURIComponent(after)}`,
+      { signal: controller.signal },
+    )
+      .then((data) => {
+        if (!controller.signal.aborted) {
+          setPage(data);
+          setError('');
+        }
+      })
+      .catch((e) => {
+        if (!controller.signal.aborted) setError(e.message);
+      });
+    return () => controller.abort();
+  }, [postId, after]);
+  return (
+    <section aria-label="People who liked this photo">
+      <h3>Liked by</h3>
+      {!page && !error && <p role="status">Loading likes…</p>}
+      {error && <p role="alert">{error}</p>}
+      <ul className="people-list">
+        {page?.items.map((person) => (
+          <li key={person.handle}>
+            <PersonLink {...person} />
+          </li>
+        ))}
+      </ul>
+      {page?.items.length === 0 && <p>No likes to show.</p>}
+      <nav className="actions" aria-label="Like pages">
+        {history.length > 1 && (
+          <button
+            onClick={() => {
+              setPage(null);
+              setHistory(history.slice(0, -1));
+            }}
+          >
+            Previous
+          </button>
+        )}
+        {page?.next && (
+          <button
+            onClick={() => {
+              setPage(null);
+              setHistory([...history, page.next!]);
+            }}
+          >
+            Next
+          </button>
+        )}
+      </nav>
+    </section>
   );
 }

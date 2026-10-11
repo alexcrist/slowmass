@@ -28,9 +28,13 @@ Same-origin secure HTTP-only cookies; use the auth library for single-use email 
 
 A viewer can access a post only as its owner or through a current accepted follow, subject to blocks and deletion. Reuse this predicate for feeds, detail views, media, likes, comments, and notifications. Notification ownership alone never grants access to its target.
 
+Profile usernames, names, and avatars are visible to active signed-in members unless either member blocked the other. Bios and posts still require ownership or an accepted follow. Avatar media remains in private R2 and every request checks membership and blocks.
+
 Private media is served through an authenticated Worker route with a resource ID and allowlisted variant. Keep R2 public access disabled. Recheck authorization on every request, including conditional requests. Initially use `Cache-Control: private, no-store` for private content and avoid CDN/service-worker caching. This sacrifices cache efficiency for clear revocation semantics at small scale. Later, cached object bytes may be reused only behind authorization that runs on every request; never cache an authorized HTTP response publicly. Signed-link delivery is a future tradeoff, not an implicit weakening of revocation.
 
 Membership retains a permanent parent pointer to the inviter and the accepted invitation. D1 triggers atomically consume invitations and reject changes to provenance. Issuance and acceptance require an active inviter. The single bootstrap root is protected by a unique index. Preserve minimal tombstones through account deletion; do not build mass-ban tools yet.
+
+An initial-profile trigger creates mutual accepted follows between inviter and invitee once both profiles exist. It checks active membership and blocks in the same transaction. It does not run on profile edits or sign-in, and does not backfill completed profiles, so historical unfollows remain respected.
 
 Email delivery uses Resend with explicit application-wide and per-recipient budgets, without tracking pixels or link tracking. Better Auth stores one-time tokens hashed and rate-limits requests through D1. Real hosted delivery is an external setup gate.
 
@@ -49,6 +53,8 @@ If the image binding cannot meet the free-tier/runtime requirements, stop that i
 Query current accepted follows and visible published posts in descending `(published_at, id)` order. Use a validated cursor with a bounded page size and an upper snapshot boundary so newer inserts do not shift an ongoing pagination session. Preserve cursor history for Newer/Older navigation; a refresh starts a new snapshot. Current access and deletion always override the snapshot.
 
 Index actual query patterns and inspect query plans/rows scanned. Batch aggregate like/comment counts and viewer-like state per page. Avoid one query per card. Comments and notifications also have bounded cursor pagination. Do not precompute timelines until measurements justify the additional writes and revocation work.
+
+Member discovery uses a persisted random key with an index. A per-browse random starting point wraps around that index, giving stable shuffled keyset pages without sorting the entire directory randomly per request. Search applies a literal, case-insensitive ordered-subsequence match to usernames and names. It allows missing letters, not arbitrary spelling corrections. Queries have a three-character minimum, 350 ms client debounce, and a server limit of 30 requests/member/minute. Filtered searches can still scan many profiles; monitor D1 rows read and introduce a dedicated search index if actual size/usage requires it. No hosted search service is added.
 
 ## Operating cost and recovery
 

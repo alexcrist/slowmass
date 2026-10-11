@@ -83,7 +83,7 @@ export async function findProfile(
   const row = await db
     .prepare(
       `SELECT p.user_id, p.handle, p.display_name AS displayName,
-    CASE WHEN p.user_id = ? OR f.status = 'accepted' THEN EXISTS(SELECT 1 FROM avatar WHERE avatar.user_id=p.user_id) ELSE 0 END AS hasAvatar,
+    EXISTS(SELECT 1 FROM avatar WHERE avatar.user_id=p.user_id) AS hasAvatar,
     CASE WHEN p.user_id = ? OR f.status = 'accepted' THEN p.bio ELSE NULL END AS bio,
     CASE WHEN p.user_id = ? THEN 'self' ELSE COALESCE(f.status, 'none') END AS relationship
     FROM profile p JOIN membership m ON m.user_id = p.user_id
@@ -92,7 +92,7 @@ export async function findProfile(
     WHERE p.handle = ? AND m.status = 'active'
     AND NOT EXISTS (SELECT 1 FROM block WHERE (blocker_id = ? AND target_id = p.user_id) OR (blocker_id = p.user_id AND target_id = ?))`,
     )
-    .bind(viewer, viewer, viewer, viewer, viewer, handle, viewer, viewer)
+    .bind(viewer, viewer, viewer, viewer, handle, viewer, viewer)
     .first<{
       user_id: string;
       hasAvatar: number;
@@ -208,5 +208,80 @@ export async function listConnections(
   return {
     items: rows.results.slice(0, 20),
     next: rows.results.length > 20 ? rows.results[19].handle : null,
+  };
+}
+
+export async function discoverPeople(
+  db: D1Database,
+  actor: string,
+  query: string,
+  seed: string,
+  after: string,
+) {
+  const phase = after ? Number(after[0]) : 0;
+  const last = after ? after.slice(2) : '';
+  // Fuzzy finder semantics: characters may be omitted, but the remaining letters
+  // must stay in order. Escape LIKE metacharacters so input is always literal.
+  const pattern =
+    '%' +
+    Array.from(query, (char) =>
+      /[%_\\]/.test(char) ? `\\${char}` : char,
+    ).join('%') +
+    '%';
+  const rows = await db
+    .prepare(
+      `WITH candidates AS (
+    SELECT * FROM (SELECT p.handle,p.display_name AS displayName,p.discovery_key AS key,
+      EXISTS(SELECT 1 FROM avatar WHERE user_id=p.user_id) AS hasAvatar,0 AS phase
+      FROM profile p JOIN membership m ON m.user_id=p.user_id AND m.status='active'
+      WHERE ?=0 AND p.discovery_key>=? AND p.discovery_key>? AND p.user_id!=?
+      AND (?='' OR p.handle LIKE ? ESCAPE '\\' OR lower(p.display_name) LIKE ? ESCAPE '\\')
+      AND NOT EXISTS(SELECT 1 FROM block WHERE (blocker_id=? AND target_id=p.user_id) OR (blocker_id=p.user_id AND target_id=?))
+      ORDER BY p.discovery_key LIMIT 21)
+    UNION ALL
+    SELECT * FROM (SELECT p.handle,p.display_name AS displayName,p.discovery_key AS key,
+      EXISTS(SELECT 1 FROM avatar WHERE user_id=p.user_id) AS hasAvatar,1 AS phase
+      FROM profile p JOIN membership m ON m.user_id=p.user_id AND m.status='active'
+      WHERE p.discovery_key<? AND p.discovery_key>? AND p.user_id!=?
+      AND (?='' OR p.handle LIKE ? ESCAPE '\\' OR lower(p.display_name) LIKE ? ESCAPE '\\')
+      AND NOT EXISTS(SELECT 1 FROM block WHERE (blocker_id=? AND target_id=p.user_id) OR (blocker_id=p.user_id AND target_id=?))
+      ORDER BY p.discovery_key LIMIT 21)
+    ) SELECT * FROM candidates ORDER BY phase,key LIMIT 21`,
+    )
+    .bind(
+      phase,
+      seed,
+      last,
+      actor,
+      query,
+      pattern,
+      pattern,
+      actor,
+      actor,
+      seed,
+      phase === 1 ? last : '',
+      actor,
+      query,
+      pattern,
+      pattern,
+      actor,
+      actor,
+    )
+    .all<{
+      handle: string;
+      displayName: string;
+      hasAvatar: number;
+      key: string;
+      phase: number;
+    }>();
+  const items = rows.results.slice(0, 20);
+  const tail = items.at(-1);
+  return {
+    items: items.map(({ handle, displayName, hasAvatar }) => ({
+      handle,
+      displayName,
+      hasAvatar,
+    })),
+    next: rows.results.length > 20 && tail ? `${tail.phase}:${tail.key}` : null,
   };
 }

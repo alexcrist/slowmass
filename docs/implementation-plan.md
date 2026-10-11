@@ -1,6 +1,6 @@
 # Implementation plan
 
-Status: authentication, invitations, profiles, avatars, and follows deployed. Posts, feed, interactions, and notifications are deployed and API-tested. Account deletion, storage quotas, encrypted backup verification, hosted Time Travel drill, and initial usage inspection are implemented. Recurring backups, off-device handoff, and complete hosted beta verification remain open. Browser and visual testing are prohibited. Check boxes represent observed implementation/verification; a local check is not hosted verification.
+Status: authentication, invitations, profiles, avatars, and follows deployed. Posts, feed, interactions, and notifications are deployed and API-tested. Account deletion, storage quotas, encrypted backup verification, hosted Time Travel drill, and initial usage inspection are implemented. The owner confirmed copying the initial recovery kit off-device. Recurring backups and complete hosted beta verification remain open. Browser and visual testing are prohibited. Check boxes represent observed implementation/verification; a local check is not hosted verification.
 
 ## Approach
 
@@ -65,7 +65,8 @@ Exit: three-user API flow covers following, posting, liking, commenting, accepti
 - [x] Implement account deletion and recovery-aware cleanup, per-user upload/storage limits, and retained invitation provenance.
 - [ ] Finish broad mutation rate limits and operator invitation/block controls.
 - [x] Add aggregate usage inspection, bounded cleanup, cost monitoring instructions, encrypted backup/export tooling, synthetic SQL/photo restore verification, and a hosted Time Travel drill on a disposable database.
-- [ ] Establish recurring backups and retain a verified off-device copy. Current backup creation is manual; the owner will copy the recovery kit to Google Drive.
+- [x] Hand off the initial private recovery kit; the owner confirmed copying it off-device.
+- [ ] Establish recurring backups. Current backup creation and off-device copying remain manual.
 - [x] Add CI checks for format, lint, types, import boundaries, meaningful tests, migrations on a clean database, and production build. Keep production deploy explicit initially.
 
 Exit: real photos survive a documented restore in a nonproduction environment; deletion remains respected. No credentials or production data appear in test artifacts or logs.
@@ -80,6 +81,18 @@ Exit: real photos survive a documented restore in a nonproduction environment; d
 - [x] Write the operations runbook with storage controls, retention, recovery quarantine, usage observations, and measured limitations.
 
 Exit: an invited friend can sign in, post, follow another friend, and interact without developer assistance. No open privacy or data-integrity failures; any remaining limitations are explicit.
+
+## October 11 social and navigation update
+
+- [x] Fix accumulated page content by removing duplicate sibling keys and remounting distinct route roots; verify repeated page changes in a Node component test.
+- [x] Separate Settings from own/other profiles, show a paginated photo grid, and preserve private post/bio access while exposing username/name/avatar to active unblocked members.
+- [x] Keep magic links, clarify invited-member onboarding, recheck sign-in on returning to the window, and confine pasted-link help to installed apps.
+- [x] Put installation help only in Settings, retaining native install events across member page changes.
+- [x] Add username/avatar feed headers, icon interactions with positive counts, and an authorized paginated Liked by list.
+- [x] Establish mutual follows at initial profile completion for inviter/invitee, respecting blocks, inactivity, and later unfollows.
+- [x] Add fuzzy name/username discovery, a three-character minimum, debounce, server rate limiting, and stable shuffled directory pages.
+- [x] Add inviter-scoped invitation history, immutable issuance timestamps, cancellation, and a copyable message for manual sharing.
+- [x] Finish release checks (79 tests, format/lint/types/build and local migrations), verify a fresh encrypted production backup including two images, apply migration 0011, deploy, and verify deployed HTTP boundaries and asset hashes. No browser or visual tests.
 
 ## Completion evidence
 

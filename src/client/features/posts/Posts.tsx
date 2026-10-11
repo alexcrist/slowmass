@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { PersonLink } from '../../navigation/PersonLink';
 import { Interactions } from '../interactions/Interactions';
 import { api, jsonRequest } from '../../api';
 type Post = {
@@ -10,6 +11,7 @@ type Post = {
   publishedAt: number;
   handle: string;
   displayName: string;
+  hasAvatar: number;
   isOwner: boolean;
   mediaUrl: string;
   likeCount: number;
@@ -17,7 +19,14 @@ type Post = {
   liked: number;
 };
 type Page = { items: Post[]; next: string | null };
-export function PostList({ handle }: { handle?: string }) {
+export function PostList({
+  handle,
+  grid = false,
+}: {
+  handle?: string;
+  grid?: boolean;
+}) {
+  const [selected, setSelected] = useState<string | null>(null);
   const [history, setHistory] = useState(['']);
   const [page, setPage] = useState<Page | null>(null);
   const [error, setError] = useState('');
@@ -30,6 +39,7 @@ export function PostList({ handle }: { handle?: string }) {
     if (cursor) params.set('cursor', cursor);
     api<Page>(`/api/posts?${params}`, { signal: controller.signal })
       .then((result) => {
+        if (controller.signal.aborted) return;
         setPage(result);
         setError('');
       })
@@ -43,6 +53,26 @@ export function PostList({ handle }: { handle?: string }) {
     setHistory(['']);
     setVersion((value) => value + 1);
   }
+  if (selected)
+    return (
+      <>
+        <button onClick={() => setSelected(null)}>Back to photos</button>
+        <PostDetail
+          key={selected}
+          id={selected}
+          onDeleted={() => {
+            setPage((current) =>
+              current
+                ? {
+                    ...current,
+                    items: current.items.filter((post) => post.id !== selected),
+                  }
+                : current,
+            );
+          }}
+        />
+      </>
+    );
   return (
     <>
       <button type="button" onClick={refresh}>
@@ -61,22 +91,49 @@ export function PostList({ handle }: { handle?: string }) {
             : 'No posts on this page. Posts from accepted follows appear here.'}
         </p>
       )}
-      {page?.items.map((post) => (
-        <PostCard
-          key={post.id}
-          post={post}
-          onDelete={() =>
-            setPage((current) =>
-              current
-                ? {
-                    ...current,
-                    items: current.items.filter((item) => item.id !== post.id),
-                  }
-                : current,
-            )
-          }
-        />
-      ))}
+      {grid ? (
+        <div className="post-grid">
+          {page?.items.map((post) => (
+            <button
+              key={post.id}
+              className="grid-photo"
+              onClick={() => setSelected(post.id)}
+              aria-label={
+                post.caption
+                  ? `Open photo: ${post.caption.slice(0, 100)}`
+                  : `Open photo by @${post.handle}`
+              }
+            >
+              <img
+                src={post.mediaUrl}
+                alt={post.altText || ''}
+                width={post.width}
+                height={post.height}
+                loading="lazy"
+              />
+            </button>
+          ))}
+        </div>
+      ) : (
+        page?.items.map((post) => (
+          <PostCard
+            key={post.id}
+            post={post}
+            onDelete={() =>
+              setPage((current) =>
+                current
+                  ? {
+                      ...current,
+                      items: current.items.filter(
+                        (item) => item.id !== post.id,
+                      ),
+                    }
+                  : current,
+              )
+            }
+          />
+        ))
+      )}
       {page && (
         <nav className="actions" aria-label="Post pages">
           {history.length > 1 && (
@@ -125,15 +182,14 @@ function PostCard({ post, onDelete }: { post: Post; onDelete: () => void }) {
   return (
     <article className="post">
       <header>
-        <strong>{post.displayName}</strong>{' '}
-        <span className="handle">@{post.handle}</span>
+        <PersonLink handle={post.handle} hasAvatar={post.hasAvatar} />
         <time dateTime={new Date(post.publishedAt).toISOString()}>
           {new Date(post.publishedAt).toLocaleString()}
         </time>
       </header>
       <img
         src={post.mediaUrl}
-        alt={post.altText || `Photo by ${post.displayName}`}
+        alt={post.altText || `Photo by @${post.handle}`}
         width={post.width}
         height={post.height}
         loading="lazy"
@@ -235,7 +291,7 @@ export function Compose({ onPublished }: { onPublished: () => void }) {
     setError(
       confirmed
         ? 'Upload cancelled.'
-        : 'Cancellation could not be confirmed. Check My photos before trying again.',
+        : 'Cancellation could not be confirmed. Check your profile before trying again.',
     );
   }
   return (
@@ -316,14 +372,22 @@ export function Compose({ onPublished }: { onPublished: () => void }) {
   );
 }
 
-export function PostDetail({ id }: { id: string }) {
+export function PostDetail({
+  id,
+  onDeleted,
+}: {
+  id: string;
+  onDeleted?: () => void;
+}) {
   const [post, setPost] = useState<Post | null>(null),
     [error, setError] = useState(''),
     [deleted, setDeleted] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
     api<{ post: Post }>(`/api/posts/${id}`, { signal: controller.signal })
-      .then((data) => setPost(data.post))
+      .then((data) => {
+        if (!controller.signal.aborted) setPost(data.post);
+      })
       .catch((e) => {
         if (!controller.signal.aborted) setError(e.message);
       });
@@ -334,7 +398,13 @@ export function PostDetail({ id }: { id: string }) {
   ) : error ? (
     <p role="alert">{error}</p>
   ) : post ? (
-    <PostCard post={post} onDelete={() => setDeleted(true)} />
+    <PostCard
+      post={post}
+      onDelete={() => {
+        setDeleted(true);
+        onDeleted?.();
+      }}
+    />
   ) : (
     <p role="status">Loading photo…</p>
   );

@@ -35,7 +35,7 @@ The repository contains email-link authentication, member invitations, profiles,
 ## Privacy and security
 
 - Authorize every private resource, including image bytes, thumbnails, avatars, comments, and notifications. An opaque ID is not authorization.
-- An accepted follow grants access; a pending request does not. Removal, blocking, deletion, and logout must have tested access semantics.
+- An accepted follow grants access to posts and bios; a pending request does not. Username, profile name, and avatar are visible to active, signed-in, unblocked members. Removal, blocking, deletion, and logout must have tested access semantics.
 - Never introduce public object URLs or a cache path that bypasses authorization. Do not cache private API responses or photos in a service worker.
 - Use a maintained authentication library. Never invent OAuth, token signing, password hashing, or session cryptography. Keep development authentication physically excluded from production configuration.
 - Use secure HTTP-only session cookies, explicit trusted origins, library-supported CSRF protection, and server-side ownership checks. Keep secrets out of source, logs, client bundles, and fixtures.

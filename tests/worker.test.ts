@@ -345,6 +345,89 @@ describe('verified email and permanent invitation provenance', () => {
       ).status,
     ).toBe(200);
   });
+  it('lists only your invitations and cancels only your unused invitations without removing history', async () => {
+    const create = await emailWorker.dispatchFetch(
+      `${origin}/api/invitations`,
+      {
+        method: 'POST',
+        headers: requestHeaders(founderCookie),
+        body: '{"email":"cancelled@example.com"}',
+      },
+    );
+    expect(create.status).toBe(201);
+    const { invitation } = (await create.json()) as {
+      invitation: { id: string };
+    };
+    expect((await requestLink('cancelled@example.com')).status).toBe(200);
+    const unusedLink = lastLink('cancelled@example.com');
+    const list = async (cookie: string) =>
+      (
+        await emailWorker.dispatchFetch(`${origin}/api/invitations`, {
+          headers: requestHeaders(cookie),
+        })
+      ).json() as Promise<{
+        items: {
+          id: string;
+          email: string;
+          accepted: boolean;
+          revokedAt: number | null;
+          createdAt: number;
+        }[];
+      }>;
+    expect(await list(friendCookie)).toMatchObject({ items: [] });
+    const initial = await list(founderCookie);
+    expect(initial.items).toHaveLength(2);
+    expect(
+      initial.items.find((i) => i.email === 'friend@example.com')?.accepted,
+    ).toBe(true);
+    const item = initial.items.find((i) => i.id === invitation.id)!;
+    expect(item.createdAt).toBeGreaterThan(0);
+    await emailWorker.dispatchFetch(
+      `${origin}/api/invitations/${invitation.id}`,
+      {
+        method: 'DELETE',
+        headers: requestHeaders(friendCookie),
+      },
+    );
+    expect(
+      (await list(founderCookie)).items.find((i) => i.id === invitation.id)
+        ?.revokedAt,
+    ).toBeNull();
+    for (let i = 0; i < 2; i++)
+      await emailWorker.dispatchFetch(
+        `${origin}/api/invitations/${invitation.id}`,
+        {
+          method: 'DELETE',
+          headers: requestHeaders(founderCookie),
+        },
+      );
+    const cancelled = (await list(founderCookie)).items.find(
+      (i) => i.id === invitation.id,
+    )!;
+    expect(cancelled.revokedAt).toBeGreaterThan(0);
+    expect(cancelled.createdAt).toBe(item.createdAt);
+    const rejected = await emailWorker.dispatchFetch(unusedLink, {
+      redirect: 'manual',
+      headers: requestHeaders(),
+    });
+    expect(rejected.headers.get('location')).toContain('error=');
+    const db = await emailWorker.getD1Database('DB');
+    expect(
+      await db
+        .prepare("SELECT 1 FROM user WHERE email='cancelled@example.com'")
+        .first(),
+    ).toBeNull();
+    expect(
+      (
+        await emailWorker.dispatchFetch(
+          `${origin}/api/invitations?after=9999999999999999:invalid`,
+          {
+            headers: requestHeaders(founderCookie),
+          },
+        )
+      ).status,
+    ).toBe(400);
+  });
   it('prevents rewriting invitation attribution', async () => {
     const db = await emailWorker.getD1Database('DB');
     await expect(

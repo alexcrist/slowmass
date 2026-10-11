@@ -4,7 +4,13 @@ import type { Env } from '../../env';
 import { getActiveUser } from '../../auth';
 import { authConfigured } from '../../auth/options';
 import { findPost } from '../posts';
-import { addComment, commentPage, removeComment, setLike } from './index';
+import {
+  likePage,
+  addComment,
+  commentPage,
+  removeComment,
+  setLike,
+} from './index';
 export const interactions = new Hono<{
   Bindings: Env;
   Variables: { userId: string };
@@ -27,6 +33,17 @@ interactions.on(['PUT', 'DELETE'], '/:postId/like', async (c) => {
   if (!(await setLike(c.env.DB, actor, id, c.req.method === 'PUT')))
     return c.json({ error: 'Post not found.' }, 404);
   return c.json({ ok: true });
+});
+interactions.get('/:postId/likes', async (c) => {
+  const actor = c.get('userId'),
+    id = c.req.param('postId'),
+    after = c.req.query('after') ?? '';
+  if (after && !/^[a-z0-9_]{3,30}$/.test(after))
+    return c.json({ error: 'Invalid page.' }, 400);
+  const post = await findPost(c.env.DB, actor, id, false);
+  if (!post || post.state !== 'published')
+    return c.json({ error: 'Post not found.' }, 404);
+  return c.json(await likePage(c.env.DB, actor, id, after));
 });
 interactions.get('/:postId/comments', async (c) => {
   const actor = c.get('userId'),

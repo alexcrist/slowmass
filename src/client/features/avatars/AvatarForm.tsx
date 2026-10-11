@@ -3,9 +3,11 @@ import { api } from '../../api';
 export function AvatarForm({
   handle,
   hasAvatar,
+  onChange,
 }: {
   handle: string;
   hasAvatar: boolean;
+  onChange: (present: boolean) => void;
 }) {
   const [present, setPresent] = useState(hasAvatar);
   const [version, setVersion] = useState(0);
@@ -33,6 +35,7 @@ export function AvatarForm({
         body: file,
       });
       setPresent(true);
+      onChange(true);
       setVersion((value) => value + 1);
       setFile(null);
       if (input.current) input.current.value = '';
@@ -50,6 +53,7 @@ export function AvatarForm({
     try {
       await api('/api/avatar', { method: 'DELETE' });
       setPresent(false);
+      onChange(false);
       setMessage('Profile photo removed.');
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Removal failed.');
@@ -87,8 +91,8 @@ export function AvatarForm({
           }}
         />
         <p className="field-help">
-          Still JPEG, PNG, or WebP. Up to 8 MB and 40 megapixels. Visible only
-          to accepted followers.
+          Still JPEG, PNG, or WebP. Up to 8 MB and 40 megapixels. Visible to
+          signed-in members.
         </p>
         <div className="actions">
           <button disabled={busy || !file}>

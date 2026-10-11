@@ -119,7 +119,7 @@ const countColumns = ` (SELECT COUNT(*) FROM post_like l JOIN membership lm ON l
  (SELECT COUNT(*) FROM comment c JOIN membership cm ON cm.user_id=c.user_id AND cm.status='active' WHERE c.post_id=p.id AND c.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM block WHERE (blocker_id=v.id AND target_id=c.user_id) OR (blocker_id=c.user_id AND target_id=v.id))) AS commentCount`;
 const select = (
   includeCounts = true,
-) => `WITH viewer AS (SELECT ? AS id) SELECT p.id,p.caption,p.alt_text AS altText,p.width,p.height,p.published_at AS publishedAt,p.state,p.object_key AS objectKey,profile.handle,profile.display_name AS displayName,p.user_id AS ownerId,
+) => `WITH viewer AS (SELECT ? AS id) SELECT p.id,p.caption,p.alt_text AS altText,p.width,p.height,p.published_at AS publishedAt,p.state,p.object_key AS objectKey,profile.handle,profile.display_name AS displayName,EXISTS(SELECT 1 FROM avatar WHERE avatar.user_id=p.user_id) AS hasAvatar,p.user_id AS ownerId,
  ${includeCounts ? countColumns : '0 AS likeCount,0 AS liked,0 AS commentCount'}
  FROM post p CROSS JOIN viewer v JOIN profile ON profile.user_id=p.user_id JOIN membership m ON m.user_id=p.user_id LEFT JOIN follow f ON f.target_id=p.user_id AND f.follower_id=v.id`;
 export type PostRow = {
@@ -133,6 +133,7 @@ export type PostRow = {
   objectKey: string | null;
   handle: string;
   displayName: string;
+  hasAvatar: number;
   ownerId: string;
   likeCount: number;
   commentCount: number;

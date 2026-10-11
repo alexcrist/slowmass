@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { createAuthClient } from 'better-auth/react';
 import { magicLinkClient } from 'better-auth/client/plugins';
-import { InstallApp } from '../install/InstallApp';
 import { PasteLoginLink } from './PasteLoginLink';
 import { MemberApp } from '../people/MemberApp';
 
@@ -18,6 +17,8 @@ export function Welcome() {
       ? 'That sign-in link could not be used. It may have expired, been used already, or your invitation may no longer be active. Request a new link below.'
       : '',
   );
+  const [checking, setChecking] = useState(false);
+  const [loginStatus, setLoginStatus] = useState('');
   const [name, setName] = useState<string | null>(null);
 
   useEffect(() => {
@@ -47,6 +48,47 @@ export function Welcome() {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    if (!sent || name !== null) return;
+    const controller = new AbortController();
+    const check = () => {
+      if (document.visibilityState === 'hidden') return;
+      fetch('/api/me', { signal: controller.signal })
+        .then(async (response) => {
+          if (response.ok) {
+            const data = (await response.json()) as { user: { name: string } };
+            if (!controller.signal.aborted) setName(data.user.name);
+          }
+        })
+        .catch(() => {});
+    };
+    window.addEventListener('focus', check);
+    document.addEventListener('visibilitychange', check);
+    return () => {
+      controller.abort();
+      window.removeEventListener('focus', check);
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, [sent, name]);
+  async function checkLogin() {
+    setChecking(true);
+    setLoginStatus('');
+    try {
+      const response = await fetch('/api/me');
+      if (response.ok) {
+        const data = (await response.json()) as { user: { name: string } };
+        setName(data.user.name);
+      } else if (response.status === 401)
+        setLoginStatus(
+          'No sign-in found in this window yet. Open your email link, then return here.',
+        );
+      else throw new Error();
+    } catch {
+      setLoginStatus('Could not check sign-in. Please try again.');
+    } finally {
+      setChecking(false);
+    }
+  }
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -91,23 +133,38 @@ export function Welcome() {
           slowmass
         </a>
       </header>
-      <InstallApp />
       <section
         className="account-section"
         aria-label={name !== null ? 'Your account' : 'Sign in'}
       >
-        {name === null && <h1>Sign in</h1>}
+        {name === null && (
+          <>
+            <h1>Welcome to Slowmass</h1>
+            <p className="status-copy">
+              Sign in or join with the email address your friend invited.
+            </p>
+          </>
+        )}
         <div className="sign-in-area">
           {name !== null ? (
             <MemberApp onSignOut={() => void signOut()} signingOut={busy} />
           ) : sent ? (
-            <div role="status">
-              <h2>Check your email.</h2>
+            <div>
+              <h2>Check your email</h2>
               <p className="status-copy">
-                If you’re a member or have an active invitation, a sign-in link
-                will arrive shortly. The link works once and expires in 10
-                minutes.
+                We’ve requested a link for {email.trim().toLowerCase()}. If
+                you’re already a member or have an active invitation for this
+                address, it will arrive shortly. The link works once and expires
+                in 10 minutes.
               </p>
+              <button
+                className="primary-button"
+                onClick={() => void checkLogin()}
+                disabled={checking}
+              >
+                {checking ? 'Checking…' : 'I’ve opened the email link'}
+              </button>
+              {loginStatus && <p role="status">{loginStatus}</p>}
               <button className="text-button" onClick={() => setSent(false)}>
                 Use another email or try again
               </button>
@@ -137,14 +194,14 @@ export function Welcome() {
                   ? 'Requesting your link…'
                   : state === 'loading'
                     ? 'One moment…'
-                    : 'Email me a sign-in link'}
+                    : 'Send sign-in link'}
               </button>
               <p className="status-copy">
                 {state === 'unavailable'
-                  ? 'Sign-in is not available yet.'
+                  ? 'Sign-in is temporarily unavailable.'
                   : state === 'error'
                     ? 'We couldn’t connect. Refresh the page to try again.'
-                    : 'Sign in by email. An invitation from an active member is required to join.'}
+                    : 'New here? Ask a member to invite this email address first. No password is needed.'}
               </p>
             </form>
           )}

@@ -99,7 +99,7 @@ avatarMedia.get('/:handle', async (c) => {
     user.id,
     c.req.param('handle').toLowerCase(),
   );
-  if (!profile || profile.bio === null) return c.notFound();
+  if (!profile) return c.notFound();
   const avatar = await c.env.DB.prepare(
     'SELECT object_key FROM avatar WHERE user_id=?',
   )

@@ -32,6 +32,7 @@ beforeEach(async () => {
         })
       ).status,
     ).toBe(200);
+  await runtime.db.prepare('DELETE FROM follow').run(); // Independent users for permission tests.
   await runtime.request('bob', '/api/people/alice/request', 'POST');
   await runtime.request('alice', '/api/people/bob/accept', 'POST');
   await runtime.db
@@ -320,4 +321,20 @@ it('paginates notifications with tied timestamps and marks an older page read', 
     (await notices('alice', first.next!)).items.every((i) => !i.unread),
   ).toBe(true);
   expect((await notices()).items.every((i) => i.unread)).toBe(true);
+});
+
+it('lists likes only for viewers with post access and hides blocked identities', async () => {
+  await runtime.request('alice', `${base}/like`, 'PUT');
+  await runtime.request('bob', `${base}/like`, 'PUT');
+  expect((await runtime.request('carol', `${base}/likes`)).status).toBe(404);
+  expect((await runtime.request(null, `${base}/likes`)).status).toBe(401);
+  const list = (await (
+    await runtime.request('alice', `${base}/likes`)
+  ).json()) as { items: { handle: string }[] };
+  expect(list.items.map((x) => x.handle)).toEqual(['alice', 'bob']);
+  await runtime.request('alice', '/api/people/bob/block', 'POST');
+  expect(
+    await (await runtime.request('alice', `${base}/likes`)).json(),
+  ).toMatchObject({ items: [{ handle: 'alice' }] });
+  expect((await runtime.request('bob', `${base}/likes`)).status).toBe(404);
 });

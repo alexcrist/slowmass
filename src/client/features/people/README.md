@@ -1,5 +1,9 @@
 # Member screens
 
-Five primary destinations (Feed, Find, New photo, Activity, Profile) organize the app. Profile navigation provides profile creation/editing, exact-handle lookup, incoming follow requests, following/follower lists, blocked accounts, and invitations. Private fields are displayed only when supplied by the authorized API. Lists have explicit Previous/Next controls. Profile handles are fixed after creation; the form explains this constraint.
+Five primary destinations (Feed, Find, New photo, Activity, Profile) organize the app. Hash links support own and other member profiles and back/forward navigation. Each route has a distinct keyed page root so edit forms and list state cannot accumulate across pages. A Node component regression test repeatedly switches pages; no browser or visual testing is used.
 
-Existing members start on Feed; new members see profile setup. Profile contains sign-out and a collapsed account-deletion section. The initial profile is loaded once per member screen mount. Each list/view refreshes after its own mutation. Errors retain inputs and allow retry. Unmounting cancels pending list/profile reads. No private data is placed in local storage or a persistent client cache.
+Profiles contain identity information, follow controls for other members, and a paginated photo grid when permitted. Settings holds editing, invitations, relationship administration, installation, sign-out, and collapsed account deletion. New members see profile setup and disclosure of mutual follows with their inviter. Usernames cannot change after creation.
+
+Find supports fuzzy matching through the API with a 350 ms debounce and three-character minimum. Clear the field to browse the shuffled directory; cursors retain the seed until a new search/shuffle. All lists use explicit page controls. Private fields are displayed only when supplied by the authorized API.
+
+The initial own profile loads once per member screen mount. Avatar changes update that parent state; profile pages fetch current details. Lists refresh after their mutations. Errors retain inputs and allow retry, and unmounting cancels pending reads. No private data is placed in local storage or a persistent client cache.

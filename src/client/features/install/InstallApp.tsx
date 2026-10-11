@@ -1,4 +1,10 @@
-import { useEffect, useState } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react';
 
 type InstallPrompt = Event & {
   prompt: () => Promise<{ outcome: 'accepted' | 'dismissed' }>;
@@ -10,7 +16,14 @@ function standalone() {
   );
 }
 
-export function InstallApp() {
+const InstallContext = createContext<{
+  installed: boolean;
+  prompt: InstallPrompt | null;
+  busy: boolean;
+  message: string;
+  install: () => Promise<void>;
+} | null>(null);
+export function InstallProvider({ children }: { children: ReactNode }) {
   const [installed, setInstalled] = useState(standalone);
   const [prompt, setPrompt] = useState<InstallPrompt | null>(null);
   const [busy, setBusy] = useState(false);
@@ -56,7 +69,20 @@ export function InstallApp() {
       setBusy(false);
     }
   }
-  if (installed) return null;
+  return (
+    <InstallContext.Provider
+      value={{ installed, prompt, busy, message, install }}
+    >
+      {children}
+    </InstallContext.Provider>
+  );
+}
+export function InstallApp() {
+  const context = useContext(InstallContext);
+  if (!context) return null;
+  const { installed, prompt, busy, message, install } = context;
+  if (installed) return <p>Slowmass is running as an installed app.</p>;
+
   return (
     <details className="install-help">
       <summary>Install Slowmass</summary>

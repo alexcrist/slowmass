@@ -5,6 +5,7 @@ import { authConfigured } from '../../auth/options';
 import type { Env } from '../../env';
 import {
   actions,
+  discoverPeople,
   changeRelationship,
   findProfile,
   listConnections,
@@ -37,7 +38,7 @@ people.put('/self', async (c) => {
     return c.json(
       {
         error:
-          'Use a 3–30 character handle (letters, numbers, underscores), a name up to 60 characters, and a bio up to 500 characters.',
+          'Use a 3–30 character username (letters, numbers, underscores), a name up to 60 characters, and a bio up to 500 characters.',
       },
       400,
     );
@@ -45,7 +46,7 @@ people.put('/self', async (c) => {
     return c.json(
       {
         error:
-          'That handle is unavailable. Existing handles cannot be changed.',
+          'That username is unavailable. Existing usernames cannot be changed.',
       },
       409,
     );
@@ -66,6 +67,41 @@ people.get('/connections', async (c) => {
       kind as ConnectionKind,
       after,
     ),
+  );
+});
+people.get('/discover', async (c) => {
+  const query = (c.req.query('q') ?? '').trim().toLowerCase();
+  const seed = c.req.query('seed') ?? '';
+  const after = c.req.query('after') ?? '';
+  if (
+    (query && (query.length < 3 || query.length > 60)) ||
+    !/^[a-f0-9]{32}$/.test(seed) ||
+    (after && !/^[01]:[a-f0-9]{32}$/.test(after))
+  )
+    return c.json(
+      { error: 'Enter at least 3 characters, or clear the search to browse.' },
+      400,
+    );
+  const now = Date.now();
+  const reserved = await c.env.DB.prepare(
+    `INSERT INTO "rateLimit"(id,key,count,lastRequest) VALUES(?,?,1,?) ON CONFLICT(key) DO UPDATE SET count=CASE WHEN lastRequest<=? THEN 1 ELSE count+1 END,lastRequest=CASE WHEN lastRequest<=? THEN excluded.lastRequest ELSE lastRequest END WHERE lastRequest<=? OR count<30`,
+  )
+    .bind(
+      `discovery:${c.get('userId')}`,
+      `discovery:${c.get('userId')}`,
+      now,
+      now - 60000,
+      now - 60000,
+      now - 60000,
+    )
+    .run();
+  if (!reserved.meta.changes)
+    return c.json(
+      { error: 'Please wait a minute before searching again.' },
+      429,
+    );
+  return c.json(
+    await discoverPeople(c.env.DB, c.get('userId'), query, seed, after),
   );
 });
 people.get('/:handle', async (c) => {

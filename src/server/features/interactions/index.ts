@@ -139,3 +139,25 @@ export async function commentPage(
     next: rows.results.length > 20 ? `${last.createdAt}:${last.id}` : null,
   };
 }
+
+export async function likePage(
+  db: D1Database,
+  actor: string,
+  postId: string,
+  after: string,
+) {
+  const rows = await db
+    .prepare(
+      `SELECT p.handle,EXISTS(SELECT 1 FROM avatar WHERE user_id=l.user_id) AS hasAvatar
+    FROM post_like l JOIN profile p ON p.user_id=l.user_id JOIN membership m ON m.user_id=l.user_id AND m.status='active'
+    WHERE l.post_id=? AND p.handle>? AND EXISTS(${writablePost})
+    AND NOT EXISTS(SELECT 1 FROM block WHERE (blocker_id=? AND target_id=l.user_id) OR (blocker_id=l.user_id AND target_id=?))
+    ORDER BY p.handle LIMIT 21`,
+    )
+    .bind(postId, after, actor, postId, actor, actor)
+    .all<{ handle: string; hasAvatar: number }>();
+  return {
+    items: rows.results.slice(0, 20),
+    next: rows.results.length > 20 ? rows.results[19].handle : null,
+  };
+}

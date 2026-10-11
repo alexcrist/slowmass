@@ -15,9 +15,13 @@ export function PasteLoginLink() {
     setError('');
     window.location.assign(target);
   }
+  const installed =
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  if (!installed) return null;
   return (
     <details className="login-link-help">
-      <summary>Sign in inside the installed app</summary>
+      <summary>Link opened in a different browser?</summary>
       <p>
         If your email link opens a separate browser, request a new link above.
         In your email, press and hold the sign-in link and copy it{' '}

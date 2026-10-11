@@ -47,7 +47,7 @@ Browser and visual testing are prohibited. Integration tests run isolated Worker
 
 After a successful `npm run check`, deploy explicitly with `npx wrangler deploy --env production`. Production has a separate auth secret installed through Wrangler, and its only public app origin is https://slowmass.com. Worker preview URLs and workers.dev access are disabled for the app. The account workers.dev subdomain exists only to allow isolated remote-binding development.
 
-Migrations 0001–0010 are applied in production, including posts, interactions, storage accounting, and account deletion. Future migrations normally use `npx wrangler d1 migrations apply slowmass --env production --remote`.
+Migrations 0001–0011 are applied in production, including posts, interactions, storage accounting, account deletion, shuffled discovery, and mutual inviter follows. Future migrations normally use `npx wrangler d1 migrations apply slowmass --env production --remote`.
 
 ### Initial trigger migration workaround
 
@@ -64,3 +64,11 @@ Worker version `869ab179-7a11-4f40-816b-cce46d422d0f` deploys photo publishing, 
 Worker version `d5531cc3-dd03-4666-80de-9b3788e33d15` enables account deletion and storage limits. Migrations 0009/0010 were imported atomically with migration-history records while the app was in maintenance mode; the storage counter and ledger both read zero bytes afterward. Maintenance was then removed. The release passed 59 tests, formatting/lint/types/build, and GitHub CI. Production checks confirmed sign-in availability, anonymous deletion rejection, inaccessible-media rejection, and origin enforcement.
 
 An encrypted production SQL backup was restored and integrity-checked in private local temporary storage; it contains no photos. A synthetic image archive also passed restoration/checksum checks, and tampered ciphertext was rejected. A disposable hosted D1 database passed a bookmark/change/restore/query drill and was deleted afterward. The owner requested a single private recovery ZIP for manual Google Drive upload. See [operations](operations.md) for retention, manual backup cadence, and recovery quarantine.
+
+## Social and navigation release (October 11, 2026)
+
+Worker version `016a77d7-1165-49a1-be95-e2eb5e5393f9` separates profiles and Settings, fixes accumulated page content, adds photo grids and member discovery, and updates invitations, login help, and feed interactions. Magic links remain the sign-in method. Migration 0011 and its history record were imported atomically during maintenance; the discovery index and both profile triggers were verified before reopening the app.
+
+The local check passed formatting, lint, types, 79 tests, and production build; local migrations also passed. A Node component regression test exercises repeated navigation without a browser. Direct production checks verified sign-in availability, anonymous access rejection for new endpoints and media, cross-origin mutation rejection, private response cache headers, and matching deployed HTML/JS/CSS. Authenticated social scenarios are covered in the local Workers/D1 tests; this release did not perform a signed-in multi-user production test or any browser/visual testing.
+
+The pre-migration encrypted production backup passed local quarantined restoration with SQL integrity and both stored image checksums verified. Production was not restored. The initial recovery kit was previously copied off-device by the owner; subsequent backup creation/copying remains manual.

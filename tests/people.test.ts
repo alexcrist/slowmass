@@ -18,6 +18,7 @@ beforeEach(async () => {
       'DELETE FROM follow',
       'DELETE FROM block',
       'DELETE FROM profile',
+      `DELETE FROM "rateLimit" WHERE key LIKE 'discovery:%'`,
     ].map((sql) => runtime.db.prepare(sql)),
   );
   for (const id of ['alice', 'bob', 'carol']) {
@@ -31,6 +32,7 @@ beforeEach(async () => {
       ).status,
     ).toBe(200);
   }
+  await runtime.db.prepare('DELETE FROM follow').run(); // Independent users for permission tests.
 });
 const action = (actor: string, target: string, command: string) =>
   runtime.request(actor, `/api/people/${target}/${command}`, 'POST');
@@ -196,7 +198,7 @@ it('validates pagination and scopes lists to the signed-in account', async () =>
     (await runtime.request('bob', '/api/people/connections?after=%27')).status,
   ).toBe(400);
 });
-it('authorizes avatar bytes on every request, including saved URLs after removal', async () => {
+it('shares avatars with members while enforcing blocks and deletion', async () => {
   const bucket = await runtime.worker.getR2Bucket('PHOTOS');
   await bucket.put('avatar-test', 'synthetic image bytes');
   await runtime.db
@@ -207,15 +209,17 @@ it('authorizes avatar bytes on every request, including saved URLs after removal
     .run();
   const path = '/media/avatar/bob';
   expect((await runtime.request(null, path)).status).toBe(404);
-  expect((await runtime.request('carol', path)).status).toBe(404);
+  expect((await runtime.request('carol', path)).status).toBe(200);
   expect((await runtime.request('bob', path)).status).toBe(200);
   await action('alice', 'bob', 'request');
-  expect((await runtime.request('alice', path)).status).toBe(404);
+  expect((await runtime.request('alice', path)).status).toBe(200);
   await action('bob', 'alice', 'accept');
   const visible = await runtime.request('alice', path);
   expect(visible.status).toBe(200);
   expect(visible.headers.get('cache-control')).toBe('private, no-store');
   await action('bob', 'alice', 'remove');
+  expect((await runtime.request('alice', path)).status).toBe(200);
+  await action('bob', 'alice', 'block');
   expect((await runtime.request('alice', path)).status).toBe(404);
   await runtime.request('bob', '/api/avatar', 'DELETE');
   expect((await runtime.request('bob', path)).status).toBe(404);
@@ -266,4 +270,99 @@ it('allows a reciprocal block while lookup is hidden', async () => {
   expect((await runtime.request('alice', '/api/people/bob')).status).toBe(404);
   await action('bob', 'alice', 'unblock');
   expect((await runtime.request('alice', '/api/people/bob')).status).toBe(200);
+});
+
+it('automatically follows the inviter in both directions only at profile creation', async () => {
+  await runtime.request('david', '/api/people/self', 'PUT', {
+    handle: 'david',
+    displayName: 'David',
+    bio: '',
+  });
+  expect((await read('alice', 'david')).profile.relationship).toBe('accepted');
+  expect((await read('david', 'alice')).profile.relationship).toBe('accepted');
+  await action('david', 'alice', 'unfollow');
+  await runtime.request('david', '/api/people/self', 'PUT', {
+    handle: 'david',
+    displayName: 'David updated',
+    bio: '',
+  });
+  expect((await read('david', 'alice')).profile.relationship).toBe('none');
+  expect((await read('alice', 'david')).profile.relationship).toBe('accepted');
+});
+it('discovers active unblocked members with partial name matching and bounded pages', async () => {
+  const seed = '8'.repeat(32);
+  const url = `/api/people/discover?seed=${seed}`;
+  expect((await runtime.request(null, url)).status).toBe(401);
+  expect((await runtime.request('alice', url + '&q=bo')).status).toBe(400);
+  const match = (await (
+    await runtime.request('alice', url + '&q=BOB')
+  ).json()) as { items: { handle: string }[] };
+  expect(match.items.map((x) => x.handle)).toEqual(['bob']);
+  const fuzzy = await (await runtime.request('bob', url + '&q=alc')).json();
+  expect(fuzzy).toMatchObject({ items: [{ handle: 'alice' }] });
+  expect(
+    await (await runtime.request('alice', url + '&q=b%25b')).json(),
+  ).toMatchObject({ items: [] });
+  await action('bob', 'alice', 'block');
+  const blocked = (await (await runtime.request('alice', url)).json()) as {
+    items: { handle: string }[];
+  };
+  expect(blocked.items.map((x) => x.handle)).toEqual(['carol']);
+  await runtime.db
+    .prepare("UPDATE membership SET status='disabled' WHERE user_id='carol'")
+    .run();
+  expect(await (await runtime.request('alice', url)).json()).toMatchObject({
+    items: [],
+  });
+  await runtime.db
+    .prepare("UPDATE membership SET status='active' WHERE user_id='carol'")
+    .run();
+});
+it('preserves shuffled discovery order across pages without duplicate people and limits searches', async () => {
+  for (let i = 0; i < 24; i++) {
+    const id = `person${i.toString().padStart(2, '0')}`,
+      now = Date.now();
+    await runtime.db
+      .prepare(
+        'INSERT INTO user(id,name,email,emailVerified,createdAt,updatedAt) VALUES(?,?,?,1,?,?)',
+      )
+      .bind(id, id, `${id}@example.com`, now, now)
+      .run();
+    await runtime.db
+      .prepare(
+        "INSERT INTO invitation(id,inviter_id,recipient_email,created_at,expires_at) VALUES(?,'alice',?,?,?)",
+      )
+      .bind(id, `${id}@example.com`, now, now + 60000)
+      .run();
+    await runtime.db
+      .prepare(
+        "INSERT INTO membership(user_id,invited_by,invitation_id,joined_at) VALUES(?,'alice',?,?)",
+      )
+      .bind(id, id, now)
+      .run();
+    await runtime.db
+      .prepare(
+        'INSERT INTO profile(user_id,handle,display_name,created_at) VALUES(?,?,?,?)',
+      )
+      .bind(id, id, id, now)
+      .run();
+  }
+  const url = '/api/people/discover?seed=' + '7'.repeat(32);
+  const first = (await (await runtime.request('alice', url)).json()) as {
+    items: { handle: string }[];
+    next: string;
+  };
+  expect(first.items).toHaveLength(20);
+  expect(first.next).toBeTruthy();
+  const second = (await (
+    await runtime.request('alice', url + '&after=' + first.next)
+  ).json()) as { items: { handle: string }[]; next: null };
+  const handles = [...first.items, ...second.items].map((x) => x.handle);
+  expect(handles.length).toBe(26);
+  expect(new Set(handles).size).toBe(26);
+  expect(second.next).toBeNull();
+  expect(await (await runtime.request('alice', url)).json()).toEqual(first);
+  for (let i = 0; i < 30; i++)
+    expect((await runtime.request('bob', url)).status).toBe(200);
+  expect((await runtime.request('bob', url)).status).toBe(429);
 });
