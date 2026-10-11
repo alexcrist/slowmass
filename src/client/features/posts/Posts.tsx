@@ -139,35 +139,37 @@ function PostCard({ post, onDelete }: { post: Post; onDelete: () => void }) {
         loading="lazy"
         decoding="async"
       />
-      {post.caption && <p className="bio">{post.caption}</p>}
-      <Interactions
-        key={`${post.id}:${post.likeCount}:${post.commentCount}:${post.liked}`}
-        postId={post.id}
-        initial={post}
-      />
-      {post.isOwner &&
-        (confirm ? (
-          <div>
-            <p>Delete this photo? This cannot be undone.</p>
-            <div className="actions">
-              <button disabled={busy} onClick={() => void remove()}>
-                Delete photo
-              </button>
-              <button disabled={busy} onClick={() => setConfirm(false)}>
-                Keep photo
-              </button>
+      <div className="post-body">
+        {post.caption && <p className="bio">{post.caption}</p>}
+        <Interactions
+          key={`${post.id}:${post.likeCount}:${post.commentCount}:${post.liked}`}
+          postId={post.id}
+          initial={post}
+        />
+        {post.isOwner &&
+          (confirm ? (
+            <div>
+              <p>Delete this photo? This cannot be undone.</p>
+              <div className="actions">
+                <button disabled={busy} onClick={() => void remove()}>
+                  Delete photo
+                </button>
+                <button disabled={busy} onClick={() => setConfirm(false)}>
+                  Keep photo
+                </button>
+              </div>
             </div>
-          </div>
-        ) : (
-          <button className="text-button" onClick={() => setConfirm(true)}>
-            Delete
-          </button>
-        ))}
-      {error && (
-        <p role="alert" className="error-message">
-          {error}
-        </p>
-      )}
+          ) : (
+            <button className="text-button" onClick={() => setConfirm(true)}>
+              Delete
+            </button>
+          ))}
+        {error && (
+          <p role="alert" className="error-message">
+            {error}
+          </p>
+        )}
+      </div>
     </article>
   );
 }

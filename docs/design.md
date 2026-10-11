@@ -1,13 +1,22 @@
 # Interface guidance
 
-Status: account/sign-in screen implemented; application screens planned.
+The interface takes its direction from early photo-sharing apps: a compact slate-blue header, lowercase script wordmark, white photo frames, and a narrow chronological feed. This basic brand direction was approved on October 10, 2026. Copy remains functional, without slogans or marketing messages.
 
-Keep the interface utilitarian. Identify the app with the plain name Slowmass. Do not create a brand identity, logo, slogan, promotional message, or decorative illustration. Product copy should explain actions, requirements, status, and errors.
+## Type and color
 
-Use the system sans-serif stack and a neutral palette: white background, dark text and buttons, gray secondary text and borders. Reserve color for functional states such as errors and keyboard focus. Use ordinary type sizes and weights with no stylized lettering.
+- Lobster Two bold italic: the text-only `slowmass` wordmark.
+- Source Sans 3: headings, controls, captions, and body text. Use 400 and 600 weights with system fallbacks.
+- Slate blue `#294e62`: header, primary actions, selected navigation.
+- Cream `#fff9ec`: wordmark on the header.
+- Off-white `#f3f3ef`: page background; white `#ffffff`: forms and photo frames.
+- Ink `#26333d`: body text; gray `#617078`: secondary text; pale gray `#d9dedf`: boundaries.
 
-The account screen uses a compact header and a left-aligned form in a bounded column. Keep inputs readable on phones, controls at least 44px tall, and keyboard focus visible. Preserve clear loading, unavailable, error, and confirmation states.
+Both fonts are served locally from `public/fonts`, with their SIL Open Font Licenses included. No third-party font or image requests. The reusable wordmark is also available at `/slowmass-wordmark.svg` as standalone vector outlines.
 
-Future screens should follow the same approach: functional navigation, full-width photos in a bounded feed column, left-aligned captions, and explicit page controls. Private profiles must never cause requests to third-party image or font hosts. No decorative animations, engagement badges, or invented social activity.
+## Layout and interaction
+
+The main content is left aligned in a column up to 640px wide. Sign-in uses a smaller form. Feed, Find, New photo, Activity, and Profile are the five primary destinations; their navigation sits below the header on desktop and at the bottom on mobile, with safe-area spacing. Icons always have text labels. Profile contains photos, editing, follow requests, following, followers, invitations, and blocked accounts. Activity also links to follow requests. New members are shown profile setup before using profile-dependent screens.
+
+Photos retain their full aspect ratio. Captions and interactions sit inside the same white frame. Lists use explicit page controls. Preserve clear loading, empty, error, and confirmation states, visible keyboard focus, and controls at least 44px tall. No automatic animation, engagement gimmicks, or invented social activity.
 
 Verification uses static checks and API/integration tests only. Browser testing, screenshot inspection, and visual regression testing are prohibited by the user.

@@ -4,4 +4,4 @@ A static React application served by Workers Assets. [Welcome](features/welcome/
 
 [Account deletion](features/account/README.md) is available from the profile screen.
 
-Global styling lives in `styles.css`; [interface guidance](../../docs/design.md) requires a plain, utilitarian UI. No local auth bypass, persisted private content, or service worker exists. Verification uses API and static checks; browser and visual testing are prohibited.
+Global styling lives in `styles.css`; [interface guidance](../../docs/design.md) defines the early photo-app palette, self-hosted typography, and responsive navigation. No local auth bypass, persisted private content, or service worker exists. Verification uses API and static checks; browser and visual testing are prohibited.

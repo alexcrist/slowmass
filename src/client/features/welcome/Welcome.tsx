@@ -81,29 +81,22 @@ export function Welcome() {
   }
 
   return (
-    <main className="welcome">
+    <main
+      className={`welcome ${name !== null ? 'member-shell' : 'guest-shell'}`}
+    >
       <header className="masthead">
         <a className="site-name" href="/" aria-label="Slowmass home">
-          Slowmass
+          slowmass
         </a>
       </header>
-      <section className="account-section" aria-labelledby="welcome-title">
-        <h1 id="welcome-title">{name !== null ? 'Account' : 'Sign in'}</h1>
+      <section
+        className="account-section"
+        aria-label={name !== null ? 'Your account' : 'Sign in'}
+      >
+        {name === null && <h1>Sign in</h1>}
         <div className="sign-in-area">
           {name !== null ? (
-            <>
-              <p className="signed-in">
-                {name ? `Welcome, ${name}.` : 'You’re signed in.'}
-              </p>
-              <MemberApp />
-              <button
-                className="text-button"
-                onClick={() => void signOut()}
-                disabled={busy}
-              >
-                {busy ? 'Signing out…' : 'Sign out'}
-              </button>
-            </>
+            <MemberApp onSignOut={() => void signOut()} signingOut={busy} />
           ) : sent ? (
             <div role="status">
               <h2>Check your email.</h2>

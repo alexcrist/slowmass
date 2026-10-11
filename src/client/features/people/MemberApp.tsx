@@ -43,8 +43,46 @@ const titles: Record<Tab, string> = {
   invitations: 'Invitations',
 };
 
-export function MemberApp() {
-  const [tab, setTab] = useState<Tab>('profile');
+const primaryTabs = [
+  'feed',
+  'people',
+  'compose',
+  'notifications',
+  'profile',
+] as const;
+const profileTabs = [
+  'photos',
+  'profile',
+  'requests',
+  'following',
+  'followers',
+  'invitations',
+  'blocked',
+] as const;
+const navLabels = {
+  feed: 'Feed',
+  people: 'Find',
+  compose: 'New photo',
+  notifications: 'Activity',
+  profile: 'Profile',
+};
+const navPaths = {
+  feed: 'M3 10 12 3l9 7v11h-6v-7H9v7H3Z',
+  people: 'M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',
+  compose:
+    'M4 6h4l2-3h4l2 3h4a1 1 0 0 1 1 1v13H3V7a1 1 0 0 1 1-1ZM16 13a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
+  notifications: 'M20 5c-3-3-6-1-8 1-2-2-5-4-8-1-4 4 1 9 8 15 7-6 12-11 8-15Z',
+  profile: 'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M4 21v-2a8 8 0 0 1 16 0v2',
+};
+
+export function MemberApp({
+  onSignOut,
+  signingOut,
+}: {
+  onSignOut: () => void;
+  signingOut: boolean;
+}) {
+  const [tab, setTab] = useState<Tab>('feed');
   const [profile, setProfile] = useState<Profile | null | undefined>();
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
@@ -55,6 +93,7 @@ export function MemberApp() {
     })
       .then((result) => {
         setProfile(result.profile);
+        if (!result.profile) setTab('profile');
         setError('');
       })
       .catch((error) => {
@@ -62,62 +101,119 @@ export function MemberApp() {
       });
     return () => controller.abort();
   }, [retry]);
+  const inProfile = profileTabs.some((item) => item === tab);
   return (
     <>
-      <nav className="tabs" aria-label="Account">
-        {(Object.keys(titles) as Tab[]).map((item) => (
+      <nav className="primary-nav" aria-label="Main navigation">
+        {primaryTabs.map((item) => (
           <button
             key={item}
             type="button"
-            aria-pressed={tab === item}
-            onClick={() => setTab(item)}
+            aria-pressed={item === 'profile' ? inProfile : tab === item}
+            onClick={() => setTab(profile === null ? 'profile' : item)}
           >
-            {titles[item]}
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d={navPaths[item]} />
+            </svg>
+            <span>{navLabels[item]}</span>
           </button>
         ))}
       </nav>
-      <h2>{titles[tab]}</h2>
-      {tab === 'invitations' ? (
-        <InvitationForm />
-      ) : error ? (
-        <div>
-          <p role="alert">{error}</p>
-          <button onClick={() => setRetry(retry + 1)}>Retry</button>
-        </div>
-      ) : profile === undefined ? (
-        <p role="status">Loading profile…</p>
-      ) : tab === 'profile' ? (
-        <>
-          <ProfileForm
-            key={profile?.handle ?? 'new'}
-            profile={profile}
-            onSave={setProfile}
-          />
-          {profile && (
-            <AvatarForm
-              key={profile.handle}
-              handle={profile.handle}
-              hasAvatar={Boolean(profile.hasAvatar)}
-            />
+      <section
+        className={`member-content ${tab === 'feed' || tab === 'photos' ? 'photo-screen' : ''}`}
+        aria-labelledby="screen-title"
+      >
+        {inProfile && profile && (
+          <nav className="profile-nav" aria-label="Profile navigation">
+            {profileTabs.map((item) => (
+              <button
+                key={item}
+                aria-pressed={tab === item}
+                onClick={() => setTab(item)}
+              >
+                {titles[item]}
+              </button>
+            ))}
+          </nav>
+        )}
+        <div className="screen-heading">
+          <h1 id="screen-title">
+            {profile === null && tab !== 'invitations'
+              ? 'Create your profile'
+              : titles[tab]}
+          </h1>
+          {tab === 'feed' && profile && (
+            <span className="field-help">Newest first</span>
           )}
-          <DeleteAccount />
-        </>
-      ) : !profile ? (
-        <p>Create your profile before finding or following people.</p>
-      ) : tab === 'feed' || tab === 'photos' ? (
-        <PostList
-          key={tab}
-          handle={tab === 'photos' ? profile.handle : undefined}
-        />
-      ) : tab === 'notifications' ? (
-        <Notifications />
-      ) : tab === 'compose' ? (
-        <Compose onPublished={() => setTab('photos')} />
-      ) : tab === 'people' ? (
-        <PersonSearch />
-      ) : (
-        <Connections key={tab} kind={tab} />
-      )}
+        </div>
+        {tab === 'invitations' ? (
+          <InvitationForm />
+        ) : error ? (
+          <div>
+            <p role="alert">{error}</p>
+            <button onClick={() => setRetry(retry + 1)}>Retry</button>
+          </div>
+        ) : profile === undefined ? (
+          <p role="status">Loading profile…</p>
+        ) : tab === 'profile' || !profile ? (
+          <>
+            {profile && (
+              <AvatarForm
+                key={profile.handle}
+                handle={profile.handle}
+                hasAvatar={Boolean(profile.hasAvatar)}
+              />
+            )}
+            <ProfileForm
+              key={profile?.handle ?? 'new'}
+              profile={profile}
+              onSave={(saved) => {
+                setProfile(saved);
+                if (!profile) setTab('feed');
+              }}
+            />
+            <div className="account-tools">
+              <button
+                className="text-button"
+                onClick={onSignOut}
+                disabled={signingOut}
+              >
+                {signingOut ? 'Signing out…' : 'Sign out'}
+              </button>
+              <details className="danger-zone">
+                <summary>Delete account</summary>
+                <DeleteAccount />
+              </details>
+            </div>
+          </>
+        ) : tab === 'feed' || tab === 'photos' ? (
+          <PostList
+            key={tab}
+            handle={tab === 'photos' ? profile.handle : undefined}
+          />
+        ) : tab === 'notifications' ? (
+          <>
+            <button className="text-button" onClick={() => setTab('requests')}>
+              View follow requests
+            </button>
+            <Notifications />
+          </>
+        ) : tab === 'compose' ? (
+          <Compose onPublished={() => setTab('photos')} />
+        ) : tab === 'people' ? (
+          <PersonSearch />
+        ) : (
+          <Connections key={tab} kind={tab} />
+        )}
+      </section>
     </>
   );
 }
@@ -298,7 +394,8 @@ function Person({ initial }: { initial: VisibleProfile }) {
   if (!profile)
     return (
       <p role="status">
-        Account blocked. Manage blocked accounts from the account navigation.
+        Account blocked. Manage blocked accounts under Profile → Blocked
+        accounts.
       </p>
     );
   const action =
