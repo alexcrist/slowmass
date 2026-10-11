@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { api } from '../../api';
+import { useApiResource } from '../../api/useApiResource';
 import { PostList } from '../posts/Posts';
 type VisibleProfile = {
   handle: string;
@@ -9,27 +10,16 @@ type VisibleProfile = {
   relationship: 'self' | 'none' | 'pending' | 'accepted';
 };
 export function ProfilePage({ handle }: { handle: string }) {
-  const [profile, setProfile] = useState<VisibleProfile | null>(null),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState(''),
-    [version, setVersion] = useState(0);
-  useEffect(() => {
-    const controller = new AbortController();
-    api<{ profile: VisibleProfile }>(
-      `/api/people/${encodeURIComponent(handle)}`,
-      { signal: controller.signal },
-    )
-      .then((data) => {
-        if (!controller.signal.aborted) {
-          setProfile(data.profile);
-          setError('');
-        }
-      })
-      .catch((e) => {
-        if (!controller.signal.aborted) setError(e.message);
-      });
-    return () => controller.abort();
-  }, [handle, version]);
+  const [busy, setBusy] = useState(false),
+    [error, setError] = useState('');
+  const {
+    data,
+    error: loadError,
+    reload,
+  } = useApiResource<{ profile: VisibleProfile }>(
+    `/api/people/${encodeURIComponent(handle)}`,
+  );
+  const profile = data?.profile;
   async function act(action: string) {
     setBusy(true);
     setError('');
@@ -41,8 +31,7 @@ export function ProfilePage({ handle }: { handle: string }) {
         location.hash = 'people';
         return;
       }
-      setProfile(null);
-      setVersion((v) => v + 1);
+      reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not update follow.');
     } finally {
@@ -52,10 +41,10 @@ export function ProfilePage({ handle }: { handle: string }) {
   if (!profile)
     return (
       <>
-        {error ? (
+        {loadError ? (
           <>
-            <p role="alert">{error}</p>
-            <button onClick={() => setVersion((v) => v + 1)}>Retry</button>
+            <p role="alert">{loadError}</p>
+            <button onClick={reload}>Retry</button>
           </>
         ) : (
           <p role="status">Loading profile…</p>
@@ -122,11 +111,7 @@ export function ProfilePage({ handle }: { handle: string }) {
         {error && <p role="alert">{error}</p>}
       </header>
       {profile.bio !== null ? (
-        <PostList
-          key={`${profile.handle}:${version}`}
-          handle={profile.handle}
-          grid
-        />
+        <PostList key={profile.handle} handle={profile.handle} grid />
       ) : (
         <div className="empty-state">
           <h2>This account is private</h2>

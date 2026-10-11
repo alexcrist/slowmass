@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { PersonLink } from '../../navigation/PersonLink';
 import { Interactions } from '../interactions/Interactions';
 import { api, jsonRequest } from '../../api';
+import { useApiResource } from '../../api/useApiResource';
 type Post = {
   id: string;
   caption: string;
@@ -28,57 +29,33 @@ export function PostList({
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [history, setHistory] = useState(['']);
-  const [page, setPage] = useState<Page | null>(null);
-  const [error, setError] = useState('');
-  const [version, setVersion] = useState(0);
   const cursor = history[history.length - 1];
-  useEffect(() => {
-    const controller = new AbortController();
-    const params = new URLSearchParams();
-    if (handle) params.set('handle', handle);
-    if (cursor) params.set('cursor', cursor);
-    api<Page>(`/api/posts?${params}`, { signal: controller.signal })
-      .then((result) => {
-        if (controller.signal.aborted) return;
-        setPage(result);
-        setError('');
-      })
-      .catch((error) => {
-        if (!controller.signal.aborted) setError(error.message);
-      });
-    return () => controller.abort();
-  }, [handle, cursor, version]);
+  const params = new URLSearchParams();
+  if (handle) params.set('handle', handle);
+  if (cursor) params.set('cursor', cursor);
+  const {
+    data: page,
+    error,
+    loading,
+    reload,
+  } = useApiResource<Page>(`/api/posts?${params}`);
   function refresh() {
-    setPage(null);
     setHistory(['']);
-    setVersion((value) => value + 1);
+    reload();
   }
   if (selected)
     return (
       <>
         <button onClick={() => setSelected(null)}>Back to photos</button>
-        <PostDetail
-          key={selected}
-          id={selected}
-          onDeleted={() => {
-            setPage((current) =>
-              current
-                ? {
-                    ...current,
-                    items: current.items.filter((post) => post.id !== selected),
-                  }
-                : current,
-            );
-          }}
-        />
+        <PostDetail key={selected} id={selected} onDeleted={reload} />
       </>
     );
   return (
     <>
-      <button type="button" onClick={refresh}>
+      <button type="button" onClick={refresh} disabled={loading}>
         Refresh posts
       </button>
-      {!page && !error && <p role="status">Loading posts…</p>}
+      {loading && <p role="status">Loading posts…</p>}
       {error && (
         <p role="alert" className="error-message">
           {error}
@@ -116,22 +93,7 @@ export function PostList({
         </div>
       ) : (
         page?.items.map((post) => (
-          <PostCard
-            key={post.id}
-            post={post}
-            onDelete={() =>
-              setPage((current) =>
-                current
-                  ? {
-                      ...current,
-                      items: current.items.filter(
-                        (item) => item.id !== post.id,
-                      ),
-                    }
-                  : current,
-              )
-            }
-          />
+          <PostCard key={post.id} post={post} onDelete={reload} />
         ))
       )}
       {page && (
@@ -139,7 +101,6 @@ export function PostList({
           {history.length > 1 && (
             <button
               onClick={() => {
-                setPage(null);
                 setHistory(history.slice(0, -1));
               }}
             >
@@ -149,7 +110,6 @@ export function PostList({
           {page.next ? (
             <button
               onClick={() => {
-                setPage(null);
                 setHistory([...history, page.next!]);
               }}
             >
@@ -379,24 +339,18 @@ export function PostDetail({
   id: string;
   onDeleted?: () => void;
 }) {
-  const [post, setPost] = useState<Post | null>(null),
-    [error, setError] = useState(''),
-    [deleted, setDeleted] = useState(false);
-  useEffect(() => {
-    const controller = new AbortController();
-    api<{ post: Post }>(`/api/posts/${id}`, { signal: controller.signal })
-      .then((data) => {
-        if (!controller.signal.aborted) setPost(data.post);
-      })
-      .catch((e) => {
-        if (!controller.signal.aborted) setError(e.message);
-      });
-    return () => controller.abort();
-  }, [id]);
+  const [deleted, setDeleted] = useState(false);
+  const { data, error, reload } = useApiResource<{ post: Post }>(
+    `/api/posts/${id}`,
+  );
+  const post = data?.post;
   return deleted ? (
     <p>Photo deleted.</p>
   ) : error ? (
-    <p role="alert">{error}</p>
+    <div>
+      <p role="alert">{error}</p>
+      <button onClick={reload}>Retry</button>
+    </div>
   ) : post ? (
     <PostCard
       post={post}

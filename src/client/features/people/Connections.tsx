@@ -1,32 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { api } from '../../api';
+import { useApiResource } from '../../api/useApiResource';
 import { profileHref } from '../../navigation';
 export type Kind = 'requests' | 'following' | 'followers' | 'blocked';
 export function Connections({ kind }: { kind: Kind }) {
   const [pages, setPages] = useState(['']);
-  const [data, setData] = useState<{
-    items: { handle: string; displayName: string }[];
-    next: string | null;
-  } | null>(null);
-  const [version, setVersion] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const after = pages[pages.length - 1];
-  useEffect(() => {
-    const controller = new AbortController();
-    api<NonNullable<typeof data>>(
-      `/api/people/connections?kind=${kind}&after=${encodeURIComponent(after)}`,
-      { signal: controller.signal },
-    )
-      .then((result) => {
-        setData(result);
-        setError('');
-      })
-      .catch((error) => {
-        if (!controller.signal.aborted) setError(error.message);
-      });
-    return () => controller.abort();
-  }, [kind, after, version]);
+  const {
+    data,
+    error: loadError,
+    loading,
+    reload,
+  } = useApiResource<{
+    items: { handle: string; displayName: string }[];
+    next: string | null;
+  }>(`/api/people/connections?kind=${kind}&after=${encodeURIComponent(after)}`);
   async function act(handle: string, action: string) {
     setBusy(true);
     setError('');
@@ -34,7 +24,7 @@ export function Connections({ kind }: { kind: Kind }) {
       await api(`/api/people/${encodeURIComponent(handle)}/${action}`, {
         method: 'POST',
       });
-      setVersion(version + 1);
+      reload();
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Action failed.');
     } finally {
@@ -51,7 +41,7 @@ export function Connections({ kind }: { kind: Kind }) {
           : 'unblock';
   return (
     <>
-      {!data && !error && <p role="status">Loading…</p>}
+      {loading && <p role="status">Loading…</p>}
       {data?.items.length === 0 && <p>No accounts on this page.</p>}
       <ul className="people-list">
         {data?.items.map((person) => (
@@ -61,7 +51,7 @@ export function Connections({ kind }: { kind: Kind }) {
             </span>
             <div className="actions">
               <button
-                disabled={busy}
+                disabled={busy || loading}
                 onClick={() => void act(person.handle, action)}
               >
                 {kind === 'requests'
@@ -74,7 +64,7 @@ export function Connections({ kind }: { kind: Kind }) {
               </button>
               {kind === 'requests' && (
                 <button
-                  disabled={busy}
+                  disabled={busy || loading}
                   onClick={() => void act(person.handle, 'deny')}
                 >
                   Deny
@@ -84,20 +74,20 @@ export function Connections({ kind }: { kind: Kind }) {
           </li>
         ))}
       </ul>
-      {error && (
+      {error && <p role="alert">{error}</p>}
+      {loadError && (
         <div>
           <p role="alert" className="error-message">
-            {error}
+            {loadError}
           </p>
-          <button onClick={() => setVersion(version + 1)}>Retry</button>
+          <button onClick={reload}>Retry</button>
         </div>
       )}
       <nav className="actions" aria-label="List pages">
         {pages.length > 1 && (
           <button
-            disabled={busy}
+            disabled={busy || loading}
             onClick={() => {
-              setData(null);
               setPages(pages.slice(0, -1));
             }}
           >
@@ -106,9 +96,8 @@ export function Connections({ kind }: { kind: Kind }) {
         )}
         {data?.next && (
           <button
-            disabled={busy}
+            disabled={busy || loading}
             onClick={() => {
-              setData(null);
               setPages([...pages, data.next!]);
             }}
           >

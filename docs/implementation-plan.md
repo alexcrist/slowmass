@@ -108,6 +108,14 @@ Exit: an invited friend can sign in, post, follow another friend, and interact w
 - [x] Prevent Cloudflare analytics injection into HTML without relaxing CSP or disabling asset compression; add the standard mobile web-app metadata tag.
 - [x] Pass formatting, lint, types, 79 tests, and production build; deploy and verify matching HTML/CSS/JS, absent analytics injection, compressed assets, and private API/media response headers through HTTP. No browser or visual testing.
 
+## October 11 loading-state audit
+
+- [x] Gate the sign-in form on a completed session check, distinguish unavailable/offline startup from signed-out state, and provide retry plus an HTML loading fallback before JavaScript starts.
+- [x] Delay member navigation and onboarding until the own-profile read resolves; show loading during retries.
+- [x] Audit feed/profile/detail, discovery, relationships, activity, invitation history, comments, and likes; use explicit loading/error/success reads with request cancellation and no stale results or premature empty states.
+- [x] Refresh successful invitation/follow/read mutations with visible loading, and add missing retry controls for photo details and liked-by lists.
+- [x] Pass 18 new delayed-response component regressions and the complete 97-test check, deploy, and verify the loading HTML, matching compressed assets, sign-in availability, and private API headers through HTTP. No browser or visual tests.
+
 ## Completion evidence
 
 For each stage, record commands/results in the work report, not as permanent design prose. Keep current docs concise. The final handoff includes the repository, local setup, deployment state, features completed, tests actually executed, observed cost assumptions, and specific unfinished prerequisites. A working local application and a verified deployed beta are different completion states.

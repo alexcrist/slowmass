@@ -1,7 +1,8 @@
-import { useEffect, useId, useState, type FormEvent } from 'react';
+import { useId, useState, type FormEvent } from 'react';
 import { PersonLink } from '../../navigation/PersonLink';
 import { profileHref } from '../../navigation';
 import { api, jsonRequest } from '../../api';
+import { useApiResource } from '../../api/useApiResource';
 type Counts = { likeCount: number; commentCount: number; liked: number };
 type Comment = {
   id: string;
@@ -106,30 +107,20 @@ function Comments({
   onChange: () => Promise<void>;
 }) {
   const label = useId(),
-    [page, setPage] = useState<Page | null>(null),
     [history, setHistory] = useState(['']),
-    [version, setVersion] = useState(0),
     [body, setBody] = useState(''),
     [id, setId] = useState(() => crypto.randomUUID()),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   const after = history[history.length - 1];
-  useEffect(() => {
-    const controller = new AbortController();
-    api<Page>(
-      `/api/interactions/${postId}/comments?after=${encodeURIComponent(after)}`,
-      { signal: controller.signal },
-    )
-      .then((data) => {
-        if (controller.signal.aborted) return;
-        setPage(data);
-        setError('');
-      })
-      .catch((e) => {
-        if (!controller.signal.aborted) setError(e.message);
-      });
-    return () => controller.abort();
-  }, [postId, after, version]);
+  const {
+    data: page,
+    error: loadError,
+    loading,
+    reload,
+  } = useApiResource<Page>(
+    `/api/interactions/${postId}/comments?after=${encodeURIComponent(after)}`,
+  );
   async function add(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -142,8 +133,7 @@ function Comments({
       setBody('');
       setId(crypto.randomUUID());
       setHistory(['']);
-      setPage(null);
-      setVersion((v) => v + 1);
+      reload();
       await onChange();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not add comment.');
@@ -156,8 +146,7 @@ function Comments({
     setError('');
     try {
       await api(`/api/interactions/comments/${id}`, { method: 'DELETE' });
-      setPage(null);
-      setVersion((v) => v + 1);
+      reload();
       await onChange();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not delete comment.');
@@ -167,7 +156,7 @@ function Comments({
   }
   return (
     <div>
-      {!page && !error && <p role="status">Loading comments…</p>}
+      {loading && <p role="status">Loading comments…</p>}
       {page?.items.length === 0 && <p>No comments on this page.</p>}
       <ul className="comment-list">
         {page?.items.map((comment) => (
@@ -192,9 +181,8 @@ function Comments({
       <nav className="actions" aria-label="Comment pages">
         {history.length > 1 && (
           <button
-            disabled={busy}
+            disabled={busy || loading}
             onClick={() => {
-              setPage(null);
               setHistory(history.slice(0, -1));
             }}
           >
@@ -203,9 +191,8 @@ function Comments({
         )}
         {page?.next && (
           <button
-            disabled={busy}
+            disabled={busy || loading}
             onClick={() => {
-              setPage(null);
               setHistory([...history, page.next!]);
             }}
           >
@@ -231,47 +218,38 @@ function Comments({
         />
         <button disabled={busy || !body.trim()}>Post comment</button>
       </form>
-      {error && (
+      {error && <p role="alert">{error}</p>}
+      {loadError && (
         <div>
-          <p role="alert">{error}</p>
-          <button onClick={() => setVersion((v) => v + 1)}>
-            Reload comments
-          </button>
+          <p role="alert">{loadError}</p>
+          <button onClick={reload}>Reload comments</button>
         </div>
       )}
     </div>
   );
 }
 function Likes({ postId }: { postId: string }) {
-  const [page, setPage] = useState<{
-      items: { handle: string; hasAvatar: number }[];
-      next: string | null;
-    } | null>(null),
-    [history, setHistory] = useState(['']),
-    [error, setError] = useState('');
+  const [history, setHistory] = useState(['']);
   const after = history[history.length - 1];
-  useEffect(() => {
-    const controller = new AbortController();
-    api<NonNullable<typeof page>>(
-      `/api/interactions/${postId}/likes?after=${encodeURIComponent(after)}`,
-      { signal: controller.signal },
-    )
-      .then((data) => {
-        if (!controller.signal.aborted) {
-          setPage(data);
-          setError('');
-        }
-      })
-      .catch((e) => {
-        if (!controller.signal.aborted) setError(e.message);
-      });
-    return () => controller.abort();
-  }, [postId, after]);
+  const {
+    data: page,
+    error,
+    loading,
+    reload,
+  } = useApiResource<{
+    items: { handle: string; hasAvatar: number }[];
+    next: string | null;
+  }>(`/api/interactions/${postId}/likes?after=${encodeURIComponent(after)}`);
   return (
     <section aria-label="People who liked this photo">
       <h3>Liked by</h3>
-      {!page && !error && <p role="status">Loading likes…</p>}
-      {error && <p role="alert">{error}</p>}
+      {loading && <p role="status">Loading likes…</p>}
+      {error && (
+        <div>
+          <p role="alert">{error}</p>
+          <button onClick={reload}>Retry</button>
+        </div>
+      )}
       <ul className="people-list">
         {page?.items.map((person) => (
           <li key={person.handle}>
@@ -283,8 +261,8 @@ function Likes({ postId }: { postId: string }) {
       <nav className="actions" aria-label="Like pages">
         {history.length > 1 && (
           <button
+            disabled={loading}
             onClick={() => {
-              setPage(null);
               setHistory(history.slice(0, -1));
             }}
           >
@@ -293,8 +271,8 @@ function Likes({ postId }: { postId: string }) {
         )}
         {page?.next && (
           <button
+            disabled={loading}
             onClick={() => {
-              setPage(null);
               setHistory([...history, page.next!]);
             }}
           >

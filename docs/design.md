@@ -22,6 +22,8 @@ Below 900px, the white header shows the wordmark, and the five primary destinati
 
 Feed and detail photos retain their full aspect ratio. Profile thumbnails use square crops; opening one shows the full photo. Feed headers show only the author's username and avatar alongside the timestamp. Heart and comment icons have accessible names and positive counts; the like count opens the people list. Thin neutral separators replace raised card frames and tinted surfaces. Lists use explicit page controls. Preserve clear loading, empty, error, and confirmation states, visible keyboard focus, and controls at least 44px tall. No automatic animation, engagement gimmicks, or invented social activity.
 
+Startup shows “Loading Slowmass…” until session verification completes; the login form appears only after a confirmed signed-out response. Lists and detail screens distinguish loading, failure, and confirmed empty results. Refreshing or retrying clears stale read errors and results; current data appears after the read succeeds. Status text uses a polite live region, with no decorative loading animation.
+
 Verification uses static checks and API/integration tests only. Browser testing, screenshot inspection, and visual regression testing are prohibited by the user.
 
 ## Branding comparison

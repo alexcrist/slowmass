@@ -1,6 +1,6 @@
 # Welcome
 
-Introduces Slowmass and requests a one-time email link when the backend is configured. Missing credentials disable sign-in with an honest availability message; network and link errors are distinct. The generic sent state does not reveal whether an address has an invitation.
+Shows a neutral loading state until both service availability and the current session are known. Only a confirmed signed-out response reveals the email sign-in form; a failed request shows an error with retry instead. The static HTML supplies the same loading message before JavaScript starts. Missing credentials show an availability message; network and link errors are distinct. The generic sent state does not reveal whether an address has an invitation.
 
 Signed-in members see the member application; sign-out is available under Settings. The header uses the locally hosted text wordmark, and signed-out members see a bounded email sign-in form. The same magic-link flow handles invited new members and returning members, followed by profile setup when needed.
 

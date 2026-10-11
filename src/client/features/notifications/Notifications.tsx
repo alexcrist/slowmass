@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { api, jsonRequest } from '../../api';
+import { useApiResource } from '../../api/useApiResource';
 import { PostDetail } from '../posts/Posts';
 type Item = {
   key: string;
@@ -14,26 +15,18 @@ type Item = {
 type Page = { items: Item[]; next: string | null };
 export function Notifications() {
   const [history, setHistory] = useState(['']),
-    [page, setPage] = useState<Page | null>(null),
-    [version, setVersion] = useState(0),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [postId, setPostId] = useState<string | null>(null);
   const cursor = history[history.length - 1];
-  useEffect(() => {
-    const controller = new AbortController();
-    api<Page>(`/api/notifications?cursor=${encodeURIComponent(cursor)}`, {
-      signal: controller.signal,
-    })
-      .then((data) => {
-        setPage(data);
-        setError('');
-      })
-      .catch((e) => {
-        if (!controller.signal.aborted) setError(e.message);
-      });
-    return () => controller.abort();
-  }, [cursor, version]);
+  const {
+    data: page,
+    error: loadError,
+    loading,
+    reload,
+  } = useApiResource<Page>(
+    `/api/notifications?cursor=${encodeURIComponent(cursor)}`,
+  );
   async function act(handle: string, action: 'accept' | 'deny') {
     setBusy(true);
     setError('');
@@ -41,7 +34,7 @@ export function Notifications() {
       await api(`/api/people/${encodeURIComponent(handle)}/${action}`, {
         method: 'POST',
       });
-      setVersion((v) => v + 1);
+      reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not update request.');
     } finally {
@@ -59,7 +52,7 @@ export function Notifications() {
           items: page.items.map(({ key, createdAt }) => ({ key, createdAt })),
         }),
       );
-      setVersion((v) => v + 1);
+      reload();
     } catch (e) {
       setError(
         e instanceof Error ? e.message : 'Could not mark notifications read.',
@@ -79,22 +72,22 @@ export function Notifications() {
     <>
       <div className="actions">
         <button
-          disabled={busy}
+          disabled={busy || loading}
           onClick={() => {
-            setPage(null);
+            setError('');
             setHistory(['']);
-            setVersion((v) => v + 1);
+            reload();
           }}
         >
           Refresh notifications
         </button>
         {page?.items.some((item) => item.unread) && (
-          <button disabled={busy} onClick={() => void read()}>
+          <button disabled={busy || loading} onClick={() => void read()}>
             Mark this page read
           </button>
         )}
       </div>
-      {!page && !error && <p role="status">Loading notifications…</p>}
+      {loading && <p role="status">Loading notifications…</p>}
       {page?.items.length === 0 && <p>No notifications on this page.</p>}
       <ul className="notification-list">
         {page?.items.map((item) => (
@@ -105,13 +98,13 @@ export function Notifications() {
                 <p>@{item.handle} requested to follow you.</p>
                 <div className="actions">
                   <button
-                    disabled={busy}
+                    disabled={busy || loading}
                     onClick={() => void act(item.handle!, 'accept')}
                   >
                     Accept
                   </button>
                   <button
-                    disabled={busy}
+                    disabled={busy || loading}
                     onClick={() => void act(item.handle!, 'deny')}
                   >
                     Deny
@@ -144,12 +137,18 @@ export function Notifications() {
         ))}
       </ul>
       {error && <p role="alert">{error}</p>}
+      {loadError && (
+        <div>
+          <p role="alert">{loadError}</p>
+          <button onClick={reload}>Retry</button>
+        </div>
+      )}
       <nav className="actions" aria-label="Notification pages">
         {history.length > 1 && (
           <button
-            disabled={busy}
+            disabled={busy || loading}
             onClick={() => {
-              setPage(null);
+              setError('');
               setHistory(history.slice(0, -1));
             }}
           >
@@ -158,9 +157,9 @@ export function Notifications() {
         )}
         {page?.next && (
           <button
-            disabled={busy}
+            disabled={busy || loading}
             onClick={() => {
-              setPage(null);
+              setError('');
               setHistory([...history, page.next!]);
             }}
           >

@@ -77,7 +77,14 @@ function MemberPages({
       return (
         <>
           <p role="alert">{error}</p>
-          <button onClick={() => setRetry((v) => v + 1)}>Retry</button>
+          <button
+            onClick={() => {
+              setError('');
+              setRetry((v) => v + 1);
+            }}
+          >
+            Retry
+          </button>
           <button className="text-button" onClick={onSignOut}>
             Sign out
           </button>
@@ -185,11 +192,13 @@ function MemberPages({
   }
   return (
     <>
-      <MemberNavigation
-        page={page}
-        profile={profile ?? null}
-        avatarVersion={avatarVersion}
-      />
+      {profile !== undefined && (
+        <MemberNavigation
+          page={page}
+          profile={profile ?? null}
+          avatarVersion={avatarVersion}
+        />
+      )}
       <section
         key={ready ? route : 'onboarding'}
         data-page={page}
@@ -198,9 +207,11 @@ function MemberPages({
       >
         <div className="screen-heading">
           <h1 id="screen-title">
-            {profile === null
-              ? 'Create your profile'
-              : titles[page] || 'Slowmass'}
+            {profile === undefined
+              ? 'Slowmass'
+              : profile === null
+                ? 'Create your profile'
+                : titles[page] || 'Slowmass'}
           </h1>
           {page === 'feed' && ready && (
             <span className="field-help">Newest first</span>

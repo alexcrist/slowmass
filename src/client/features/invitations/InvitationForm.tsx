@@ -1,5 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { api, jsonRequest } from '../../api';
+import { useApiResource } from '../../api/useApiResource';
 type Item = {
   id: string;
   email: string;
@@ -15,26 +16,17 @@ export function InvitationForm() {
     [invited, setInvited] = useState(''),
     [error, setError] = useState(''),
     [copyStatus, setCopyStatus] = useState(''),
-    [version, setVersion] = useState(0),
-    [history, setHistory] = useState(['']),
-    [page, setPage] = useState<{ items: Item[]; next: string | null } | null>(
-      null,
-    );
+    [history, setHistory] = useState(['']);
   const after = history[history.length - 1];
-  useEffect(() => {
-    const controller = new AbortController();
-    api<NonNullable<typeof page>>(
-      `/api/invitations?after=${encodeURIComponent(after)}`,
-      { signal: controller.signal },
-    )
-      .then((data) => {
-        if (!controller.signal.aborted) setPage(data);
-      })
-      .catch((e) => {
-        if (!controller.signal.aborted) setError(e.message);
-      });
-    return () => controller.abort();
-  }, [after, version]);
+  const {
+    data: page,
+    error: loadError,
+    loading,
+    reload,
+  } = useApiResource<{
+    items: Item[];
+    next: string | null;
+  }>(`/api/invitations?after=${encodeURIComponent(after)}`);
   async function invite(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -46,7 +38,7 @@ export function InvitationForm() {
       setInvited(email.trim().toLowerCase());
       setEmail('');
       setHistory(['']);
-      setVersion((v) => v + 1);
+      reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not create invitation.');
     } finally {
@@ -60,7 +52,7 @@ export function InvitationForm() {
       await api(`/api/invitations/${id}`, { method: 'DELETE' });
       if (page?.items.find((item) => item.id === id)?.email === invited)
         setInvited('');
-      setVersion((v) => v + 1);
+      reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not cancel invitation.');
     } finally {
@@ -112,21 +104,15 @@ export function InvitationForm() {
           <p role="status">{copyStatus}</p>
         </div>
       )}
-      {error && (
-        <>
-          <p role="alert">{error}</p>
-          <button
-            onClick={() => {
-              setError('');
-              setVersion((v) => v + 1);
-            }}
-          >
-            Reload invitations
-          </button>
-        </>
-      )}
+      {error && <p role="alert">{error}</p>}
       <h2>Your invitations</h2>
-      {!page && !error && <p role="status">Loading invitations…</p>}
+      {loading && <p role="status">Loading invitations…</p>}
+      {loadError && (
+        <div>
+          <p role="alert">{loadError}</p>
+          <button onClick={reload}>Reload invitations</button>
+        </div>
+      )}
       {page?.items.length === 0 && <p>No invitations yet.</p>}
       <ul className="people-list">
         {page?.items.map((item) => (
@@ -157,8 +143,8 @@ export function InvitationForm() {
       <nav className="actions" aria-label="Invitation pages">
         {history.length > 1 && (
           <button
+            disabled={busy || loading}
             onClick={() => {
-              setPage(null);
               setHistory(history.slice(0, -1));
             }}
           >
@@ -167,8 +153,8 @@ export function InvitationForm() {
         )}
         {page?.next && (
           <button
+            disabled={busy || loading}
             onClick={() => {
-              setPage(null);
               setHistory([...history, page.next!]);
             }}
           >

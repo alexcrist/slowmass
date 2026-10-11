@@ -84,3 +84,9 @@ Formatting, lint, types, 79 existing tests, and production build passed. Direct 
 Worker version `e750a8ca-eac0-439c-9856-1ace8b38be40` places Settings on the member's own profile, removes its global navigation links and the manual Shuffle people control, updates invitation wording, and labels composition “New post.” HTML response headers prevent Cloudflare's injected analytics script from conflicting with the existing self-only CSP; the standard mobile web-app metadata tag is also present.
 
 Formatting, lint, types, 79 tests, and production build passed. Direct HTTP verified exact deployed HTML/JS/CSS matches, no injected analytics script in app or branding HTML, gzip-compressed JS/CSS, available sign-in, and private/no-store responses for anonymous API/media requests. No schema changes, browser tests, or visual tests were needed.
+
+## Loading-state release (October 11, 2026)
+
+Worker version `e8baaef9-ebbb-4638-8756-a310532f66ad` replaces the startup login flash with a loading state until session verification completes. The audit also covers member initialization, paginated lists, profile/photo details, retries, and refreshes after mutations. A shared component-scoped read hook ignores obsolete requests and hides old read errors/results while loading. No backend, database, caching, or polling behavior changed.
+
+Formatting, lint, types, 97 tests (including 18 new delayed-response component regressions), and production build passed. Direct HTTP confirmed the initial loading HTML, matching deployed HTML/CSS/JS, compressed assets, available sign-in, and private/no-store account responses. All checks used source review, Node components, local Workers/D1 tests, and HTTP; no browser or visual testing was performed.

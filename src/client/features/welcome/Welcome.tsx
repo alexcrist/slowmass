@@ -9,6 +9,7 @@ type State = 'loading' | 'ready' | 'unavailable' | 'error';
 
 export function Welcome() {
   const [state, setState] = useState<State>('loading');
+  const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
@@ -30,23 +31,31 @@ export function Welcome() {
         });
         if (!response.ok) throw new Error('Status unavailable');
         const status = (await response.json()) as { signInAvailable: boolean };
-        setState(status.signInAvailable ? 'ready' : 'unavailable');
+        if (controller.signal.aborted) return;
         if (status.signInAvailable) {
           const me = await fetch('/api/me', { signal: controller.signal });
           if (me.ok) {
             const result = (await me.json()) as { user: { name: string } };
+            if (controller.signal.aborted) return;
             setName(result.user.name);
           } else if (me.status !== 401) {
             throw new Error('Account unavailable');
           }
         }
+        if (!controller.signal.aborted)
+          setState(status.signInAvailable ? 'ready' : 'unavailable');
       } catch {
         if (!controller.signal.aborted) setState('error');
       }
     }
     void load();
     return () => controller.abort();
-  }, []);
+  }, [attempt]);
+
+  function retry() {
+    setState('loading');
+    setAttempt((value) => value + 1);
+  }
 
   useEffect(() => {
     if (!sent || name !== null) return;
@@ -135,9 +144,15 @@ export function Welcome() {
       </header>
       <section
         className="account-section"
-        aria-label={name !== null ? 'Your account' : 'Sign in'}
+        aria-label={
+          state !== 'ready'
+            ? 'Slowmass'
+            : name !== null
+              ? 'Your account'
+              : 'Sign in'
+        }
       >
-        {name === null && (
+        {state === 'ready' && name === null && (
           <>
             <h1>Welcome to Slowmass</h1>
             <p className="status-copy">
@@ -146,7 +161,18 @@ export function Welcome() {
           </>
         )}
         <div className="sign-in-area">
-          {name !== null ? (
+          {state === 'loading' ? (
+            <p role="status">Loading Slowmass…</p>
+          ) : state === 'error' || state === 'unavailable' ? (
+            <div>
+              <p role="alert">
+                {state === 'error'
+                  ? 'We couldn’t load Slowmass. Check your connection and try again.'
+                  : 'Slowmass is temporarily unavailable. Please try again.'}
+              </p>
+              <button onClick={retry}>Try again</button>
+            </div>
+          ) : name !== null ? (
             <MemberApp onSignOut={() => void signOut()} signingOut={busy} />
           ) : sent ? (
             <div>
@@ -185,28 +211,16 @@ export function Welcome() {
                 placeholder="you@example.com"
                 disabled={busy}
               />
-              <button
-                className="primary-button"
-                type="submit"
-                disabled={state !== 'ready' || busy}
-              >
-                {busy
-                  ? 'Requesting your link…'
-                  : state === 'loading'
-                    ? 'One moment…'
-                    : 'Send sign-in link'}
+              <button className="primary-button" type="submit" disabled={busy}>
+                {busy ? 'Requesting your link…' : 'Send sign-in link'}
               </button>
               <p className="status-copy">
-                {state === 'unavailable'
-                  ? 'Sign-in is temporarily unavailable.'
-                  : state === 'error'
-                    ? 'We couldn’t connect. Refresh the page to try again.'
-                    : 'New here? Ask a member to invite you. No password is needed.'}
+                New here? Ask a member to invite you. No password is needed.
               </p>
             </form>
           )}
           {name === null && state === 'ready' && <PasteLoginLink />}
-          {message && (
+          {state === 'ready' && message && (
             <p className="error-message" role="alert">
               {message}
             </p>
