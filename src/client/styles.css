@@ -14,11 +14,11 @@
 }
 :root {
   font-family: 'Source Sans 3', system-ui, sans-serif;
-  color: #26333d;
+  color: #29362e;
   background: #f3f3ef;
-  --blue: #294e62;
-  --muted: #617078;
-  --line: #d9dedf;
+  --brand: #234b38;
+  --muted: #627066;
+  --line: #dbe1da;
   --paper: #fff;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -32,7 +32,7 @@ body {
   margin: 0;
 }
 a {
-  color: var(--blue);
+  color: var(--brand);
   text-underline-offset: 3px;
 }
 button,
@@ -52,10 +52,10 @@ button:disabled {
   outline-offset: 3px;
 }
 .masthead {
-  background: var(--blue);
-  border-bottom: 1px solid #1c3b4c;
+  background: var(--brand);
+  border-bottom: 1px solid #183a29;
   padding: 8px max(20px, calc((100% - 640px) / 2));
-  box-shadow: 0 1px 3px #26333d20;
+  box-shadow: 0 1px 3px #29362e20;
 }
 .site-name {
   display: inline-flex;
@@ -68,7 +68,7 @@ button:disabled {
   line-height: 1.2;
   color: #fff9ec;
   text-decoration: none;
-  text-shadow: 0 2px 0 #183746;
+  text-shadow: 0 2px 0 #163323;
 }
 .account-section {
   max-width: 640px;
@@ -81,7 +81,7 @@ button:disabled {
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 8px;
-  box-shadow: 0 3px 10px #26333d08;
+  box-shadow: 0 3px 10px #29362e08;
 }
 h1 {
   font-size: 26px;
@@ -130,12 +130,12 @@ p {
   height: 23px;
 }
 .primary-nav button[aria-pressed='true'] {
-  color: var(--blue);
-  border-bottom-color: var(--blue);
-  background: #edf2f4;
+  color: var(--brand);
+  border-bottom-color: var(--brand);
+  background: #eaf1e9;
 }
 .primary-nav button:hover {
-  background: #f0f4f5;
+  background: #f0f4ee;
 }
 .member-content {
   background: var(--paper);
@@ -173,38 +173,38 @@ p {
   font-size: 15px;
 }
 .profile-nav button[aria-pressed='true'] {
-  color: var(--blue);
-  border-bottom-color: var(--blue);
+  color: var(--brand);
+  border-bottom-color: var(--brand);
   font-weight: 600;
 }
 :where(button:not([class])),
 .actions button {
   min-height: 44px;
   padding: 9px 15px;
-  border: 1px solid #bdc8ce;
+  border: 1px solid #becbbe;
   border-radius: 5px;
-  background: #f8fafb;
-  color: var(--blue);
+  background: #f8faf6;
+  color: var(--brand);
   font-weight: 600;
 }
 :where(button:not([class])):enabled:hover,
 .actions button:enabled:hover {
-  background: #edf2f4;
+  background: #eaf1e9;
 }
 .primary-button {
   width: 100%;
   min-height: 48px;
   margin-top: 8px;
-  border: 1px solid #203e50;
+  border: 1px solid #193c2a;
   border-radius: 5px;
-  background: var(--blue);
+  background: var(--brand);
   color: #fff;
   padding: 11px 16px;
   font-weight: 600;
   box-shadow: inset 0 1px 0 #ffffff15;
 }
 .primary-button:enabled:hover {
-  background: #365f74;
+  background: #306449;
 }
 .field-label {
   display: block;
@@ -216,18 +216,18 @@ input,
 textarea {
   width: 100%;
   min-height: 48px;
-  border: 1px solid #bbc6cc;
+  border: 1px solid #bac8bb;
   border-radius: 5px;
-  background: #fcfdfd;
-  color: #26333d;
+  background: #fcfdfb;
+  color: #29362e;
   font-size: 16px;
   padding: 11px 12px;
   margin: 0 0 12px;
-  box-shadow: inset 0 1px 2px #26333d05;
+  box-shadow: inset 0 1px 2px #29362e05;
 }
 input:disabled {
   color: var(--muted);
-  background: #f3f5f5;
+  background: #f2f5ef;
 }
 textarea {
   resize: vertical;
@@ -237,8 +237,8 @@ input[type='file'] {
 }
 input::file-selector-button {
   font: inherit;
-  color: var(--blue);
-  background: #edf2f4;
+  color: var(--brand);
+  background: #eaf1e9;
   border: 0;
   border-radius: 3px;
   padding: 5px 10px;
@@ -261,7 +261,7 @@ input::file-selector-button {
 .text-button {
   border: 0;
   background: transparent;
-  color: var(--blue);
+  color: var(--brand);
   min-height: 44px;
   padding: 10px 0;
   text-decoration: underline;
@@ -347,7 +347,7 @@ input::file-selector-button {
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 6px;
-  box-shadow: 0 2px 4px #26333d06;
+  box-shadow: 0 2px 4px #29362e06;
   overflow-wrap: anywhere;
 }
 .post header {
@@ -386,9 +386,9 @@ input::file-selector-button {
     left: 0;
     right: 0;
     border: 0;
-    border-top: 1px solid #c8d2d7;
+    border-top: 1px solid #c9d4c7;
     padding-bottom: env(safe-area-inset-bottom);
-    box-shadow: 0 -2px 8px #26333d08;
+    box-shadow: 0 -2px 8px #29362e08;
   }
   .primary-nav button {
     min-height: 66px;

@@ -1,15 +1,15 @@
 # Interface guidance
 
-The interface takes its direction from early photo-sharing apps: a compact slate-blue header, lowercase script wordmark, white photo frames, and a narrow chronological feed. This basic brand direction was approved on October 10, 2026. Copy remains functional, without slogans or marketing messages.
+The interface takes its direction from early photo-sharing apps: a compact forest-green header, lowercase script wordmark, white photo frames, and a narrow chronological feed. This basic brand direction was approved on October 10, 2026. Copy remains functional, without slogans or marketing messages.
 
 ## Type and color
 
 - Lobster Two bold italic: the text-only `slowmass` wordmark.
 - Source Sans 3: headings, controls, captions, and body text. Use 400 and 600 weights with system fallbacks.
-- Slate blue `#294e62`: header, primary actions, selected navigation.
+- Forest green `#234b38`: header, primary actions, selected navigation.
 - Cream `#fff9ec`: wordmark on the header.
 - Off-white `#f3f3ef`: page background; white `#ffffff`: forms and photo frames.
-- Ink `#26333d`: body text; gray `#617078`: secondary text; pale gray `#d9dedf`: boundaries.
+- Ink `#29362e`: body text; gray `#627066`: secondary text; pale gray `#dbe1da`: boundaries.
 
 Both fonts are served locally from `public/fonts`, with their SIL Open Font Licenses included. No third-party font or image requests. The reusable wordmark is also available at `/slowmass-wordmark.svg` as standalone vector outlines.
 
