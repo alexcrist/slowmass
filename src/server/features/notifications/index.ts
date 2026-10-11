@@ -40,11 +40,12 @@ export async function notificationPage(
   db: D1Database,
   actor: string,
   cursor: ReturnType<typeof parsePage>,
+  filter: 'all' | 'requests' = 'all',
 ) {
   const rows = await db
     .prepare(
       `${events} SELECT e.*, (e.createdAt>COALESCE(r.read_through,-1)) AS unread FROM events e CROSS JOIN viewer v LEFT JOIN notification_read r ON r.user_id=v.id AND r.event_key=e.key
- WHERE e.createdAt<? OR (e.createdAt=? AND e.key<?) ORDER BY e.createdAt DESC,e.key DESC LIMIT 21`,
+ WHERE ${filter === 'requests' ? "e.kind='request' AND" : ''} (e.createdAt<? OR (e.createdAt=? AND e.key<?)) ORDER BY e.createdAt DESC,e.key DESC LIMIT 21`,
     )
     .bind(
       actor,

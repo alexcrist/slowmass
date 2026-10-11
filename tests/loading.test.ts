@@ -40,6 +40,7 @@ beforeEach(() => {
     hash: '#feed',
     search: '',
     origin: 'https://slowmass.com',
+    reload: vi.fn(),
   });
   vi.stubGlobal('navigator', { standalone: false });
   vi.stubGlobal('document', {
@@ -50,6 +51,7 @@ beforeEach(() => {
   vi.stubGlobal('window', {
     addEventListener: events.addEventListener.bind(events),
     removeEventListener: events.removeEventListener.bind(events),
+    dispatchEvent: events.dispatchEvent.bind(events),
     scrollTo: vi.fn(),
     matchMedia: () => ({
       matches: false,
@@ -231,7 +233,7 @@ const lists = [
     path: '/api/posts?',
     loading: 'Loading posts…',
     empty: 'No posts on this page.',
-    retry: 'Refresh posts',
+    retry: 'Retry',
   },
   {
     name: 'people',
@@ -243,7 +245,7 @@ const lists = [
   },
   {
     name: 'connections',
-    element: () => createElement(Connections, { kind: 'requests' }),
+    element: () => createElement(Connections, { kind: 'followers' }),
     path: '/api/people/connections?',
     loading: 'Loading…',
     empty: 'No accounts on this page.',
@@ -254,7 +256,7 @@ const lists = [
     element: () => createElement(Notifications),
     path: '/api/notifications?',
     loading: 'Loading notifications…',
-    empty: 'No notifications on this page.',
+    empty: 'No activity on this page.',
     retry: 'Retry',
   },
   {
@@ -263,7 +265,7 @@ const lists = [
     path: '/api/invitations?',
     loading: 'Loading invitations…',
     empty: 'No invitations yet.',
-    retry: 'Reload invitations',
+    retry: 'Retry',
   },
 ];
 it.each(lists)(
@@ -288,7 +290,7 @@ it.each([
   {
     panel: 'comments',
     open: 'Show comments',
-    retry: 'Reload comments',
+    retry: 'Retry',
     empty: 'No comments on this page.',
   },
   {
@@ -352,7 +354,7 @@ it('clears previous photo details during navigation and ignores a late, aborted 
   expect(visibleText()).not.toContain('Photo unavailable');
 });
 
-it('does not show an old feed page or end marker while paging and refreshing', async () => {
+it('does not show an old feed page or end marker while paging', async () => {
   await mount(createElement(PostList));
   await reply(pending('/api/posts?'), {
     items: [post('first')],
@@ -361,12 +363,14 @@ it('does not show an old feed page or end marker while paging and refreshing', a
   await click('Older');
   expect(visibleText()).toContain('Loading posts…');
   expect(visibleText()).not.toContain('Photo first');
-  expect(visibleText()).not.toContain('End of posts.');
+  expect(
+    renderer.root.findAllByProps({ 'aria-label': 'End of posts' }),
+  ).toHaveLength(0);
   await reply(pending('/api/posts?cursor=older'), { items: [], next: null });
-  expect(visibleText()).toContain('End of posts.');
-  await click('Refresh posts');
-  expect(visibleText()).not.toContain('End of posts.');
-  expect(visibleText()).not.toContain('No posts on this page.');
+  expect(
+    renderer.root.findAllByProps({ 'aria-label': 'End of posts' }),
+  ).toHaveLength(1);
+  expect(visibleText()).not.toContain('End of posts');
 });
 
 it('waits for profile authorization before showing private or empty states', async () => {
@@ -387,11 +391,11 @@ it('waits for profile authorization before showing private or empty states', asy
 });
 
 it.each(['connections', 'activity'])(
-  '%s stop showing an accepted follow request while refreshing',
+  '%s stop showing resolved relationship actions while refreshing',
   async (kind) => {
     await mount(
       kind === 'connections'
-        ? createElement(Connections, { kind: 'requests' })
+        ? createElement(Connections, { kind: 'followers' })
         : createElement(Notifications),
     );
     const path =
@@ -411,8 +415,9 @@ it.each(['connections', 'activity'])(
       ],
       next: null,
     });
-    await click('Accept');
-    await reply(pending('/api/people/alice/accept'), { ok: true });
+    const action = kind === 'connections' ? 'remove' : 'accept';
+    await click(kind === 'connections' ? 'Remove follower' : 'Accept');
+    await reply(pending(`/api/people/alice/${action}`), { ok: true });
     expect(visibleText()).toContain('Loading');
     expect(visibleText()).not.toContain('@alice');
     expect(
@@ -458,4 +463,208 @@ it('does not keep the empty invitation message or old cancellation status after 
   expect(visibleText()).toContain('Loading invitations…');
   expect(visibleText()).not.toContain('Waiting to join');
   expect(visibleText()).not.toContain('Invitation ready');
+});
+
+async function selectTab(label: string, modified = false) {
+  const link = renderer.root
+    .findAllByType('a')
+    .find((item) => item.props['aria-label'] === label)!;
+  const event = {
+    button: 0,
+    ctrlKey: modified,
+    defaultPrevented: false,
+    preventDefault: vi.fn(),
+  };
+  await act(async () => {
+    link.props.onClick(event);
+    if (
+      !modified &&
+      !event.preventDefault.mock.calls.length &&
+      location.hash !== link.props.href
+    ) {
+      location.hash = link.props.href;
+      window.dispatchEvent(new Event('hashchange'));
+    }
+  });
+  return event;
+}
+
+it('reselecting Feed reloads the newest page without another account read or a persistent refresh button', async () => {
+  await mount(
+    createElement(MemberApp, { onSignOut: vi.fn(), signingOut: false }),
+  );
+  await reply(pending('/api/people/self'), { profile: ownProfile });
+  await reply(pending('/api/posts?'), {
+    items: [post('first')],
+    next: 'older',
+  });
+  await click('Older');
+  await reply(pending('/api/posts?cursor=older'), {
+    items: [post('older')],
+    next: null,
+  });
+  expect(visibleText()).toContain('Photo older');
+  expect(visibleText()).not.toContain('Refresh posts');
+  const event = await selectTab('Feed');
+  expect(event.preventDefault).toHaveBeenCalledOnce();
+  expect(visibleText()).toContain('Loading posts…');
+  expect(visibleText()).not.toContain('Photo older');
+  expect(
+    renderer.root.findAllByProps({ 'aria-label': 'End of posts' }),
+  ).toHaveLength(0);
+  expect(pending('/api/posts?').path).toBe('/api/posts?');
+  expect(
+    requests.filter((item) => item.path === '/api/people/self'),
+  ).toHaveLength(1);
+});
+
+it.each([
+  {
+    route: '#notifications',
+    label: 'Activity',
+    path: '/api/notifications?',
+    data: { items: [], next: null },
+    loading: 'Loading notifications…',
+  },
+  {
+    route: '#profile/alice',
+    label: 'Profile',
+    path: '/api/people/alice',
+    data: { profile: { ...ownProfile, relationship: 'self' } },
+    loading: 'Loading profile…',
+  },
+  {
+    route: '#profile',
+    label: 'Profile',
+    path: '/api/people/alice',
+    data: { profile: { ...ownProfile, relationship: 'self' } },
+    loading: 'Loading profile…',
+  },
+])(
+  'reselecting $route fetches current data in the installed app',
+  async ({ route, label, path, data, loading }) => {
+    location.hash = route;
+    vi.stubGlobal('navigator', { standalone: true });
+    await mount(
+      createElement(MemberApp, { onSignOut: vi.fn(), signingOut: false }),
+    );
+    await reply(pending('/api/people/self'), { profile: ownProfile });
+    await reply(pending(path), data);
+    const event = await selectTab(label);
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(visibleText()).toContain(loading);
+    expect(pending(path)).toBeDefined();
+    expect(visibleText()).not.toContain('Refresh notifications');
+  },
+);
+
+it('preserves draft input and normal modified navigation when a tab is selected again', async () => {
+  location.hash = '#compose';
+  await mount(
+    createElement(MemberApp, { onSignOut: vi.fn(), signingOut: false }),
+  );
+  await reply(pending('/api/people/self'), { profile: ownProfile });
+  await act(async () => {
+    renderer.root
+      .findByProps({ id: 'caption' })
+      .props.onChange({ target: { value: 'Keep this draft' } });
+  });
+  const compose = await selectTab('New post');
+  expect(compose.preventDefault).not.toHaveBeenCalled();
+  expect(renderer.root.findByProps({ id: 'caption' }).props.value).toBe(
+    'Keep this draft',
+  );
+  await selectTab('Feed');
+  await reply(pending('/api/posts?'), { items: [], next: null });
+  const count = requests.length;
+  const modified = await selectTab('Feed', true);
+  expect(modified.preventDefault).not.toHaveBeenCalled();
+  expect(requests).toHaveLength(count);
+});
+
+it('Profile navigates home from another member and Settings provides the only full-app reload control', async () => {
+  location.hash = '#profile/bob';
+  await mount(
+    createElement(MemberApp, { onSignOut: vi.fn(), signingOut: false }),
+  );
+  await reply(pending('/api/people/self'), { profile: ownProfile });
+  const event = await selectTab('Profile');
+  expect(event.preventDefault).not.toHaveBeenCalled();
+  expect(location.hash).toBe('#profile/alice');
+  expect(pending('/api/people/alice')).toBeDefined();
+  expect(visibleText()).not.toContain('Reload app');
+  await act(async () => {
+    location.hash = '#settings';
+    window.dispatchEvent(new Event('hashchange'));
+  });
+  await click('Reload app');
+  expect(location.reload).toHaveBeenCalledOnce();
+});
+
+it('filters and resolves follow requests inside Activity without a separate screen', async () => {
+  location.hash = '#notifications';
+  await mount(
+    createElement(MemberApp, { onSignOut: vi.fn(), signingOut: false }),
+  );
+  await reply(pending('/api/people/self'), { profile: ownProfile });
+  await reply(pending('/api/notifications?'), {
+    items: [
+      { key: 'likes:one', kind: 'likes', count: 2, createdAt: 2, unread: 1 },
+    ],
+    next: 'older',
+  });
+  await click('Older');
+  await reply(pending('/api/notifications?cursor=older'), {
+    items: [],
+    next: null,
+  });
+  await click('Follow requests');
+  expect(location.hash).toBe('#notifications');
+  expect(visibleText()).toContain('Loading notifications…');
+  expect(pending('/api/notifications?').path).toBe(
+    '/api/notifications?cursor=&filter=requests',
+  );
+  await reply(pending('/api/notifications?'), {
+    items: [
+      {
+        key: 'request:bob',
+        kind: 'request',
+        handle: 'bob',
+        createdAt: 1,
+        unread: 1,
+      },
+    ],
+    next: null,
+  });
+  await click('Accept');
+  await reply(pending('/api/people/bob/accept'), { ok: true });
+  expect(pending('/api/notifications?').path).toContain('filter=requests');
+  await reply(pending('/api/notifications?'), { items: [], next: null });
+  expect(visibleText()).toContain('No pending follow requests');
+  await click('All');
+  expect(pending('/api/notifications?').path).toBe(
+    '/api/notifications?cursor=',
+  );
+  expect(requests.some((item) => item.path.includes('/connections'))).toBe(
+    false,
+  );
+  expect(renderer.root.findAllByProps({ href: '#requests' })).toHaveLength(0);
+});
+
+it('opens older follow-request links in Activity', async () => {
+  location.hash = '#requests';
+  await mount(
+    createElement(MemberApp, { onSignOut: vi.fn(), signingOut: false }),
+  );
+  await reply(pending('/api/people/self'), { profile: ownProfile });
+  expect(renderer.root.findByType('h1').children).toEqual(['Activity']);
+  expect(
+    renderer.root.findAllByProps({ 'aria-label': 'Activity filters' }),
+  ).toHaveLength(1);
+  expect(pending('/api/notifications?')).toBeDefined();
+  const event = await selectTab('Activity');
+  expect(event.preventDefault).toHaveBeenCalledOnce();
+  expect(requests.some((item) => item.path.includes('/connections'))).toBe(
+    false,
+  );
 });

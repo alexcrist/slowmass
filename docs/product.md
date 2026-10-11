@@ -15,8 +15,8 @@ A mobile-first place to share single photos with friends. The feed is reverse ch
 - Publish exactly one still photo with an optional plain-text caption and optional author-written alt text. Preview before publishing; preserve the chosen aspect ratio. Show a clear unsupported-format message when conversion cannot be performed.
 - View own posts on the profile and navigate there after posting. Own posts are excluded from the home feed unless the product decision changes; do not create a synthetic self-follow.
 - Feed cards show the author's username and avatar, linking to their profile. Like/unlike and comment controls use accessible icons and positive counts. Clicking the like count opens a paginated list of members who liked the post. Comments are flat and paginated. Authors can delete their comments; post owners can delete comments on their posts. Post owners can delete posts. Caption editing is deferred.
-- Show in-app notifications for follow requests, likes, and comments, with unread state and safe links. Group likes per post; display authoritative current counts. No SMS, email activity digests, or push notifications initially.
-- Use explicit Newer/Older page navigation, preserve navigation state, and show a caught-up/end state. Load images near the viewport without automatically fetching another page.
+- Show in-app notifications for follow requests, likes, and comments, with unread state and safe links. Group likes per post; display authoritative current counts. Activity includes All and Follow requests filters, with requests accepted or denied in place. No SMS, email activity digests, or push notifications initially.
+- Use explicit Newer/Older page navigation, preserve navigation state, and show an accessible check-circle icon at the end of posts. Load images near the viewport without automatically fetching another page.
 - Provide logout and account deletion. Deletion immediately removes visibility and schedules retryable object cleanup. Document backup retention separately from live deletion.
 
 ## Privacy semantics

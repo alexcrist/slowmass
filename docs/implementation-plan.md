@@ -116,6 +116,14 @@ Exit: an invited friend can sign in, post, follow another friend, and interact w
 - [x] Refresh successful invitation/follow/read mutations with visible loading, and add missing retry controls for photo details and liked-by lists.
 - [x] Pass 18 new delayed-response component regressions and the complete 97-test check, deploy, and verify the loading HTML, matching compressed assets, sign-in availability, and private API headers through HTTP. No browser or visual tests.
 
+## October 11 activity and navigation cleanup
+
+- [x] Remove persistent refresh buttons, retain failure-only Retry controls, and support refreshing the first page by reselecting Feed, Activity, or own Profile; keep a full Reload app control in Settings.
+- [x] Keep follow requests within Activity using All/Follow requests filters, inline decisions, and server filtering before pagination; resolve old request-page links to Activity.
+- [x] Replace visible end-of-posts text with a neutral check-circle icon and accessible label.
+- [x] Add labeled arrow back controls to secondary pages and inline photo details; use safe parent destinations for direct links.
+- [x] Pass formatting, lint, types, 106 tests, and production build; deploy and verify matching compressed assets, sign-in availability, and anonymous filtered-activity rejection through HTTP. No database migration, browser test, or visual test.
+
 ## Completion evidence
 
 For each stage, record commands/results in the work report, not as permanent design prose. Keep current docs concise. The final handoff includes the repository, local setup, deployment state, features completed, tests actually executed, observed cost assumptions, and specific unfinished prerequisites. A working local application and a verified deployed beta are different completion states.

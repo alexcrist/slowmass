@@ -110,7 +110,7 @@ export function InvitationForm() {
       {loadError && (
         <div>
           <p role="alert">{loadError}</p>
-          <button onClick={reload}>Reload invitations</button>
+          <button onClick={reload}>Retry</button>
         </div>
       )}
       {page?.items.length === 0 && <p>No invitations yet.</p>}

@@ -338,3 +338,58 @@ it('lists likes only for viewers with post access and hides blocked identities',
   ).toMatchObject({ items: [{ handle: 'alice' }] });
   expect((await runtime.request('bob', `${base}/likes`)).status).toBe(404);
 });
+
+it('filters pending requests before pagination and preserves visibility and cursor boundaries', async () => {
+  await runtime.request('carol', '/api/people/alice/request', 'POST');
+  await runtime.request('david', '/api/people/alice/request', 'POST');
+  await runtime.db
+    .prepare("UPDATE follow SET created_at=500 WHERE status='pending'")
+    .run();
+  await runtime.request('bob', `${base}/like`, 'PUT');
+  await runtime.db.batch(
+    Array.from({ length: 26 }, (_, i) =>
+      runtime.db
+        .prepare(
+          "INSERT INTO comment(id,post_id,user_id,body,created_at) VALUES(?,?,'bob','Comment',?)",
+        )
+        .bind(crypto.randomUUID(), postId, i === 25 ? 500 : 600),
+    ),
+  );
+  expect((await notices()).items.some((item) => item.kind === 'request')).toBe(
+    false,
+  );
+  async function filtered(cursor = '') {
+    const response = await runtime.request(
+      'alice',
+      `/api/notifications?filter=requests&cursor=${encodeURIComponent(cursor)}`,
+    );
+    expect(response.status).toBe(200);
+    return response.json() as Promise<{
+      items: { key: string; kind: string }[];
+      next: string | null;
+    }>;
+  }
+  expect(await filtered()).toMatchObject({
+    items: [
+      { key: 'request:david', kind: 'request' },
+      { key: 'request:carol', kind: 'request' },
+    ],
+    next: null,
+  });
+  expect(
+    await filtered(btoa(JSON.stringify({ time: 500, key: 'request:david' }))),
+  ).toMatchObject({ items: [{ key: 'request:carol' }] });
+  await runtime.request('alice', '/api/people/carol/deny', 'POST');
+  expect((await filtered()).items.map((item) => item.key)).toEqual([
+    'request:david',
+  ]);
+  await runtime.request('alice', '/api/people/david/block', 'POST');
+  expect((await filtered()).items).toEqual([]);
+  expect(
+    (await runtime.request(null, '/api/notifications?filter=requests')).status,
+  ).toBe(401);
+  expect(
+    (await runtime.request('alice', '/api/notifications?filter=invalid'))
+      .status,
+  ).toBe(400);
+});

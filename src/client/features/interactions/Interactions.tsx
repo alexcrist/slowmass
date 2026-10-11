@@ -222,7 +222,7 @@ function Comments({
       {loadError && (
         <div>
           <p role="alert">{loadError}</p>
-          <button onClick={reload}>Reload comments</button>
+          <button onClick={reload}>Retry</button>
         </div>
       )}
     </div>

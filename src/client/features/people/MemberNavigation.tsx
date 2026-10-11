@@ -1,4 +1,4 @@
-import { profileHref } from '../../navigation';
+import { currentRoute, profileHref } from '../../navigation';
 import type { Profile } from './ProfileForm';
 
 const destinations = [
@@ -41,10 +41,12 @@ export function MemberNavigation({
   page,
   profile,
   avatarVersion,
+  onReselect,
 }: {
   page: string;
   profile: Profile | null;
   avatarVersion: number;
+  onReselect: () => void;
 }) {
   return (
     <nav className="app-navigation" aria-label="Main navigation">
@@ -61,36 +63,62 @@ export function MemberNavigation({
         </span>
       </a>
       <div className="primary-nav">
-        {destinations.map((item) => (
-          <a
-            className="nav-link"
-            key={item.page}
-            href={
-              profile
-                ? item.page === 'profile'
-                  ? profileHref(profile.handle)
-                  : `#${item.page}`
-                : '#profile'
-            }
-            aria-label={item.label}
-            aria-current={page === item.page ? 'page' : undefined}
-          >
-            {item.page === 'profile' && profile?.hasAvatar ? (
-              <img
-                className="nav-avatar"
-                src={`/media/avatar/${encodeURIComponent(profile.handle)}?v=${avatarVersion}`}
-                width={24}
-                height={24}
-                alt=""
-              />
-            ) : (
-              <Icon path={item.path} />
-            )}
-            <span className="nav-label" aria-hidden="true">
-              {item.label}
-            </span>
-          </a>
-        ))}
+        {destinations.map((item) => {
+          const href = profile
+            ? item.page === 'profile'
+              ? profileHref(profile.handle)
+              : `#${item.page}`
+            : '#profile';
+          const route = currentRoute();
+          const canRefresh =
+            Boolean(profile) &&
+            ['feed', 'notifications', 'profile'].includes(item.page) &&
+            (href === `#${route}` ||
+              (item.page === 'profile' && route === 'profile'));
+          return (
+            <a
+              className="nav-link"
+              key={item.page}
+              href={href}
+              onClick={(event) => {
+                if (
+                  !canRefresh ||
+                  event.defaultPrevented ||
+                  event.button !== 0 ||
+                  event.metaKey ||
+                  event.ctrlKey ||
+                  event.shiftKey ||
+                  event.altKey
+                )
+                  return;
+                event.preventDefault();
+                onReselect();
+              }}
+              aria-label={item.label}
+              aria-description={
+                canRefresh
+                  ? 'Select again to load the latest updates.'
+                  : undefined
+              }
+              aria-current={page === item.page ? 'page' : undefined}
+            >
+              {item.page === 'profile' && profile?.hasAvatar ? (
+                <img
+                  className="nav-avatar"
+                  src={`/media/avatar/${encodeURIComponent(profile.handle)}?v=${avatarVersion}`}
+                  width={24}
+                  height={24}
+                  alt=""
+                />
+              ) : (
+                <Icon path={item.path} />
+              )}
+              <span className="nav-label" aria-hidden="true">
+                {item.label}
+              </span>
+            </a>
+          );
+        })}
       </div>
     </nav>
   );

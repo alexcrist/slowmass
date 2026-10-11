@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../api';
 import { profileHref, useRoute } from '../../navigation';
+import { BackControl } from '../../navigation/BackControl';
 import { DeleteAccount } from '../account/DeleteAccount';
 import { Notifications } from '../notifications/Notifications';
 import { Compose, PostList } from '../posts/Posts';
@@ -22,7 +23,6 @@ const titles: Record<string, string> = {
   settings: 'Settings',
   edit: 'Edit profile',
   invitations: 'Invite friends',
-  requests: 'Follow requests',
   following: 'Following',
   followers: 'Followers',
   blocked: 'Blocked accounts',
@@ -50,6 +50,7 @@ function MemberPages({
   const [avatarVersion, setAvatarVersion] = useState(0);
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
+  const [pageVersion, setPageVersion] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
     api<{ profile: Profile | null }>('/api/people/self', {
@@ -68,6 +69,14 @@ function MemberPages({
   }, [retry]);
   const ready = Boolean(profile);
   const profileRoute = profile ? profileHref(profile.handle) : '#profile';
+  const back =
+    page === 'settings' || page === 'following' || page === 'followers'
+      ? { href: profileRoute, label: 'Back to profile' }
+      : ['edit', 'invitations', 'blocked'].includes(page)
+        ? { href: '#settings', label: 'Back to settings' }
+        : page === 'profile' && handle && handle !== profile?.handle
+          ? { href: '#feed', label: 'Back to feed' }
+          : null;
   function saved(value: Profile) {
     setProfile(value);
     location.hash = profileHref(value.handle);
@@ -121,14 +130,7 @@ function MemberPages({
           />
         );
       case 'notifications':
-        return (
-          <>
-            <a className="text-button" href="#requests">
-              Follow requests
-            </a>
-            <Notifications />
-          </>
-        );
+        return <Notifications />;
       case 'edit':
         return (
           <>
@@ -149,7 +151,6 @@ function MemberPages({
         );
       case 'invitations':
         return <InvitationForm />;
-      case 'requests':
       case 'following':
       case 'followers':
       case 'blocked':
@@ -160,13 +161,19 @@ function MemberPages({
             <nav className="settings-links" aria-label="Settings">
               <a href="#edit">Edit profile</a>
               <a href="#invitations">Invite friends</a>
-              <a href="#requests">Follow requests</a>
               <a href="#following">Following</a>
               <a href="#followers">Followers</a>
               <a href="#blocked">Blocked accounts</a>
             </nav>
             <InstallApp />
             <div className="account-tools">
+              <button
+                className="text-button"
+                onClick={() => location.reload()}
+                disabled={signingOut}
+              >
+                Reload app
+              </button>
               <button
                 className="text-button"
                 onClick={onSignOut}
@@ -197,14 +204,19 @@ function MemberPages({
           page={page}
           profile={profile ?? null}
           avatarVersion={avatarVersion}
+          onReselect={() => {
+            setPageVersion((version) => version + 1);
+            window.scrollTo(0, 0);
+          }}
         />
       )}
       <section
-        key={ready ? route : 'onboarding'}
+        key={ready ? `${route}:${pageVersion}` : 'onboarding'}
         data-page={page}
         className={`member-content ${ready && (page === 'feed' || page === 'profile') ? 'photo-screen' : ''}`}
         aria-labelledby="screen-title"
       >
+        {ready && back && <BackControl {...back} />}
         <div className="screen-heading">
           <h1 id="screen-title">
             {profile === undefined

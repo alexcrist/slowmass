@@ -90,3 +90,9 @@ Formatting, lint, types, 79 tests, and production build passed. Direct HTTP veri
 Worker version `e8baaef9-ebbb-4638-8756-a310532f66ad` replaces the startup login flash with a loading state until session verification completes. The audit also covers member initialization, paginated lists, profile/photo details, retries, and refreshes after mutations. A shared component-scoped read hook ignores obsolete requests and hides old read errors/results while loading. No backend, database, caching, or polling behavior changed.
 
 Formatting, lint, types, 97 tests (including 18 new delayed-response component regressions), and production build passed. Direct HTTP confirmed the initial loading HTML, matching deployed HTML/CSS/JS, compressed assets, available sign-in, and private/no-store account responses. All checks used source review, Node components, local Workers/D1 tests, and HTTP; no browser or visual testing was performed.
+
+## Activity and navigation release (October 11, 2026)
+
+Worker version `0e9a9944-c3b3-4252-8bc8-012ccef8e02c` removes persistent refresh controls, adds refresh-by-tab and Settings reload, consolidates follow requests into Activity, replaces the post end label with an accessible icon, and adds secondary-page back controls. The notifications endpoint accepts an optional validated requests filter before pagination; there are no schema changes.
+
+Formatting, lint, types, 106 tests, and production build passed. Node component checks cover tab refresh, draft preservation, filtered Activity actions, legacy request links, and end-marker semantics. Workers/D1 checks verify filtered requests hidden behind newer activity, tied cursor boundaries, resolved/blocked actors, invalid filters, and anonymous rejection. Direct HTTP confirmed matching HTML/CSS/JS, compressed assets, available sign-in, and private/no-store anonymous account/activity responses. No browser or visual testing was performed.

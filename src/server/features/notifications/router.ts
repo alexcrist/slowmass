@@ -17,13 +17,18 @@ notifications.use('*', async (c, next) => {
   await next();
 });
 notifications.get('/', async (c) => {
+  const filter = c.req.query('filter') ?? 'all';
+  if (filter !== 'all' && filter !== 'requests')
+    return c.json({ error: 'Invalid activity filter.' }, 400);
   let cursor;
   try {
     cursor = parsePage(c.req.query('cursor'));
   } catch {
     return c.json({ error: 'Invalid page.' }, 400);
   }
-  return c.json(await notificationPage(c.env.DB, c.get('userId'), cursor));
+  return c.json(
+    await notificationPage(c.env.DB, c.get('userId'), cursor, filter),
+  );
 });
 notifications.post('/read', bodyLimit({ maxSize: 6000 }), async (c) => {
   const data: unknown = await c.req.json().catch(() => null);

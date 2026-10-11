@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
 import { profileHref } from '../../navigation';
-export type Kind = 'requests' | 'following' | 'followers' | 'blocked';
+export type Kind = 'following' | 'followers' | 'blocked';
 export function Connections({ kind }: { kind: Kind }) {
   const [pages, setPages] = useState(['']);
   const [busy, setBusy] = useState(false);
@@ -32,13 +32,11 @@ export function Connections({ kind }: { kind: Kind }) {
     }
   }
   const action =
-    kind === 'requests'
-      ? 'accept'
-      : kind === 'following'
-        ? 'unfollow'
-        : kind === 'followers'
-          ? 'remove'
-          : 'unblock';
+    kind === 'following'
+      ? 'unfollow'
+      : kind === 'followers'
+        ? 'remove'
+        : 'unblock';
   return (
     <>
       {loading && <p role="status">Loading…</p>}
@@ -54,22 +52,12 @@ export function Connections({ kind }: { kind: Kind }) {
                 disabled={busy || loading}
                 onClick={() => void act(person.handle, action)}
               >
-                {kind === 'requests'
-                  ? 'Accept'
-                  : kind === 'following'
-                    ? 'Unfollow'
-                    : kind === 'followers'
-                      ? 'Remove follower'
-                      : 'Unblock'}
+                {kind === 'following'
+                  ? 'Unfollow'
+                  : kind === 'followers'
+                    ? 'Remove follower'
+                    : 'Unblock'}
               </button>
-              {kind === 'requests' && (
-                <button
-                  disabled={busy || loading}
-                  onClick={() => void act(person.handle, 'deny')}
-                >
-                  Deny
-                </button>
-              )}
             </div>
           </li>
         ))}

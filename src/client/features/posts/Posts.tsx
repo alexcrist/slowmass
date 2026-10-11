@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { PersonLink } from '../../navigation/PersonLink';
+import { BackControl } from '../../navigation/BackControl';
 import { Interactions } from '../interactions/Interactions';
 import { api, jsonRequest } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
@@ -39,27 +40,23 @@ export function PostList({
     loading,
     reload,
   } = useApiResource<Page>(`/api/posts?${params}`);
-  function refresh() {
-    setHistory(['']);
-    reload();
-  }
   if (selected)
     return (
       <>
-        <button onClick={() => setSelected(null)}>Back to photos</button>
+        <BackControl onClick={() => setSelected(null)} label="Back to photos" />
         <PostDetail key={selected} id={selected} onDeleted={reload} />
       </>
     );
   return (
     <>
-      <button type="button" onClick={refresh} disabled={loading}>
-        Refresh posts
-      </button>
       {loading && <p role="status">Loading posts…</p>}
       {error && (
-        <p role="alert" className="error-message">
-          {error}
-        </p>
+        <div>
+          <p role="alert" className="error-message">
+            {error}
+          </p>
+          <button onClick={reload}>Retry</button>
+        </div>
       )}
       {page?.items.length === 0 && (
         <p>
@@ -116,7 +113,22 @@ export function PostList({
               Older
             </button>
           ) : (
-            <p>End of posts.</p>
+            <svg
+              className="end-of-posts"
+              role="img"
+              aria-label="End of posts"
+              width={32}
+              height={32}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="m8 12 3 3 5-6" />
+            </svg>
           )}
         </nav>
       )}

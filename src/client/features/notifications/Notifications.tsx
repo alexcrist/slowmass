@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { api, jsonRequest } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
 import { PostDetail } from '../posts/Posts';
+import { BackControl } from '../../navigation/BackControl';
+import { profileHref } from '../../navigation';
 type Item = {
   key: string;
   kind: 'request' | 'likes' | 'comment';
@@ -14,7 +16,8 @@ type Item = {
 };
 type Page = { items: Item[]; next: string | null };
 export function Notifications() {
-  const [history, setHistory] = useState(['']),
+  const [filter, setFilter] = useState<'all' | 'requests'>('all'),
+    [history, setHistory] = useState(['']),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [postId, setPostId] = useState<string | null>(null);
@@ -25,7 +28,7 @@ export function Notifications() {
     loading,
     reload,
   } = useApiResource<Page>(
-    `/api/notifications?cursor=${encodeURIComponent(cursor)}`,
+    `/api/notifications?cursor=${encodeURIComponent(cursor)}${filter === 'requests' ? '&filter=requests' : ''}`,
   );
   async function act(handle: string, action: 'accept' | 'deny') {
     setBusy(true);
@@ -64,38 +67,59 @@ export function Notifications() {
   if (postId)
     return (
       <>
-        <button onClick={() => setPostId(null)}>Back to notifications</button>
+        <BackControl onClick={() => setPostId(null)} label="Back to activity" />
         <PostDetail key={postId} id={postId} />
       </>
     );
   return (
     <>
-      <div className="actions">
-        <button
-          disabled={busy || loading}
-          onClick={() => {
-            setError('');
-            setHistory(['']);
-            reload();
-          }}
-        >
-          Refresh notifications
-        </button>
-        {page?.items.some((item) => item.unread) && (
+      <div
+        className="activity-filters"
+        role="group"
+        aria-label="Activity filters"
+      >
+        {(['all', 'requests'] as const).map((value) => (
+          <button
+            key={value}
+            className="activity-filter"
+            aria-pressed={filter === value}
+            disabled={busy}
+            onClick={() => {
+              if (value === filter) return;
+              setFilter(value);
+              setHistory(['']);
+              setError('');
+            }}
+          >
+            {value === 'all' ? 'All' : 'Follow requests'}
+          </button>
+        ))}
+      </div>
+      {page?.items.some((item) => item.unread) && (
+        <div className="actions">
           <button disabled={busy || loading} onClick={() => void read()}>
             Mark this page read
           </button>
-        )}
-      </div>
+        </div>
+      )}
       {loading && <p role="status">Loading notifications…</p>}
-      {page?.items.length === 0 && <p>No notifications on this page.</p>}
+      {page?.items.length === 0 && (
+        <p>
+          {filter === 'requests'
+            ? 'No pending follow requests on this page.'
+            : 'No activity on this page.'}
+        </p>
+      )}
       <ul className="notification-list">
         {page?.items.map((item) => (
           <li key={item.key}>
             {Boolean(item.unread) && <strong>Unread. </strong>}
             {item.kind === 'request' ? (
               <>
-                <p>@{item.handle} requested to follow you.</p>
+                <p>
+                  <a href={profileHref(item.handle!)}>@{item.handle}</a>{' '}
+                  requested to follow you.
+                </p>
                 <div className="actions">
                   <button
                     disabled={busy || loading}
@@ -118,7 +142,10 @@ export function Notifications() {
               </p>
             ) : (
               <>
-                <p>@{item.handle} commented on your photo.</p>
+                <p>
+                  <a href={profileHref(item.handle!)}>@{item.handle}</a>{' '}
+                  commented on your photo.
+                </p>
                 <p className="bio">{item.body}</p>
               </>
             )}
