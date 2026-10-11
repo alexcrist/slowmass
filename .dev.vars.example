@@ -1,0 +1,7 @@
+# Copy to .dev.vars. Never commit credentials.
+# Generate AUTH_SECRET with: openssl rand -base64 32
+AUTH_SECRET=
+RESEND_API_KEY=
+EMAIL_FROM=Slowmass <hello@slowmass.com>
+# Used only to create the first verified member. All later joins require a member invitation.
+BOOTSTRAP_EMAIL=
