@@ -98,7 +98,9 @@ export function ProfilePage({ handle }: { handle: string }) {
           <div className="actions">
             <a href="#following">Following</a>
             <a href="#followers">Followers</a>
-            <a href="#settings">Settings</a>
+            <a className="button-link" href="#settings">
+              Settings
+            </a>
           </div>
         ) : (
           <div className="actions">

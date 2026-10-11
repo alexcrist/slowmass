@@ -74,13 +74,6 @@ button:disabled {
   color: var(--ink);
   text-decoration: none;
 }
-.mobile-settings {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  font-size: 14px;
-  text-decoration: none;
-}
 .member-shell {
   padding-bottom: calc(90px + env(safe-area-inset-bottom));
 }
@@ -169,9 +162,6 @@ p {
 .nav-link:hover {
   background: var(--hover);
 }
-.app-navigation > .nav-settings {
-  display: none;
-}
 .member-content {
   background: var(--paper);
   margin: 32px 24px 64px;
@@ -188,7 +178,8 @@ p {
   margin: 0;
 }
 :where(button:not([class])),
-.actions button {
+.actions button,
+.button-link {
   min-height: 44px;
   padding: 9px 15px;
   border: 1px solid #d4d4d4;
@@ -198,8 +189,15 @@ p {
   font-weight: 600;
 }
 :where(button:not([class])):enabled:hover,
-.actions button:enabled:hover {
+.actions button:enabled:hover,
+.button-link:hover {
   background: var(--hover);
+}
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
 }
 .primary-button {
   width: 100%;
@@ -658,10 +656,6 @@ input::file-selector-button {
   .nav-label {
     opacity: var(--label-opacity);
     white-space: nowrap;
-  }
-  .app-navigation > .nav-settings {
-    display: grid;
-    flex-shrink: 0;
   }
   .app-navigation:has(:focus-visible) {
     --rail-width: 216px;

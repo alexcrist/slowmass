@@ -78,3 +78,9 @@ The pre-migration encrypted production backup passed local quarantined restorati
 Worker version `67f6dcad-f3c3-407b-be28-ba852ac1d06f` deploys the white canvas, neutral photo surrounds, desktop expanding sidebar, and mobile header/bottom navigation. Browser and manifest theme/background colors are white; primary buttons retain Douglas Fir. There are no database or backend behavior changes.
 
 Formatting, lint, types, 79 existing tests, and production build passed. Direct HTTP checks confirmed the deployed HTML, CSS, JS, and manifest match the checked build and sign-in remains available. Verification used source review and CLI/component/API checks only; no browser or visual tests were performed.
+
+## Interface cleanup release (October 11, 2026)
+
+Worker version `e750a8ca-eac0-439c-9856-1ace8b38be40` places Settings on the member's own profile, removes its global navigation links and the manual Shuffle people control, updates invitation wording, and labels composition “New post.” HTML response headers prevent Cloudflare's injected analytics script from conflicting with the existing self-only CSP; the standard mobile web-app metadata tag is also present.
+
+Formatting, lint, types, 79 tests, and production build passed. Direct HTTP verified exact deployed HTML/JS/CSS matches, no injected analytics script in app or branding HTML, gzip-compressed JS/CSS, available sign-in, and private/no-store responses for anonymous API/media requests. No schema changes, browser tests, or visual tests were needed.

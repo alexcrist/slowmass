@@ -8,7 +8,7 @@ const destinations = [
     label: 'Find',
     path: 'M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',
   },
-  { page: 'compose', label: 'New photo', path: 'M12 4v16M4 12h16' },
+  { page: 'compose', label: 'New post', path: 'M12 4v16M4 12h16' },
   {
     page: 'notifications',
     label: 'Activity',
@@ -20,15 +20,6 @@ const destinations = [
     path: 'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M4 21v-2a8 8 0 0 1 16 0v2',
   },
 ];
-const settingsPages = new Set([
-  'settings',
-  'edit',
-  'invitations',
-  'requests',
-  'following',
-  'followers',
-  'blocked',
-]);
 
 function Icon({ path }: { path: string }) {
   return (
@@ -101,17 +92,6 @@ export function MemberNavigation({
           </a>
         ))}
       </div>
-      <a
-        className="nav-link nav-settings"
-        href="#settings"
-        aria-label="Settings"
-        aria-current={settingsPages.has(page) ? 'page' : undefined}
-      >
-        <Icon path="M4 6h16M4 12h16M4 18h16" />
-        <span className="nav-label" aria-hidden="true">
-          Settings
-        </span>
-      </a>
     </nav>
   );
 }

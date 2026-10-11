@@ -39,9 +39,7 @@ export function Discover() {
   );
 }
 function Directory({ query }: { query: string }) {
-  const [seed, setSeed] = useState(() =>
-      crypto.randomUUID().replaceAll('-', ''),
-    ),
+  const [seed] = useState(() => crypto.randomUUID().replaceAll('-', '')),
     [history, setHistory] = useState(['']),
     [data, setData] = useState<Page | null>(null),
     [error, setError] = useState(''),
@@ -66,17 +64,6 @@ function Directory({ query }: { query: string }) {
   }, [query, seed, after, version]);
   return (
     <>
-      {!query && (
-        <button
-          onClick={() => {
-            setData(null);
-            setHistory(['']);
-            setSeed(crypto.randomUUID().replaceAll('-', ''));
-          }}
-        >
-          Shuffle people
-        </button>
-      )}
       {!data && !error && <p role="status">Finding people…</p>}
       {error && (
         <>

@@ -16,7 +16,7 @@ import { MemberNavigation } from './MemberNavigation';
 const titles: Record<string, string> = {
   feed: 'Feed',
   people: 'Find people',
-  compose: 'New photo',
+  compose: 'New post',
   notifications: 'Activity',
   profile: 'Profile',
   settings: 'Settings',

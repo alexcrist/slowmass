@@ -101,6 +101,13 @@ Exit: an invited friend can sign in, post, follow another friend, and interact w
 - [x] Set browser and installed-app launch colors to white, preserving the approved app icons.
 - [x] Pass formatting, lint, types, the existing 79 tests, and production build; deploy and verify matching HTML/CSS/JS/manifest plus sign-in availability by HTTP. No schema changes or browser/visual testing.
 
+## October 11 interface cleanup
+
+- [x] Shorten the invitation prompt, use “New post” throughout the UI, and remove the manual Shuffle people control while retaining paginated discovery.
+- [x] Move Settings access to a button on the member's own profile and remove global header/sidebar Settings links.
+- [x] Prevent Cloudflare analytics injection into HTML without relaxing CSP or disabling asset compression; add the standard mobile web-app metadata tag.
+- [x] Pass formatting, lint, types, 79 tests, and production build; deploy and verify matching HTML/CSS/JS, absent analytics injection, compressed assets, and private API/media response headers through HTTP. No browser or visual testing.
+
 ## Completion evidence
 
 For each stage, record commands/results in the work report, not as permanent design prose. Keep current docs concise. The final handoff includes the repository, local setup, deployment state, features completed, tests actually executed, observed cost assumptions, and specific unfinished prerequisites. A working local application and a verified deployed beta are different completion states.

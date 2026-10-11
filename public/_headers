@@ -2,3 +2,13 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: same-origin
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+
+# Prevent analytics injection into HTML; keep other assets compressible.
+/
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
+
+/branding/
+  Cache-Control: public, max-age=0, must-revalidate, no-transform
+
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate, no-transform

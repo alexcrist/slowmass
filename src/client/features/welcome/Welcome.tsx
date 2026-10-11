@@ -132,11 +132,6 @@ export function Welcome() {
         <a className="site-name" href="/" aria-label="Slowmass home">
           slowmass
         </a>
-        {name !== null && (
-          <a className="mobile-settings" href="#settings">
-            Settings
-          </a>
-        )}
       </header>
       <section
         className="account-section"
@@ -206,7 +201,7 @@ export function Welcome() {
                   ? 'Sign-in is temporarily unavailable.'
                   : state === 'error'
                     ? 'We couldn’t connect. Refresh the page to try again.'
-                    : 'New here? Ask a member to invite this email address first. No password is needed.'}
+                    : 'New here? Ask a member to invite you. No password is needed.'}
               </p>
             </form>
           )}
