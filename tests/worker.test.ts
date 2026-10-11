@@ -362,6 +362,33 @@ describe('verified email and permanent invitation provenance', () => {
         .run(),
     ).rejects.toThrow();
   });
+  it('retains immutable invitation and join timestamps for incident review', async () => {
+    const db = await emailWorker.getD1Database('DB');
+    const row = await db
+      .prepare(
+        'SELECT i.created_at, m.joined_at FROM invitation i JOIN membership m ON m.invitation_id = i.id WHERE m.user_id = ?',
+      )
+      .bind(friendId)
+      .first<{ created_at: number; joined_at: number }>();
+    expect(row?.created_at).toBeGreaterThan(0);
+    expect(row!.joined_at).toBeGreaterThanOrEqual(row!.created_at);
+    await expect(
+      db
+        .prepare(
+          'UPDATE invitation SET created_at = created_at - 1 WHERE accepted_by = ?',
+        )
+        .bind(friendId)
+        .run(),
+    ).rejects.toThrow();
+    await expect(
+      db
+        .prepare(
+          'UPDATE membership SET joined_at = joined_at - 1 WHERE user_id = ?',
+        )
+        .bind(friendId)
+        .run(),
+    ).rejects.toThrow();
+  });
   it('rejects a join if the inviter is disabled after a link was sent', async () => {
     expect(
       (

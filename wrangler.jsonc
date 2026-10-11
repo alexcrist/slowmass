@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "slowmass",
+  "name": "slowmass-local",
   "main": "src/server/index.ts",
   "compatibility_date": "2026-10-10",
   "compatibility_flags": ["nodejs_compat"],
@@ -21,4 +21,25 @@
     },
   ],
   "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "slowmass-photos" }],
+  "env": {
+    "production": {
+      "name": "slowmass",
+      "workers_dev": false,
+      "preview_urls": false,
+      "routes": [{ "pattern": "slowmass.com", "custom_domain": true }],
+      "vars": {
+        "APP_ORIGIN": "https://slowmass.com",
+        "EMAIL_FROM": "Slowmass <hello@slowmass.com>",
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "slowmass",
+          "database_id": "94db9800-be5d-43a4-8e31-bcd95f1324cd",
+          "migrations_dir": "migrations",
+        },
+      ],
+      "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "slowmass-photos" }],
+    },
+  },
 }

@@ -6,7 +6,7 @@ Slowmass is a private, chronological photo-sharing app built around intentional 
 
 ## Status
 
-The repository contains the product/architecture plan, a mobile welcome screen, email-link authentication, and member invitations with permanent inviter attribution. The photo feed, profiles, follows, posting, likes, comments, and notifications are not implemented yet. Production is not deployed. Cloudflare authorization and email-delivery setup are the next external prerequisites.
+The repository contains the product/architecture plan, a mobile welcome screen, email-link authentication, and member invitations with permanent inviter attribution. The photo feed, profiles, follows, posting, likes, comments, and notifications are not implemented yet. The welcome screen, email-link sign-in, and invitations are deployed at https://slowmass.com. First-member email delivery and sign-in have been verified. Private photo processing is the next integration gate.
 
 The operating target is $0/month within Cloudflare's free allowances, followed by measured upgrades. See [architecture](docs/architecture.md) for constraints and the scaling path.
 

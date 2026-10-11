@@ -1,6 +1,6 @@
 # Implementation plan
 
-Status: foundation in progress; external authentication and Cloudflare verification pending. Execute in dependency order. Check boxes represent observed completion, never generated code alone.
+Status: foundation deployed; first-member email login verified; private image processing verification in progress. Execute in dependency order. Check boxes represent observed completion, never generated code alone.
 
 ## Approach
 
@@ -21,8 +21,8 @@ Exit: repository exists, symlink is tracked as a symlink, and the design is revi
 - [x] Scaffold one strict TypeScript package with React/Vite, Hono, Wrangler, formatting/linting, test runner, and lockfile. Pin compatible versions after checking official docs.
 - [ ] Verify local static routing, API routing, D1 migrations, R2 access, and production bundling.
 - [x] Verify email-link/D1 integration, session signatures, trusted origins, verified-email invitation checks, and logout in the local runtime with simulated email delivery.
-- [ ] Verify real email delivery and secure sessions on the production HTTPS origin.
-- [ ] Prove private image inspection/re-encoding via Images binding; verify output format, orientation, metadata removal, animation rejection, upload limits, and quota behavior.
+- [ ] Complete hosted secure-session verification. First-member email delivery and sign-in at https://slowmass.com are user-confirmed; hosted session expiry/logout and invited-member verification remain.
+- [ ] Complete private image inspection/re-encoding verification (remote synthetic PNG-to-WebP smoke check passed); verify output format, orientation, metadata removal, animation rejection, upload limits, and quota behavior.
 - [ ] Measure deployed CPU for auth and a private-image request against the free Worker limit. Confirm the actual account supports the planned free services. If deployment prerequisites are unavailable, label local results accordingly and keep this gate open.
 - [x] Add reproducible commands for local dev, migrations, checks, and build; document only commands that work.
 
