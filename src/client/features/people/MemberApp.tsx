@@ -1,4 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
+import { Notifications } from '../notifications/Notifications';
+import { Compose, PostList } from '../posts/Posts';
 import { AvatarForm } from '../avatars/AvatarForm';
 import { api, jsonRequest } from '../../api';
 import { InvitationForm } from '../invitations/InvitationForm';
@@ -17,8 +19,20 @@ type VisibleProfile = {
   relationship: 'self' | 'none' | 'pending' | 'accepted';
 };
 type Kind = 'requests' | 'following' | 'followers' | 'blocked';
-type Tab = 'profile' | 'people' | 'invitations' | Kind;
+type Tab =
+  | 'notifications'
+  | 'feed'
+  | 'photos'
+  | 'compose'
+  | 'profile'
+  | 'people'
+  | 'invitations'
+  | Kind;
 const titles: Record<Tab, string> = {
+  notifications: 'Notifications',
+  feed: 'Feed',
+  photos: 'My photos',
+  compose: 'New photo',
   profile: 'Profile',
   people: 'Find a person',
   requests: 'Follow requests',
@@ -88,6 +102,15 @@ export function MemberApp() {
         </>
       ) : !profile ? (
         <p>Create your profile before finding or following people.</p>
+      ) : tab === 'feed' || tab === 'photos' ? (
+        <PostList
+          key={tab}
+          handle={tab === 'photos' ? profile.handle : undefined}
+        />
+      ) : tab === 'notifications' ? (
+        <Notifications />
+      ) : tab === 'compose' ? (
+        <Compose onPublished={() => setTab('photos')} />
       ) : tab === 'people' ? (
         <PersonSearch />
       ) : (
@@ -301,6 +324,7 @@ function Person({ initial }: { initial: VisibleProfile }) {
       ) : (
         <p>This profile is private.</p>
       )}
+      {profile.bio !== null && <PostList handle={profile.handle} />}
       {profile.relationship === 'pending' && (
         <p role="status">Follow request pending.</p>
       )}

@@ -4,7 +4,9 @@ Slowmass is a private, invitation-only photo-sharing app with a chronological fe
 
 ## Status
 
-The repository contains the product/architecture plan, a mobile welcome screen, email-link authentication, and member invitations with permanent inviter attribution. Profiles, private avatars, and follow relationships are implemented. The photo feed, posting, likes, comments, and notifications remain planned. The welcome screen, email-link sign-in, and invitations are deployed at https://slowmass.com. First-member email delivery and sign-in have been verified. Private photo processing is the next integration gate.
+Email-link authentication, invitations with permanent provenance/timestamps, profiles, private avatars, and follow relationships are deployed at https://slowmass.com. First-member email delivery and sign-in are verified.
+
+Single-photo publishing, chronological pagination, post deletion, likes, comments, and in-app notifications are implemented and API-tested; production deployment is pending. Trusted remote image checks verified orientation, metadata removal, and still-image processing. Account deletion, backup/restore exercises, aggregate storage limits, and hosted cost measurements remain beta-readiness work.
 
 The operating target is $0/month within Cloudflare's free allowances, followed by measured upgrades. See [architecture](docs/architecture.md) for constraints and the scaling path.
 
@@ -30,7 +32,7 @@ Open http://localhost:8787. The welcome screen works without credentials and rep
 npm run check
 ```
 
-`npm run check` runs formatting, lint, types, unit/Worker integration tests, and the production frontend build. Worker tests run real local D1 and the auth library, including one-time email verification through a simulated email transport. They do not send real emails or prove hosted delivery. Browser and visual testing are prohibited. Multi-user integration tests verify profile visibility, follows, blocks, avatar access, and quota enforcement through the API. No production resources are accessed.
+`npm run check` runs formatting, lint, types, unit/Worker integration tests, and the production frontend build. Worker tests run real local D1 and the auth library, including one-time email verification through a simulated email transport. They do not send real emails or prove hosted delivery. Browser and visual testing are prohibited. Multi-user integration tests verify profile/media visibility, follows, blocks, upload retries and cancellation, feed pagination, interaction permissions/counts, notifications, and quotas through the API. No production resources are accessed.
 
 ## Project map
 

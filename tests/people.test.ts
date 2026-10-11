@@ -236,25 +236,25 @@ it('bounds processing attempts, deduplicates retries and cleans orphaned objects
     .prepare("UPDATE photo_attempt SET state='done' WHERE id='alice:0'")
     .run();
   expect(await reservePhoto(db, 'alice', '0')).toBe('done');
-  await bucket.put('orphan', 'orphan bytes');
-  await bucket.put('current', 'current bytes');
+  await bucket.put('avatars/orphan', 'orphan bytes');
+  await bucket.put('avatars/current', 'current bytes');
   await runtime.db
     .prepare(
       'INSERT INTO avatar(user_id,object_key,width,height) VALUES(?,?,1,1)',
     )
-    .bind('bob', 'current')
+    .bind('bob', 'avatars/current')
     .run();
-  for (const key of ['orphan', 'current'])
+  for (const key of ['avatars/orphan', 'avatars/current'])
     await runtime.db
       .prepare('INSERT INTO photo_cleanup(object_key,not_before) VALUES(?,0)')
       .bind(key)
       .run();
   await cleanupAvatars(db, bucket as unknown as R2Bucket);
-  expect(await bucket.get('orphan')).toBeNull();
-  expect(await bucket.get('current')).not.toBeNull();
+  expect(await bucket.get('avatars/orphan')).toBeNull();
+  expect(await bucket.get('avatars/current')).not.toBeNull();
   expect(
     await runtime.db
-      .prepare("SELECT 1 FROM photo_cleanup WHERE object_key='orphan'")
+      .prepare("SELECT 1 FROM photo_cleanup WHERE object_key='avatars/orphan'")
       .first(),
   ).toBeNull();
 });

@@ -11,7 +11,7 @@ Initial operating target: $0/month within free allowances, with a measured path 
 - [docs/architecture.md](docs/architecture.md): proposed architecture, privacy, cost model, and scaling decisions.
 - [docs/implementation-plan.md](docs/implementation-plan.md): executable build stages and acceptance criteria.
 
-The repository contains email-link authentication, member invitations, profiles, private avatars, and follow relationships; photo posts and interactions remain planned. Keep proposed behavior visibly separate from verified implementation. As features ship, their local READMEs become the authority for implemented behavior.
+The repository contains email-link authentication, member invitations, profiles, private avatars, follow relationships, photo posts, a paginated feed, likes, comments, and in-app notifications. Account deletion and operational readiness remain open. Keep proposed behavior visibly separate from verified implementation. As features ship, their local READMEs become the authority for implemented behavior.
 
 - [docs/design.md](docs/design.md): visual direction.
 - [docs/setup.md](docs/setup.md): external setup and migration workflow.

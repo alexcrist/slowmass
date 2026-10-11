@@ -1,6 +1,6 @@
 # Product contract
 
-Status: proposed MVP, not implemented.
+Status: MVP product contract. Core social/photo features are implemented; account deletion and operational readiness remain open. See the implementation plan for verification and deployment status.
 
 ## Experience
 

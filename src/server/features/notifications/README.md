@@ -1,0 +1,7 @@
+# In-app notifications
+
+Notifications are derived from current incoming follow requests, other active members' grouped likes on owned published posts, and their undeleted comments. Self-interactions produce no notification. Blocks in either direction hide actors; deleted posts and comments, removed likes, and resolved requests disappear immediately. Targets are authorized again by the post API when opened.
+
+This intentionally avoids a second event projection, outbox, or background service at low usage. Activity is not a permanent audit log. Permanent invitation provenance remains a separate membership concern. If aggregate reads become expensive, measure query scans before introducing projections.
+
+Pages contain at most 20 items ordered by activity timestamp and stable event key. Like groups can move when new likes arrive; refresh starts from current activity. The client explicitly marks the displayed page read. Only matching, currently visible event versions are acknowledged in one SQL statement. A stale page cannot acknowledge a newer like group. Read rows are scoped to the member and stable event key, and duplicate acknowledgements do not regress them. No polling, email, SMS, or push delivery is used.

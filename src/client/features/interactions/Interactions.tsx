@@ -1,0 +1,204 @@
+import { useEffect, useId, useState, type FormEvent } from 'react';
+import { api, jsonRequest } from '../../api';
+type Counts = { likeCount: number; commentCount: number; liked: number };
+type Comment = {
+  id: string;
+  body: string;
+  createdAt: number;
+  handle: string;
+  displayName: string;
+  canDelete: number;
+};
+type Page = { items: Comment[]; next: string | null };
+export function Interactions({
+  postId,
+  initial,
+}: {
+  postId: string;
+  initial: Counts;
+}) {
+  const [counts, setCounts] = useState(initial),
+    [open, setOpen] = useState(false),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState('');
+  async function refresh() {
+    const data = await api<{ post: Counts }>(`/api/posts/${postId}`);
+    setCounts(data.post);
+  }
+  async function like() {
+    setBusy(true);
+    setError('');
+    try {
+      await api(`/api/interactions/${postId}/like`, {
+        method: counts.liked ? 'DELETE' : 'PUT',
+      });
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not update like.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section aria-label="Likes and comments">
+      <div className="actions">
+        <button
+          disabled={busy}
+          aria-pressed={Boolean(counts.liked)}
+          onClick={() => void like()}
+        >
+          {counts.liked ? 'Unlike' : 'Like'} ({counts.likeCount})
+        </button>
+        <button aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? 'Hide comments' : 'Comments'} ({counts.commentCount})
+        </button>
+      </div>
+      {error && <p role="alert">{error}</p>}
+      {open && <Comments postId={postId} onChange={refresh} />}
+    </section>
+  );
+}
+function Comments({
+  postId,
+  onChange,
+}: {
+  postId: string;
+  onChange: () => Promise<void>;
+}) {
+  const label = useId(),
+    [page, setPage] = useState<Page | null>(null),
+    [history, setHistory] = useState(['']),
+    [version, setVersion] = useState(0),
+    [body, setBody] = useState(''),
+    [id, setId] = useState(() => crypto.randomUUID()),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState('');
+  const after = history[history.length - 1];
+  useEffect(() => {
+    const controller = new AbortController();
+    api<Page>(
+      `/api/interactions/${postId}/comments?after=${encodeURIComponent(after)}`,
+      { signal: controller.signal },
+    )
+      .then((data) => {
+        setPage(data);
+        setError('');
+      })
+      .catch((e) => {
+        if (!controller.signal.aborted) setError(e.message);
+      });
+    return () => controller.abort();
+  }, [postId, after, version]);
+  async function add(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      await api(
+        `/api/interactions/${postId}/comments`,
+        jsonRequest('POST', { id, body }),
+      );
+      setBody('');
+      setId(crypto.randomUUID());
+      setHistory(['']);
+      setPage(null);
+      setVersion((v) => v + 1);
+      await onChange();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not add comment.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function remove(id: string) {
+    setBusy(true);
+    setError('');
+    try {
+      await api(`/api/interactions/comments/${id}`, { method: 'DELETE' });
+      setPage(null);
+      setVersion((v) => v + 1);
+      await onChange();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete comment.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div>
+      {!page && !error && <p role="status">Loading comments…</p>}
+      {page?.items.length === 0 && <p>No comments on this page.</p>}
+      <ul className="comment-list">
+        {page?.items.map((comment) => (
+          <li key={comment.id}>
+            <strong>{comment.displayName}</strong>{' '}
+            <span className="handle">@{comment.handle}</span>
+            <p className="bio">{comment.body}</p>
+            <time dateTime={new Date(comment.createdAt).toISOString()}>
+              {new Date(comment.createdAt).toLocaleString()}
+            </time>
+            {Boolean(comment.canDelete) && (
+              <button
+                disabled={busy}
+                className="text-button"
+                onClick={() => void remove(comment.id)}
+              >
+                Delete comment
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <nav className="actions" aria-label="Comment pages">
+        {history.length > 1 && (
+          <button
+            disabled={busy}
+            onClick={() => {
+              setPage(null);
+              setHistory(history.slice(0, -1));
+            }}
+          >
+            Newer comments
+          </button>
+        )}
+        {page?.next && (
+          <button
+            disabled={busy}
+            onClick={() => {
+              setPage(null);
+              setHistory([...history, page.next!]);
+            }}
+          >
+            Older comments
+          </button>
+        )}
+      </nav>
+      <form onSubmit={(e) => void add(e)}>
+        <label className="field-label" htmlFor={label}>
+          Add a comment
+        </label>
+        <textarea
+          id={label}
+          required
+          maxLength={1000}
+          rows={2}
+          value={body}
+          disabled={busy}
+          onChange={(e) => {
+            setBody(e.target.value);
+            setId(crypto.randomUUID());
+          }}
+        />
+        <button disabled={busy || !body.trim()}>Post comment</button>
+      </form>
+      {error && (
+        <div>
+          <p role="alert">{error}</p>
+          <button onClick={() => setVersion((v) => v + 1)}>
+            Reload comments
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}

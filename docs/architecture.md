@@ -18,9 +18,9 @@ Build the frontend as static assets; private feeds have no SEO need and do not r
 
 Concepts: user/profile, session/account (auth library), membership with immutable inviter attribution, invitation, follow request/accepted relationship, block, media upload, post, like, comment, notification, and cleanup task. Database uniqueness enforces one relationship and one like per pair; foreign keys and explicit lifecycle rules prevent dangling accessible content.
 
-Use server-generated stable IDs and server publication timestamps. Make publish, follow transitions, and notification creation retry-safe with scoped idempotency keys or natural unique constraints. Use D1-supported atomic batches/conditional SQL, not assumptions about interactive transactions. Check permissions in the mutation's SQL/atomic operation where a preceding check could race with removal or blocking.
+Use validated client UUIDs for retryable posts/comments and server timestamps. Make publish, follow transitions, and notification creation retry-safe with scoped idempotency keys or natural unique constraints. Use D1-supported atomic batches/conditional SQL, not assumptions about interactive transactions. Check permissions in the mutation's SQL/atomic operation where a preceding check could race with removal or blocking.
 
-The notifications feature owns notification reads and mutation projections. Composition passes notification-writing contracts into originating features; avoid circular dependencies between notifications, follows, comments, and posts. Commit related application records atomically where supported; otherwise use a persisted outbox and idempotent reconciliation, not fire-and-forget promises.
+Notifications are derived from current requests, grouped likes, and comments on the viewer's posts. This avoids asynchronous projections and an outbox at low usage. Read acknowledgements are atomic, per event version, and verified against currently visible activity. Introduce projections only if measured query costs justify them; preserve visibility and mutation consistency.
 
 ## Authorization and sessions
 
@@ -38,7 +38,7 @@ Email delivery uses Resend with explicit application-wide and per-recipient budg
 
 Client resizing improves upload speed but is not validation. Accept bounded uploads from authenticated eligible users, enforce per-user quotas, and reject oversized bodies while streaming. Restrict input formats to still formats verified by the processor; reject animation and SVG. Handle phone orientation and unsupported HEIC explicitly.
 
-Use the Cloudflare Images binding to inspect/decode/re-encode private bytes and generate fixed feed/thumbnail variants once at upload, storing final variants in R2. Set pixel limits, output dimensions/quality, and metadata stripping explicitly. Retain no original after successful processing. Never resize on each view. Verify binding availability, remote test support, format detection, metadata removal, CPU usage, and free-tier accounting before committing to this path.
+Use the Cloudflare Images binding to inspect/decode/re-encode private bytes and generate one bounded WebP per post (1600px) or avatar (320px) at upload, storing the result in R2. Set pixel limits, output dimensions/quality, and metadata stripping explicitly. Retain no original after successful processing. Never resize on each view. Verify binding availability, remote test support, format detection, metadata removal, CPU usage, and free-tier accounting before committing to this path.
 
 Lifecycle: reserve an upload record and idempotency key, process into private temporary/final objects, then atomically publish the post only after required variants exist. Publication retries return the same post. Processing errors expose no post or original and can be retried. A scheduled bounded cleanup pass removes expired uploads and retries deletion tasks. D1 and R2 cannot commit together, so write durable intent and reconcile orphan objects; do not imply distributed transactions exist.
 

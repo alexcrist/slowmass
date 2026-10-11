@@ -6,6 +6,10 @@ import { account } from './features/account/router';
 import { invitations } from './features/invitations/router';
 import { avatars, avatarMedia } from './features/avatars/router';
 import { cleanupAvatars } from './features/avatars/cleanup';
+import { posts, postMedia } from './features/posts/router';
+import { cleanupPosts } from './features/posts';
+import { interactions } from './features/interactions/router';
+import { notifications } from './features/notifications/router';
 import { people } from './features/people/router';
 import type { Env } from './env';
 
@@ -49,6 +53,10 @@ app.on(['GET', 'POST'], '/api/auth/*', async (c) => {
 app.route('/api/me', account);
 app.route('/api/people', people);
 app.route('/api/avatar', avatars);
+app.route('/api/posts', posts);
+app.route('/api/interactions', interactions);
+app.route('/api/notifications', notifications);
+app.route('/media/posts', postMedia);
 app.route('/media/avatar', avatarMedia);
 app.route('/api/invitations', invitations);
 // No media route is public, even before media implementation exists.
@@ -69,5 +77,6 @@ export default {
   fetch: app.fetch,
   scheduled: async (_controller: ScheduledController, env: Env) => {
     await cleanupAvatars(env.DB, env.PHOTOS);
+    await cleanupPosts(env.DB, env.PHOTOS);
   },
 };

@@ -196,3 +196,44 @@ textarea {
 input[type='file'] {
   padding: 8px;
 }
+
+.post {
+  margin: 24px 0;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #ddd;
+}
+.post header {
+  margin-bottom: 12px;
+}
+.post time {
+  display: block;
+  color: #555;
+  font-size: 13px;
+  margin-top: 4px;
+}
+.post img,
+.photo-preview {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 75svh;
+  object-fit: contain;
+}
+
+.comment-list,
+.notification-list {
+  list-style: none;
+  padding: 0;
+}
+.comment-list li,
+.notification-list li {
+  padding-block: 1rem;
+  border-bottom: 1px solid #ddd;
+  overflow-wrap: anywhere;
+}
+.comment-list time,
+.notification-list time {
+  display: block;
+  font-size: 0.875rem;
+  color: #555;
+}

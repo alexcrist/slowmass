@@ -2,7 +2,7 @@ export async function cleanupAvatars(db: D1Database, bucket: R2Bucket) {
   const now = Date.now();
   const due = await db
     .prepare(
-      'SELECT object_key FROM photo_cleanup WHERE not_before <= ? ORDER BY not_before LIMIT 10',
+      "SELECT object_key FROM photo_cleanup WHERE object_key LIKE 'avatars/%' AND not_before <= ? ORDER BY not_before LIMIT 5",
     )
     .bind(now)
     .all<{ object_key: string }>();
