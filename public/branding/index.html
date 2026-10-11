@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Slowmass — branding options</title>
+    <link rel="stylesheet" href="/branding/preview.css" />
+    <script src="/branding/preview.js" defer></script>
+  </head>
+  <body data-palette="forest" data-font="fraunces">
+    <header class="page-header">
+      <a href="/">Back to Slowmass</a><span>Design preview</span>
+    </header>
+    <main>
+      <div class="intro">
+        <h1>Find the right slowmass.</h1>
+        <p>
+          Choose a color and a wordmark. Mix them freely, then share the
+          combination you like. These choices only affect this preview.
+        </p>
+      </div>
+      <div class="workspace">
+        <div class="choices">
+          <fieldset>
+            <legend>Color palette</legend>
+            <p class="hint">
+              Four greens, plus the original slate for comparison.
+            </p>
+            <div class="palettes">
+              <label class="palette forest"
+                ><input
+                  type="radio"
+                  name="palette"
+                  value="forest"
+                  checked
+                /><span class="swatches"><i></i><i></i><i></i></span
+                ><strong>Forest</strong><small>Balanced · #234B38</small></label
+              >
+              <label class="palette pine"
+                ><input type="radio" name="palette" value="pine" /><span
+                  class="swatches"
+                  ><i></i><i></i><i></i></span
+                ><strong>Deep pine</strong
+                ><small>Cooler · #183F35</small></label
+              >
+              <label class="palette moss"
+                ><input type="radio" name="palette" value="moss" /><span
+                  class="swatches"
+                  ><i></i><i></i><i></i></span
+                ><strong>Moss</strong><small>Earthier · #46563A</small></label
+              >
+              <label class="palette fern"
+                ><input type="radio" name="palette" value="fern" /><span
+                  class="swatches"
+                  ><i></i><i></i><i></i></span
+                ><strong>Fern</strong><small>Brighter · #326448</small></label
+              >
+              <label class="palette slate"
+                ><input type="radio" name="palette" value="slate" /><span
+                  class="swatches"
+                  ><i></i><i></i><i></i></span
+                ><strong>Original slate</strong
+                ><small>Blue · #294E62</small></label
+              >
+            </div>
+          </fieldset>
+          <button class="preview-jump" type="button">
+            See selected combination
+          </button>
+          <fieldset>
+            <legend>Wordmark font</legend>
+            <p class="hint">
+              All lowercase. Source Sans 3 stays the interface font.
+            </p>
+            <div class="fonts">
+              <label class="font-option"
+                ><input
+                  type="radio"
+                  name="font"
+                  value="fraunces"
+                  checked
+                /><span class="sample fraunces">slowmass</span
+                ><strong>Fraunces</strong
+                ><small>A soft, distinctive serif</small></label
+              >
+              <label class="font-option"
+                ><input type="radio" name="font" value="dmsans" /><span
+                  class="sample dmsans"
+                  >slowmass</span
+                ><strong>DM Sans</strong
+                ><small>Simple and understated</small></label
+              >
+              <label class="font-option"
+                ><input type="radio" name="font" value="sora" /><span
+                  class="sample sora"
+                  >slowmass</span
+                ><strong>Sora</strong
+                ><small>Geometric and compact</small></label
+              >
+              <label class="font-option"
+                ><input type="radio" name="font" value="grandhotel" /><span
+                  class="sample grandhotel"
+                  >slowmass</span
+                ><strong>Grand Hotel</strong
+                ><small>A lighter vintage script</small></label
+              >
+              <label class="font-option"
+                ><input type="radio" name="font" value="caveat" /><span
+                  class="sample caveat"
+                  >slowmass</span
+                ><strong>Caveat</strong
+                ><small>Loose, handwritten lettering</small></label
+              >
+              <label class="font-option"
+                ><input type="radio" name="font" value="lobster" /><span
+                  class="sample lobster"
+                  >slowmass</span
+                ><strong>Lobster Two</strong
+                ><small>Current font, for comparison</small></label
+              >
+            </div>
+          </fieldset>
+          <button class="preview-jump" type="button">
+            See selected combination
+          </button>
+        </div>
+        <aside class="preview-column" id="preview" aria-label="Selected design">
+          <div class="selection">
+            <h2 id="selection" aria-live="polite">Forest + Fraunces</h2>
+            <p>Sample app screen · not your live feed</p>
+          </div>
+          <div class="phone">
+            <div class="app-header"><span class="wordmark">slowmass</span></div>
+            <div class="app-body">
+              <div class="feed-heading">
+                <strong>Feed</strong><span>Newest first</span>
+              </div>
+              <article class="photo-card">
+                <div class="photo-heading">
+                  <span class="avatar-placeholder" aria-hidden="true"></span>
+                  <div>
+                    <strong>Photo preview</strong
+                    ><small>Typography and color sample</small>
+                  </div>
+                </div>
+                <div class="photo-placeholder">
+                  <svg viewBox="0 0 120 100" aria-hidden="true">
+                    <rect x="12" y="10" width="96" height="80" rx="4" />
+                    <circle cx="82" cy="32" r="8" />
+                    <path d="m16 78 29-34 22 24 12-13 25 23" /></svg
+                  ><span>Your photo</span>
+                </div>
+                <div class="caption">
+                  <strong>slowmass</strong>
+                  <p>
+                    A caption goes here. Photos stay at the center of the feed.
+                  </p>
+                  <div class="sample-actions" aria-hidden="true">
+                    <span>♡ Like</span><span>Comment</span>
+                  </div>
+                </div>
+              </article>
+              <div class="pagination">
+                <span>End of posts.</span
+                ><span class="sample-button">New photo</span>
+              </div>
+            </div>
+            <div class="app-nav" aria-hidden="true">
+              <strong>Feed</strong><span>Find</span><span>New photo</span
+              ><span>Activity</span><span>Profile</span>
+            </div>
+          </div>
+          <div class="logo-paper">
+            <span class="wordmark">slowmass</span
+            ><small>Wordmark on a light background</small>
+          </div>
+          <button id="copy" type="button">Copy link to this combination</button>
+          <p id="copy-status" role="status"></p>
+          <p class="hint">
+            My starting pick: Forest + Fraunces. Try DM Sans for a simpler
+            direction, or Grand Hotel for a gentler script.
+          </p>
+        </aside>
+      </div>
+      <noscript
+        >JavaScript is needed to switch the live preview. You can still compare
+        the font and color samples above.</noscript
+      >
+    </main>
+  </body>
+</html>

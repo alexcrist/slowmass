@@ -20,3 +20,7 @@ The main content is left aligned in a column up to 640px wide. Sign-in uses a sm
 Photos retain their full aspect ratio. Captions and interactions sit inside the same white frame. Lists use explicit page controls. Preserve clear loading, empty, error, and confirmation states, visible keyboard focus, and controls at least 44px tall. No automatic animation, engagement gimmicks, or invented social activity.
 
 Verification uses static checks and API/integration tests only. Browser testing, screenshot inspection, and visual regression testing are prohibited by the user.
+
+## Branding comparison
+
+`/branding/` is a standalone, public, noindex design preview. It offers five palettes and six wordmark fonts with a sample app frame. Selections are stored only in the URL fragment and do not change the application theme or account data. Its extra fonts and scripts load only on that page, are self-hosted with licenses, and make no API requests. The app continues to use Forest and Lobster Two until another combination is selected for implementation.
