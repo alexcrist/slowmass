@@ -5,7 +5,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { makeSignature } from 'better-auth/crypto';
 
 const secret = 'test-only-secret-with-at-least-thirty-two-characters';
-export async function testRuntime() {
+export async function testRuntime(maintenance = false) {
   const result = await build({
     entryPoints: ['src/server/index.ts'],
     bundle: true,
@@ -25,6 +25,7 @@ export async function testRuntime() {
       r2Buckets: ['PHOTOS'],
       bindings: {
         APP_ORIGIN: 'http://localhost:8787',
+        MAINTENANCE_MODE: maintenance ? 'true' : 'false',
         AUTH_SECRET: secret,
         RESEND_API_KEY: 'test-key',
         EMAIL_FROM: 'test@example.com',

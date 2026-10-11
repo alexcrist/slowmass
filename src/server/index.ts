@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { createAuth } from './auth';
 import { authConfigured } from './auth/options';
+import { cleanupAccounts } from './features/account';
 import { account } from './features/account/router';
 import { invitations } from './features/invitations/router';
 import { avatars, avatarMedia } from './features/avatars/router';
@@ -25,6 +26,14 @@ app.use('*', async (c, next) => {
     'Content-Security-Policy',
     "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
   );
+  if (
+    c.env.MAINTENANCE_MODE === 'true' &&
+    (c.req.path.startsWith('/api/') || c.req.path.startsWith('/media/'))
+  )
+    return c.json(
+      { error: 'Maintenance in progress. Please try again shortly.' },
+      503,
+    );
   if (
     !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) &&
     c.req.header('Origin') !== c.env.APP_ORIGIN
@@ -76,7 +85,20 @@ app.onError((error, c) => {
 export default {
   fetch: app.fetch,
   scheduled: async (_controller: ScheduledController, env: Env) => {
+    if (env.MAINTENANCE_MODE === 'true') return;
+    await cleanupAccounts(env.DB);
     await cleanupAvatars(env.DB, env.PHOTOS);
     await cleanupPosts(env.DB, env.PHOTOS);
+    await env.DB.batch([
+      env.DB.prepare(
+        'DELETE FROM verification WHERE id IN(SELECT id FROM verification WHERE expiresAt<? LIMIT 100)',
+      ).bind(Date.now()),
+      env.DB.prepare(
+        'DELETE FROM session WHERE id IN(SELECT id FROM session WHERE expiresAt<? LIMIT 100)',
+      ).bind(Date.now()),
+      env.DB.prepare(
+        'DELETE FROM email_budget WHERE budget_key IN(SELECT budget_key FROM email_budget WHERE expires_at<? LIMIT 100)',
+      ).bind(Date.now()),
+    ]);
   },
 };

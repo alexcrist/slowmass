@@ -3,8 +3,14 @@ import type { Env } from '../env';
 import { authOptions } from './options';
 import { activeMember } from '../membership';
 
+const instances = new WeakMap<Env, ReturnType<typeof betterAuth>>();
 export function createAuth(env: Env) {
-  return betterAuth(authOptions(env));
+  let auth = instances.get(env);
+  if (!auth) {
+    auth = betterAuth(authOptions(env));
+    instances.set(env, auth);
+  }
+  return auth;
 }
 
 export async function getActiveUser(env: Env, headers: Headers) {

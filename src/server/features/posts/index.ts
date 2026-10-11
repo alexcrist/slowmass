@@ -1,6 +1,11 @@
 import type { Env } from '../../env';
 import { PhotoError, processPhoto } from '../../photos';
-import { readPhoto, reservePhoto } from '../../photos/storage';
+import {
+  readPhoto,
+  reservePhoto,
+  reserveStorage,
+  releaseStorage,
+} from '../../photos/storage';
 export type Draft = { id: string; caption: string; altText: string };
 export function parseDraft(value: unknown): Draft | null {
   if (!value || typeof value !== 'object') return null;
@@ -78,13 +83,14 @@ export async function publishPhoto(
     .run();
   try {
     const photo = await processPhoto(env.IMAGES, await readPhoto(request));
+    await reserveStorage(env.DB, actor, key, photo.bytes.length);
     await env.PHOTOS.put(key, photo.bytes, {
       httpMetadata: { contentType: 'image/webp' },
     });
     const results = await env.DB.batch([
       // Monotonic publication time makes snapshots stable even for same-millisecond writes.
       env.DB.prepare(
-        `UPDATE post SET state='published',object_key=?,width=?,height=?,published_at=MAX(?,COALESCE((SELECT MAX(published_at)+1 FROM post),0)) WHERE id=? AND user_id=? AND state='processing'`,
+        `UPDATE post SET state='published',object_key=?,width=?,height=?,published_at=MAX(?,COALESCE((SELECT MAX(published_at)+1 FROM post),0)) WHERE id=? AND user_id=? AND state='processing' AND EXISTS(SELECT 1 FROM membership WHERE user_id=post.user_id AND status='active')`,
       ).bind(key, photo.width, photo.height, Date.now(), id, actor),
       env.DB.prepare(
         "UPDATE photo_attempt SET state='done' WHERE id=? AND EXISTS(SELECT 1 FROM post WHERE id=? AND state='published')",
@@ -232,7 +238,7 @@ export async function cleanupPosts(db: D1Database, bucket: R2Bucket) {
   const now = Date.now();
   const due = await db
     .prepare(
-      "SELECT object_key FROM photo_cleanup WHERE object_key LIKE 'posts/%' AND not_before<=? ORDER BY not_before LIMIT 5",
+      "SELECT object_key FROM photo_cleanup WHERE object_key LIKE 'posts/%' AND not_before<=? ORDER BY not_before LIMIT 2",
     )
     .bind(now)
     .all<{ object_key: string }>();
@@ -246,6 +252,7 @@ export async function cleanupPosts(db: D1Database, bucket: R2Bucket) {
       continue;
     try {
       await bucket.delete(row.object_key);
+      await releaseStorage(db, row.object_key);
       await db
         .prepare('DELETE FROM photo_cleanup WHERE object_key=?')
         .bind(row.object_key)

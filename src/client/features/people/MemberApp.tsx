@@ -1,3 +1,4 @@
+import { DeleteAccount } from '../account/DeleteAccount';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Notifications } from '../notifications/Notifications';
 import { Compose, PostList } from '../posts/Posts';
@@ -99,6 +100,7 @@ export function MemberApp() {
               hasAvatar={Boolean(profile.hasAvatar)}
             />
           )}
+          <DeleteAccount />
         </>
       ) : !profile ? (
         <p>Create your profile before finding or following people.</p>

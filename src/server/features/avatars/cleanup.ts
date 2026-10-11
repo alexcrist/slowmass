@@ -1,8 +1,9 @@
+import { releaseStorage } from '../../photos/storage';
 export async function cleanupAvatars(db: D1Database, bucket: R2Bucket) {
   const now = Date.now();
   const due = await db
     .prepare(
-      "SELECT object_key FROM photo_cleanup WHERE object_key LIKE 'avatars/%' AND not_before <= ? ORDER BY not_before LIMIT 5",
+      "SELECT object_key FROM photo_cleanup WHERE object_key LIKE 'avatars/%' AND not_before <= ? ORDER BY not_before LIMIT 2",
     )
     .bind(now)
     .all<{ object_key: string }>();
@@ -22,6 +23,7 @@ export async function cleanupAvatars(db: D1Database, bucket: R2Bucket) {
     }
     try {
       await bucket.delete(row.object_key);
+      await releaseStorage(db, row.object_key);
       await db
         .prepare('DELETE FROM photo_cleanup WHERE object_key=?')
         .bind(row.object_key)

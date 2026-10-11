@@ -4,7 +4,7 @@ import { getActiveUser } from '../../auth';
 import { authConfigured } from '../../auth/options';
 import { findProfile, ownProfile } from '../people';
 import { processPhoto, PhotoError } from '../../photos';
-import { readPhoto, reservePhoto } from '../../photos/storage';
+import { readPhoto, reservePhoto, reserveStorage } from '../../photos/storage';
 export const avatars = new Hono<{ Bindings: Env }>();
 export const avatarMedia = new Hono<{ Bindings: Env }>();
 
@@ -47,23 +47,26 @@ avatars.put('/', async (c) => {
       await readPhoto(c.req.raw),
       320,
     );
+    await reserveStorage(c.env.DB, user.id, key, photo.bytes.length);
     await c.env.PHOTOS.put(key, photo.bytes, {
       httpMetadata: { contentType: 'image/webp' },
     });
-    await c.env.DB.batch([
+    const published = await c.env.DB.batch([
       c.env.DB.prepare(
         'INSERT INTO photo_cleanup (object_key,not_before) SELECT object_key,? FROM avatar WHERE user_id=? ON CONFLICT DO NOTHING',
       ).bind(Date.now(), user.id),
       c.env.DB.prepare(
-        `INSERT INTO avatar (user_id,object_key,width,height) VALUES (?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET object_key=excluded.object_key,width=excluded.width,height=excluded.height`,
-      ).bind(user.id, key, photo.width, photo.height),
-      c.env.DB.prepare("UPDATE photo_attempt SET state='done' WHERE id=?").bind(
-        `${user.id}:${id}`,
-      ),
-      c.env.DB.prepare('DELETE FROM photo_cleanup WHERE object_key=?').bind(
-        key,
-      ),
+        `INSERT INTO avatar (user_id,object_key,width,height) SELECT user_id,?,?,? FROM membership WHERE user_id=? AND status='active' ON CONFLICT(user_id) DO UPDATE SET object_key=excluded.object_key,width=excluded.width,height=excluded.height`,
+      ).bind(key, photo.width, photo.height, user.id),
+      c.env.DB.prepare(
+        "UPDATE photo_attempt SET state='done' WHERE id=? AND EXISTS(SELECT 1 FROM avatar WHERE object_key=?)",
+      ).bind(`${user.id}:${id}`, key),
+      c.env.DB.prepare(
+        'DELETE FROM photo_cleanup WHERE object_key=? AND EXISTS(SELECT 1 FROM avatar WHERE object_key=?)',
+      ).bind(key, key),
     ]);
+    if (!published[1].meta.changes)
+      return c.json({ error: 'Account is no longer active.' }, 403);
     return c.json({ ok: true });
   } catch (error) {
     await c.env.DB.prepare("UPDATE photo_attempt SET state='failed' WHERE id=?")

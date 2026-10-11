@@ -1,5 +1,6 @@
 export interface Env {
   DB: D1Database;
+  MAINTENANCE_MODE?: string;
   PHOTOS: R2Bucket;
   IMAGES?: ImagesBinding;
   ASSETS: Fetcher;

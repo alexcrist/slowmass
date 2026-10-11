@@ -1,3 +1,7 @@
-# Current account
+# Account and deletion
 
-Returns only the current active member's ID and display name. A valid session alone is insufficient: email verification and current membership are checked through the auth module. The frontend uses this to distinguish the welcome screen from signed-in membership. Profile onboarding is not implemented here.
+Account reads require a verified active session. Deletion requires the same authentication, origin protection, a bounded body, and explicit DELETE confirmation. One database batch marks membership deleted, revokes sessions and pending recipient invitations, removes matching email-link verifications and auth accounts, and anonymizes the user/profile. Invitation IDs, parent pointers, and issuance/join timestamps survive. The bootstrap root tombstone prevents a second root. Rejoining requires a fresh invitation and creates a new member identity.
+
+Current membership checks hide photos, comments, notifications, and profiles immediately. Publication and avatar replacement also check active membership in their final SQL, so a concurrent upload cannot reactivate deleted content. Scheduled work erases up to five posts and 100 rows per ancillary table for one pending account per run. It queues media deletion, redacts recipient email through a narrowly scoped trigger exception, and clears the temporary redaction address when content cleanup completes. R2 cleanup completion is tracked separately. Accepted descendants remain active; account deletion is not a mass ban.
+
+Backups may contain earlier content until expiration. Restores are quarantined, with sessions removed and memberships disabled until the latest deletion and access decisions are reconciled. See the operations runbook; never restore a stale snapshot directly into public service.
