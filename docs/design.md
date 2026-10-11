@@ -25,6 +25,6 @@ Verification uses static checks and API/integration tests only. Browser testing,
 
 `/branding/` is a standalone, public, noindex design preview. Caveat is the confirmed wordmark font. Five PNW evergreen-inspired palettes are available: Deep Pine, Douglas Fir (selected), Western Redcedar, Sitka Spruce, and Western Hemlock. These are artistic color directions, not botanical color specifications. Selections are stored only in the URL fragment and do not change the application theme or account data. Preview scripts load only on that page and make no API requests. The app uses Douglas Fir and Caveat.
 
-## Favicon exploration
+## Favicon
 
-`/favicon-preview/` is a temporary public, noindex comparison page with eight variations on the selected `sm` monogram in Douglas Fir and cream. The original is preserved as the reference; alternatives explore scale, spacing, tile shape, reversed colors, and an inset border. Lettering uses Caveat bold converted to vector outlines. It shows enlarged icons, 16px/32px samples, and light/dark tab examples. Selection changes only that page's favicon and URL fragment; the main app icon remains unset pending the owner's choice. Assets and scripts are local and make no account/API requests. Remove this preview when the selection process is complete.
+The selected favicon is the original lowercase `sm` monogram: Caveat bold in cream on a rounded Douglas Fir tile. `/favicon.svg` preserves the approved vector geometry. `/favicon.ico` contains 16px, 32px, and 48px versions; `/apple-touch-icon.png` is a 180px version with an opaque Douglas Fir background for home-screen use. These assets are linked from the application document. The temporary favicon comparison page was removed after selection.
