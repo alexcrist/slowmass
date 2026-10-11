@@ -7,4 +7,5 @@ export interface Env {
   BOOTSTRAP_EMAIL?: string;
   RESEND_API_KEY?: string;
   EMAIL_FROM?: string;
+  EMAIL_REPLY_TO?: string;
 }

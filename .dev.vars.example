@@ -3,5 +3,7 @@
 AUTH_SECRET=
 RESEND_API_KEY=
 EMAIL_FROM=Slowmass <hello@slowmass.com>
+# Optional inbox for replies; may differ from the verified sending domain.
+EMAIL_REPLY_TO=
 # Used only to create the first verified member. All later joins require a member invitation.
 BOOTSTRAP_EMAIL=

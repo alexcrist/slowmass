@@ -19,7 +19,7 @@ The Images binding is deliberately not configured until private processing and f
 
 Create a Resend account on its Free plan. Add slowmass.com as a sending domain and install its verification DNS records in Cloudflare. Keep open and click tracking disabled. Create a sending-only API key scoped to that domain where supported.
 
-In the ignored `.dev.vars` file, enter the API key and your desired sending address. Set `BOOTSTRAP_EMAIL` to the address you will use for the first account. Its first successful email verification establishes the root member. Once any membership exists, this setting cannot create another root. Every later member requires an active member's invitation.
+In the ignored `.dev.vars` file, enter the API key and your desired sending address. Use `EMAIL_REPLY_TO` for an optional personal reply inbox; Gmail can receive replies but cannot be used as the Resend sender. Set `BOOTSTRAP_EMAIL` to the address you will use for the first account. Its first successful email verification establishes the root member. Once any membership exists, this setting cannot create another root. Every later member requires an active member's invitation.
 
 The implementation agent has generated a local auth secret in `.dev.vars`. On a fresh checkout, copy `.dev.vars.example` and generate one using `openssl rand -base64 32`. Do not paste credentials into chat. Production secrets must be installed through Wrangler's secret input; production needs a distinct auth secret and verified HTTPS origin.
 
@@ -38,3 +38,7 @@ After credentials are available, verify a real email link, first-member bootstra
 - [Resend sender domain setup](https://resend.com/docs/dashboard/domains/introduction)
 - [Resend pricing](https://resend.com/pricing)
 - [Better Auth email-link integration](https://better-auth.com/docs/plugins/magic-link)
+
+## Local test isolation
+
+Browser tests start their own local Worker with an explicit, empty `tests/browser/worker.env`. They do not reuse a developer server or load `.dev.vars`. Integration tests intercept email delivery in memory. Neither suite should send real email.

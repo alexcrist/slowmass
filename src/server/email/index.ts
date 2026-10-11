@@ -48,6 +48,7 @@ export async function sendLoginEmail(
     },
     body: JSON.stringify({
       from: env.EMAIL_FROM,
+      reply_to: env.EMAIL_REPLY_TO || undefined,
       to: [email],
       subject: 'Your Slowmass sign-in link',
       text: `Use this link to confirm your email and sign in to Slowmass:\n\n${url}\n\nIt expires in 10 minutes and can be used once. If you did not request it, you can ignore this email.`,
