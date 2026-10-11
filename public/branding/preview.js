@@ -18,7 +18,7 @@ function fromUrl() {
   const params = new URLSearchParams(location.hash.slice(1));
   const palette = Object.hasOwn(palettes, params.get('palette'))
     ? params.get('palette')
-    : 'pine';
+    : 'fir';
   render(palette);
 }
 fromUrl();

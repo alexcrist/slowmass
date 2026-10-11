@@ -15,8 +15,8 @@
 :root {
   font-family: 'Source Sans 3', system-ui, sans-serif;
   color: #29362e;
-  background: #eef2ef;
-  --brand: #183f35;
+  background: #f0f2ec;
+  --brand: #214c3b;
   --muted: #627066;
   --line: #dbe1da;
   --paper: #fff;
@@ -53,7 +53,7 @@ button:disabled {
 }
 .masthead {
   background: var(--brand);
-  border-bottom: 1px solid #123128;
+  border-bottom: 1px solid #183a2c;
   padding: 8px max(20px, calc((100% - 640px) / 2));
   box-shadow: 0 1px 3px #29362e20;
 }
@@ -66,9 +66,9 @@ button:disabled {
   font-size: 37px;
   font-weight: 700;
   line-height: 1.2;
-  color: #f4f6ef;
+  color: #f6f7ed;
   text-decoration: none;
-  text-shadow: 0 2px 0 #102d24;
+  text-shadow: 0 2px 0 #143225;
 }
 .account-section {
   max-width: 640px;
@@ -132,7 +132,7 @@ p {
 .primary-nav button[aria-pressed='true'] {
   color: var(--brand);
   border-bottom-color: var(--brand);
-  background: #e0ebe5;
+  background: #dde7d8;
 }
 .primary-nav button:hover {
   background: #f0f4ee;
@@ -189,7 +189,7 @@ p {
 }
 :where(button:not([class])):enabled:hover,
 .actions button:enabled:hover {
-  background: #e0ebe5;
+  background: #dde7d8;
 }
 .primary-button {
   width: 100%;
@@ -204,7 +204,7 @@ p {
   box-shadow: inset 0 1px 0 #ffffff15;
 }
 .primary-button:enabled:hover {
-  background: #285c4d;
+  background: #30634b;
 }
 .field-label {
   display: block;
@@ -238,7 +238,7 @@ input[type='file'] {
 input::file-selector-button {
   font: inherit;
   color: var(--brand);
-  background: #e0ebe5;
+  background: #dde7d8;
   border: 0;
   border-radius: 3px;
   padding: 5px 10px;

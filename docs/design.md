@@ -1,14 +1,14 @@
 # Interface guidance
 
-The interface takes its direction from early photo-sharing apps: a compact Deep Pine green header, lowercase script wordmark, white photo frames, and a narrow chronological feed. This basic brand direction was approved on October 10, 2026. Copy remains functional, without slogans or marketing messages.
+The interface takes its direction from early photo-sharing apps: a compact Douglas Fir green header, lowercase script wordmark, white photo frames, and a narrow chronological feed. This basic brand direction was approved on October 10, 2026. Copy remains functional, without slogans or marketing messages.
 
 ## Type and color
 
 - Caveat bold: the text-only `slowmass` wordmark.
 - Source Sans 3: headings, controls, captions, and body text. Use 400 and 600 weights with system fallbacks.
-- Deep Pine `#183f35`: header, primary actions, selected navigation.
-- Cream `#f4f6ef`: wordmark on the header.
-- Off-white `#eef2ef`: page background; white `#ffffff`: forms and photo frames.
+- Douglas Fir `#214c3b`: header, primary actions, selected navigation.
+- Cream `#f6f7ed`: wordmark on the header.
+- Off-white `#f0f2ec`: page background; white `#ffffff`: forms and photo frames.
 - Ink `#29362e`: body text; gray `#627066`: secondary text; pale gray `#dbe1da`: boundaries.
 
 Both fonts are served locally from `public/fonts`, with their SIL Open Font Licenses included. No third-party font or image requests. The reusable wordmark is also available at `/slowmass-wordmark.svg` as standalone vector outlines.
@@ -23,4 +23,4 @@ Verification uses static checks and API/integration tests only. Browser testing,
 
 ## Branding comparison
 
-`/branding/` is a standalone, public, noindex design preview. Caveat is the confirmed wordmark font. Five PNW evergreen-inspired palettes are available: Deep Pine (current), Douglas Fir (recommended), Western Redcedar, Sitka Spruce, and Western Hemlock. These are artistic color directions, not botanical color specifications. Selections are stored only in the URL fragment and do not change the application theme or account data. Preview scripts load only on that page and make no API requests. The app uses Deep Pine and Caveat.
+`/branding/` is a standalone, public, noindex design preview. Caveat is the confirmed wordmark font. Five PNW evergreen-inspired palettes are available: Deep Pine, Douglas Fir (selected), Western Redcedar, Sitka Spruce, and Western Hemlock. These are artistic color directions, not botanical color specifications. Selections are stored only in the URL fragment and do not change the application theme or account data. Preview scripts load only on that page and make no API requests. The app uses Douglas Fir and Caveat.
