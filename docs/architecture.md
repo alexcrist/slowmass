@@ -61,9 +61,9 @@ Current planning allowances:
 - R2 Standard: 10 GB-month, one million Class A and ten million Class B operations/month included; no egress fee. Storage continues to accrue while the app is idle.
 - Images: 5,000 unique transformations/month on Free, then new transformations fail. Two variants roughly halve the upload allowance; avatars and retries must be accounted for. Persist variants to avoid repeated monthly transformations.
 
-Instrument aggregate request/CPU/error metrics, database scans/writes, upload failures, object bytes, and transformations. Do not collect behavioral profiles. Apply finite log retention and redact user content. Baseline the actual beta workload rather than predicting capacity from user count alone.
+Instrument aggregate request/CPU/error metrics, database scans/writes, upload failures, object bytes, and transformations. Do not collect behavioral profiles. Keep persistent request logs disabled initially and redact user content from application errors. Baseline the actual beta workload rather than predicting capacity from user count alone.
 
-Test D1 point-in-time recovery plus an independent export/restore before inviting users. Keep backup artifacts access-restricted. R2 durability is not backup protection against accidental deletion; define a separate encrypted backup copy and bounded retention for published photos, account for its bytes, and test restoration. Recovery must preserve deletion records so restoring a backup does not resurrect access to deleted content. Document the recovery window and data-loss tolerance.
+The operations tooling now verifies encrypted exports and synthetic photo restoration; a disposable hosted database has passed a Time Travel drill. Follow the operations runbook for manual backup cadence and off-device copies. Keep backup artifacts access-restricted. R2 durability is not backup protection against accidental deletion; define a separate encrypted backup copy and bounded retention for published photos, account for its bytes, and test restoration. Recovery must preserve deletion records so restoring a backup does not resurrect access to deleted content. Document the recovery window and data-loss tolerance.
 
 ## Growth path
 

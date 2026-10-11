@@ -1,6 +1,6 @@
 # Implementation plan
 
-Status: authentication, invitations, profiles, avatars, and follows deployed. Posts, feed, interactions, and notifications are deployed and API-tested. Recovery, account deletion, cost measurements, and complete hosted beta verification remain open. Browser and visual testing are prohibited. Check boxes represent observed implementation/verification; a local check is not hosted verification.
+Status: authentication, invitations, profiles, avatars, and follows deployed. Posts, feed, interactions, and notifications are deployed and API-tested. Account deletion, storage quotas, encrypted backup verification, hosted Time Travel drill, and initial usage inspection are implemented. Recurring backups, off-device handoff, and complete hosted beta verification remain open. Browser and visual testing are prohibited. Check boxes represent observed implementation/verification; a local check is not hosted verification.
 
 ## Approach
 
@@ -62,8 +62,10 @@ Exit: three-user API flow covers following, posting, liking, commenting, accepti
 
 - [x] Implement the user-requested utilitarian interface, with mobile CSS, semantic controls, labels, and focus/touch targets. Review source statically; no browser or visual checks.
 - [ ] Cover loading, empty, permission-denied, offline/network-error, quota, and unsupported-photo states. Installable web app is optional; never cache private photos for offline use.
-- [ ] Implement account deletion and recovery-aware cleanup, per-user upload limits, mutation rate limits, and operator invitation/block controls through a simple script or existing interface.
-- [ ] Add privacy-preserving metrics, bounded logs, cost monitoring instructions, backup/export procedure, and a restore exercise.
+- [x] Implement account deletion and recovery-aware cleanup, per-user upload/storage limits, and retained invitation provenance.
+- [ ] Finish broad mutation rate limits and operator invitation/block controls.
+- [x] Add aggregate usage inspection, bounded cleanup, cost monitoring instructions, encrypted backup/export tooling, synthetic SQL/photo restore verification, and a hosted Time Travel drill on a disposable database.
+- [ ] Establish recurring backups and retain a verified off-device copy. Current backup creation is manual; the owner will copy the recovery kit to Google Drive.
 - [x] Add CI checks for format, lint, types, import boundaries, meaningful tests, migrations on a clean database, and production build. Keep production deploy explicit initially.
 
 Exit: real photos survive a documented restore in a nonproduction environment; deletion remains respected. No credentials or production data appear in test artifacts or logs.
@@ -75,7 +77,7 @@ Exit: real photos survive a documented restore in a nonproduction environment; d
 - [ ] Seed realistic synthetic follow graphs and posts. Measure feed latency, D1 rows scanned, Worker CPU, and request counts; identify concrete upgrade thresholds from observed usage.
 - [x] Configure production resources, secrets, verified email sender domain, and explicit deployment within the user's authorization. Apply each feature migration before dependent code.
 - [ ] Verify the actual deployed login/upload/follow/feed/interaction flow. Do not equate a successful build or HTTP 200 with a working app.
-- [ ] Write a concise operator runbook and update documentation to reflect actual implementation and measured limitations.
+- [x] Write the operations runbook with storage controls, retention, recovery quarantine, usage observations, and measured limitations.
 
 Exit: an invited friend can sign in, post, follow another friend, and interact without developer assistance. No open privacy or data-integrity failures; any remaining limitations are explicit.
 

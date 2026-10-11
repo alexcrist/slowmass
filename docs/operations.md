@@ -46,7 +46,7 @@ The latest verified snapshot defines recoverable data. With daily successful cop
 5. Validate permissions, object checksums, invitation provenance, and cleanup through API/database checks. If current deletion/access decisions cannot be recovered, keep affected accounts disabled; do not silently reactivate them from an old snapshot. Keep expired sessions invalid and use a fresh auth secret if restoring after credential loss.
 6. Only reopen accounts whose current access state has been reconciled. Remove maintenance mode in an explicit deployment after validation. The restore checker is deliberately not a one-command production overwrite tool.
 
-The automated exercise verifies an encrypted synthetic SQL/photo archive and rejects tampered ciphertext. The initial production archive contains no photos, so its successful restore establishes database recovery only; synthetic fixtures establish the media path. Hosted Time Travel drill results are recorded below when observed. A complete application cutover after disaster remains an operator procedure, not an automated guarantee.
+The automated exercise verifies an encrypted synthetic SQL/photo archive and rejects tampered ciphertext. The initial production archive contains no photos, so its successful restore establishes database recovery only; synthetic fixtures establish the media path. On October 10, 2026, a disposable hosted D1 database was written with a synthetic value, bookmarked, changed, and restored to that bookmark. A subsequent query returned the original value. The disposable database was then deleted; production was not restored. A complete application cutover after disaster remains an operator procedure, not an automated guarantee.
 
 ## Release and rollback
 
