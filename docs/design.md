@@ -24,3 +24,7 @@ Verification uses static checks and API/integration tests only. Browser testing,
 ## Branding comparison
 
 `/branding/` is a standalone, public, noindex design preview. Caveat is the confirmed wordmark font. Five PNW evergreen-inspired palettes are available: Deep Pine, Douglas Fir (selected), Western Redcedar, Sitka Spruce, and Western Hemlock. These are artistic color directions, not botanical color specifications. Selections are stored only in the URL fragment and do not change the application theme or account data. Preview scripts load only on that page and make no API requests. The app uses Douglas Fir and Caveat.
+
+## Favicon exploration
+
+`/favicon-preview/` is a temporary public, noindex comparison page with six standalone SVG candidates in Douglas Fir and cream. Lettered candidates use Caveat bold converted to vector outlines. It shows enlarged icons, 16px/32px samples, and light/dark tab examples. Selection changes only that page's favicon and URL fragment; the main app icon remains unset pending the owner's choice. Assets and scripts are local and make no account/API requests. Remove this preview when the selection process is complete.
