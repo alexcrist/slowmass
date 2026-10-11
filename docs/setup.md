@@ -13,7 +13,7 @@ npx wrangler whoami
 
 Complete browser authorization using the account that owns slowmass.com. Keep tokens out of chat and source control. The implementation agent can then inspect the account, create the D1 database and private R2 bucket, replace the placeholder binding, and configure the production origin/domain. R2 may require billing activation even within free allowances; complete any account-owner action in Cloudflare's dashboard.
 
-The production Images binding is not configured yet. An isolated remote preview successfully inspected a synthetic PNG and re-encoded it to WebP using private bytes on this account. Full photo safety and quota verification remains open. No paid Workers or Images subscription has been enabled. R2 is activated with its usage-based billing and included allowances.
+The production Images binding processes private avatars. Remote checks verified JPEG orientation and metadata removal, still PNG/WebP conversion, animation rejection, and the complete avatar API using isolated local D1/R2 with remote image processing. The hourly cleanup schedule removes replaced/orphaned avatar objects in bounded batches. Hosted CPU measurements and full photo-post verification remain open. No paid Workers or Images subscription has been enabled. R2 is activated with its usage-based billing and included allowances.
 
 ## Email delivery
 
@@ -41,13 +41,13 @@ After credentials are available, verify a real email link, first-member bootstra
 
 ## Local test isolation
 
-Browser tests start their own local Worker with an explicit, empty `tests/browser/worker.env`. They do not reuse a developer server or load `.dev.vars`. Integration tests intercept email delivery in memory. Neither suite should send real email.
+Browser and visual testing are prohibited. Integration tests run isolated Workers/D1/R2 with synthetic accounts and intercept or reject external network requests. They never load `.dev.vars`, send real email, or access production data.
 
 ## Production deployment
 
 After a successful `npm run check`, deploy explicitly with `npx wrangler deploy --env production`. Production has a separate auth secret installed through Wrangler, and its only public app origin is https://slowmass.com. Worker preview URLs and workers.dev access are disabled for the app. The account workers.dev subdomain exists only to allow isolated remote-binding development.
 
-All four initial migrations have been applied. Future migrations normally use `npx wrangler d1 migrations apply slowmass --env production --remote`.
+The initial migrations and profile/avatar migrations are applied before deploying their dependent code. Future migrations normally use `npx wrangler d1 migrations apply slowmass --env production --remote`.
 
 ### Initial trigger migration workaround
 

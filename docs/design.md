@@ -9,3 +9,5 @@ Use the system sans-serif stack and a neutral palette: white background, dark te
 The account screen uses a compact header and a left-aligned form in a bounded column. Keep inputs readable on phones, controls at least 44px tall, and keyboard focus visible. Preserve clear loading, unavailable, error, and confirmation states.
 
 Future screens should follow the same approach: functional navigation, full-width photos in a bounded feed column, left-aligned captions, and explicit page controls. Private profiles must never cause requests to third-party image or font hosts. No decorative animations, engagement badges, or invented social activity.
+
+Verification uses static checks and API/integration tests only. Browser testing, screenshot inspection, and visual regression testing are prohibited by the user.

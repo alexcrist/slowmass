@@ -10,7 +10,6 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "test:browser": "playwright test",
     "db:migrate": "wrangler d1 migrations apply slowmass --local",
     "auth:schema": "node scripts/generate-auth-schema.mjs",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build"
@@ -28,7 +27,6 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20261010.1",
-    "@playwright/test": "1.64.0",
     "@types/node": "24.10.1",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { createAuthClient } from 'better-auth/react';
 import { magicLinkClient } from 'better-auth/client/plugins';
-import { InvitationForm } from './InvitationForm';
+import { MemberApp } from '../people/MemberApp';
 
 const auth = createAuthClient({ plugins: [magicLinkClient()] });
 type State = 'loading' | 'ready' | 'unavailable' | 'error';
@@ -95,8 +95,7 @@ export function Welcome() {
               <p className="signed-in">
                 {name ? `Welcome, ${name}.` : 'You’re signed in.'}
               </p>
-              <p className="status-copy">Photo sharing is not available yet.</p>
-              <InvitationForm />
+              <MemberApp />
               <button
                 className="text-button"
                 onClick={() => void signOut()}

@@ -1,6 +1,6 @@
 # Implementation plan
 
-Status: foundation deployed; first-member email login verified; private image processing verification in progress. Execute in dependency order. Check boxes represent observed completion, never generated code alone.
+Status: foundation deployed; first-member email login verified; private image processing verification in progress. Browser and visual testing are prohibited; use API/integration and static checks. Execute in dependency order. Check boxes represent observed completion, never generated code alone.
 
 ## Approach
 
@@ -19,7 +19,7 @@ Exit: repository exists, symlink is tracked as a symlink, and the design is revi
 ## 1. Runtime and highest-risk integration spike
 
 - [x] Scaffold one strict TypeScript package with React/Vite, Hono, Wrangler, formatting/linting, test runner, and lockfile. Pin compatible versions after checking official docs.
-- [ ] Verify local static routing, API routing, D1 migrations, R2 access, and production bundling.
+- [x] Verify local static routing, API routing, D1 migrations, R2 access, and production bundling.
 - [x] Verify email-link/D1 integration, session signatures, trusted origins, verified-email invitation checks, and logout in the local runtime with simulated email delivery.
 - [ ] Complete hosted secure-session verification. First-member email delivery and sign-in at https://slowmass.com are user-confirmed; hosted session expiry/logout and invited-member verification remain.
 - [ ] Complete private image inspection/re-encoding verification (remote synthetic PNG-to-WebP smoke check passed); verify output format, orientation, metadata removal, animation rejection, upload limits, and quota behavior.
@@ -30,14 +30,14 @@ Exit: one authenticated user can submit an image to a private test path and retr
 
 ## 2. Identity, profiles, and relationship privacy
 
-- [ ] Implement onboarding, unique handles, private profile reads/edits, exact-handle lookup, and avatar processing.
+- [x] Implement onboarding, unique handles, private profile reads/edits, exact-handle lookup, and avatar processing.
 - [x] Implement invitation eligibility and permanent inviter attribution, with an authenticated invitation form.
-- [ ] Implement follow request/cancel/accept/deny, unfollow, follower removal, and block/unblock.
+- [x] Implement follow request/cancel/accept/deny, unfollow, follower removal, and block/unblock.
 - [x] Enforce feature dependency boundaries and active-membership access.
 - [ ] Establish private-profile/post access predicates.
-- [ ] Add persistence constraints and integration tests for duplicate/crossing requests, ownership, concurrent transitions, and removed/blocked access.
+- [x] Add persistence constraints and integration tests for duplicate/crossing requests, ownership, concurrent transitions, and removed/blocked access.
 
-Exit: two test users can establish and revoke a relationship; a third user cannot read private profile details or media. UI explains empty/requested/accepted states.
+Exit: two synthetic test users can establish and revoke a relationship; a third user cannot read private profile details or media. UI code provides empty/requested/accepted states.
 
 ## 3. Publish and browse photos
 
@@ -47,7 +47,7 @@ Exit: two test users can establish and revoke a relationship; a third user canno
 - [ ] Add explicit cursor pagination, snapshot boundary, navigation history, viewport image loading, and caught-up state.
 - [ ] Add post deletion with immediate access denial and durable retryable media cleanup.
 
-Exit: upload on a narrow-screen browser, reload, and see exactly one published post. A follower sees it in order; pending/stranger/removed users cannot access it by API or saved media URL. Tied timestamps, concurrent inserts, and deletions do not break pagination.
+Exit: upload through the API, reload, and see exactly one published post. A follower sees it in order; pending/stranger/removed users cannot access it by API or saved media URL. Tied timestamps, concurrent inserts, and deletions do not break pagination.
 
 ## 4. Interactions and notifications
 
@@ -56,7 +56,7 @@ Exit: upload on a narrow-screen browser, reload, and see exactly one published p
 - [ ] Ensure notifications and source mutations cannot diverge silently; use atomic writes or a minimal durable outbox when required.
 - [ ] Recheck visibility when rendering notifications and navigating to their targets; clean up or hide obsolete events.
 
-Exit: three-user browser flow covers following, posting, liking, commenting, accepting/denying requests, unread state, retries, and revoked access. Counts and grouped notifications remain correct after unlike/deletion.
+Exit: three-user API flow covers following, posting, liking, commenting, accepting/denying requests, unread state, retries, and revoked access. Counts and grouped notifications remain correct after unlike/deletion.
 
 ## 5. Complete mobile experience and operations
 
@@ -70,7 +70,7 @@ Exit: real photos survive a documented restore in a nonproduction environment; d
 
 ## 6. Beta readiness and deployment
 
-- [ ] Run full browser flow with separate authenticated users on phone and desktop viewports, plus keyboard/accessibility checks.
+- [ ] Run full API flow with separate authenticated users; review UI semantics and responsive CSS statically. Never run browser or visual tests.
 - [ ] Test direct unauthorized requests, stale media URLs, CSRF/origin checks, session expiry, duplicate publication, simultaneous likes, interrupted processing, and retryable cleanup.
 - [ ] Seed realistic synthetic follow graphs and posts. Measure feed latency, D1 rows scanned, Worker CPU, and request counts; identify concrete upgrade thresholds from observed usage.
 - [ ] Configure production resources, secrets, email sender domain, migration order, and explicit deployment only within the user's deployment authorization. State any external prerequisites precisely.

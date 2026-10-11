@@ -11,7 +11,7 @@ Initial operating target: $0/month within free allowances, with a measured path 
 - [docs/architecture.md](docs/architecture.md): proposed architecture, privacy, cost model, and scaling decisions.
 - [docs/implementation-plan.md](docs/implementation-plan.md): executable build stages and acceptance criteria.
 
-The repository contains a welcome screen, email-link authentication, and member invitations; photo-sharing features remain planned. Keep proposed behavior visibly separate from verified implementation. As features ship, their local READMEs become the authority for implemented behavior.
+The repository contains email-link authentication, member invitations, profiles, private avatars, and follow relationships; photo posts and interactions remain planned. Keep proposed behavior visibly separate from verified implementation. As features ship, their local READMEs become the authority for implemented behavior.
 
 - [docs/design.md](docs/design.md): visual direction.
 - [docs/setup.md](docs/setup.md): external setup and migration workflow.
@@ -55,14 +55,14 @@ Each feature/shared module gets a proportionate README, even if only a few sente
 4. Review the diff for bugs, unnecessary abstraction, dead code, sensitive data, and cost amplification. Fix discovered issues relevant to the change.
 5. Update docs and plan checkboxes honestly. Report implemented behavior, checks actually run, and remaining limitations.
 
-AI-assisted work is held to the same bar as any other code. Fast generation is not evidence of correctness. Never claim a command, deployment, test, or restore succeeded without observing its result. Prefer direct CLI/API tools; use a browser to verify UI behavior. Follow existing user authorization and do not insert unnecessary approval gates.
+AI-assisted work is held to the same bar as any other code. Fast generation is not evidence of correctness. Never claim a command, deployment, test, or restore succeeded without observing its result. Prefer direct CLI/API tools. Never perform browser testing or visual testing. Follow existing user authorization and do not insert unnecessary approval gates.
 
 ## Testing and UI quality
 
 Keep the interface utilitarian. Use only the plain Slowmass name for identification. Do not introduce logos, slogans, marketing copy, decorative illustrations, or a brand identity. Use functional labels, neutral styling, and clear status messages.
 
 - Add focused unit tests for domain rules and meaningful integration tests against the Workers/D1 runtime. Mock external providers only at their boundaries.
-- Use a real browser for the critical multi-user flow and responsive/accessibility checks. Do not inherit Rhonda's project-specific prohibition on browser testing.
+- **Never perform browser testing or visual testing.** Do not launch browser automation, capture or inspect screenshots, or run visual regression checks. The user explicitly prohibits these because of time and token cost. Verify behavior with static analysis, type checks, unit/integration tests, database checks, and direct HTTP/API requests instead.
 - Include negative cases: pending follower, stranger, blocked user, removed follower, expired session, duplicate mutation, interrupted upload, and deleted content.
 - Keep fixtures synthetic. CI must not use production accounts, production data, or a production database.
 - Use formatting, linting, type checking, boundary checks, tests, and a production build as commit/CI gates once tooling exists. Do not invent commands in documentation before implementing them.

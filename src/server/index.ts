@@ -4,6 +4,9 @@ import { createAuth } from './auth';
 import { authConfigured } from './auth/options';
 import { account } from './features/account/router';
 import { invitations } from './features/invitations/router';
+import { avatars, avatarMedia } from './features/avatars/router';
+import { cleanupAvatars } from './features/avatars/cleanup';
+import { people } from './features/people/router';
 import type { Env } from './env';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -44,6 +47,9 @@ app.on(['GET', 'POST'], '/api/auth/*', async (c) => {
   return response;
 });
 app.route('/api/me', account);
+app.route('/api/people', people);
+app.route('/api/avatar', avatars);
+app.route('/media/avatar', avatarMedia);
 app.route('/api/invitations', invitations);
 // No media route is public, even before media implementation exists.
 app.all('/media/*', (c) => c.json({ error: 'Not found.' }, 404));
@@ -59,4 +65,9 @@ app.onError((error, c) => {
   );
   return c.json({ error: 'Something went wrong. Please try again.' }, 500);
 });
-export default app;
+export default {
+  fetch: app.fetch,
+  scheduled: async (_controller: ScheduledController, env: Env) => {
+    await cleanupAvatars(env.DB, env.PHOTOS);
+  },
+};

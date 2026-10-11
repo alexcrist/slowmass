@@ -117,3 +117,82 @@ input {
 .invitation-form {
   margin-top: 24px;
 }
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.tabs button,
+.actions button,
+button:not([class]) {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid #888;
+  border-radius: 4px;
+  background: #fff;
+  color: #222;
+  cursor: pointer;
+}
+.tabs button[aria-pressed='true'] {
+  background: #222;
+  color: #fff;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+textarea {
+  width: 100%;
+  font: inherit;
+  padding: 12px;
+  border: 1px solid #888;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  resize: vertical;
+}
+.field-help {
+  font-size: 13px;
+  color: #555;
+  margin: -4px 0 20px;
+}
+.field-label {
+  margin-top: 16px;
+}
+.person {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #ddd;
+}
+.handle {
+  font-size: 14px;
+  color: #555;
+  overflow-wrap: anywhere;
+}
+.bio {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.people-list {
+  list-style: none;
+  padding: 0;
+}
+.people-list li {
+  border-bottom: 1px solid #ddd;
+  padding: 16px 0;
+}
+.people-list .actions {
+  margin-top: 12px;
+}
+
+.avatar {
+  display: block;
+  width: 120px;
+  height: 120px;
+  object-fit: contain;
+}
+input[type='file'] {
+  padding: 8px;
+}

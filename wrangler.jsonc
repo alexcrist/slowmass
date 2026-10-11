@@ -24,6 +24,8 @@
   "env": {
     "production": {
       "name": "slowmass",
+      "images": { "binding": "IMAGES" },
+      "triggers": { "crons": ["17 * * * *"] },
       "workers_dev": false,
       "preview_urls": false,
       "routes": [{ "pattern": "slowmass.com", "custom_domain": true }],
