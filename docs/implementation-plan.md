@@ -94,6 +94,13 @@ Exit: an invited friend can sign in, post, follow another friend, and interact w
 - [x] Add inviter-scoped invitation history, immutable issuance timestamps, cancellation, and a copyable message for manual sharing.
 - [x] Finish release checks (79 tests, format/lint/types/build and local migrations), verify a fresh encrypted production backup including two images, apply migration 0011, deploy, and verify deployed HTTP boundaries and asset hashes. No browser or visual tests.
 
+## October 11 white interface update
+
+- [x] Replace the tinted canvas/header and raised photo cards with white surfaces, neutral navigation, and subtle gray separators; retain Caveat, Source Sans 3, and green primary buttons.
+- [x] Add a desktop icon sidebar with hover/keyboard label expansion and bottom Settings; retain mobile bottom navigation and put mobile Settings in the header.
+- [x] Set browser and installed-app launch colors to white, preserving the approved app icons.
+- [x] Pass formatting, lint, types, the existing 79 tests, and production build; deploy and verify matching HTML/CSS/JS/manifest plus sign-in availability by HTTP. No schema changes or browser/visual testing.
+
 ## Completion evidence
 
 For each stage, record commands/results in the work report, not as permanent design prose. Keep current docs concise. The final handoff includes the repository, local setup, deployment state, features completed, tests actually executed, observed cost assumptions, and specific unfinished prerequisites. A working local application and a verified deployed beta are different completion states.

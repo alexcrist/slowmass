@@ -11,6 +11,7 @@ import { ProfileForm, type Profile } from './ProfileForm';
 import { ProfilePage } from './ProfilePage';
 import { Discover } from './Discover';
 import { Connections, type Kind } from './Connections';
+import { MemberNavigation } from './MemberNavigation';
 
 const titles: Record<string, string> = {
   feed: 'Feed',
@@ -25,14 +26,6 @@ const titles: Record<string, string> = {
   following: 'Following',
   followers: 'Followers',
   blocked: 'Blocked accounts',
-};
-const paths = {
-  feed: 'M3 10 12 3l9 7v11h-6v-7H9v7H3Z',
-  people: 'M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',
-  compose:
-    'M4 6h4l2-3h4l2 3h4a1 1 0 0 1 1 1v13H3V7a1 1 0 0 1 1-1ZM16 13a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
-  notifications: 'M20 5c-3-3-6-1-8 1-2-2-5-4-8-1-4 4 1 9 8 15 7-6 12-11 8-15Z',
-  profile: 'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M4 21v-2a8 8 0 0 1 16 0v2',
 };
 export function MemberApp(props: {
   onSignOut: () => void;
@@ -54,6 +47,7 @@ function MemberPages({
   const route = useRoute();
   const [page, handle] = route.split('/');
   const [profile, setProfile] = useState<Profile | null>();
+  const [avatarVersion, setAvatarVersion] = useState(0);
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
   useEffect(() => {
@@ -134,13 +128,14 @@ function MemberPages({
             <AvatarForm
               handle={profile.handle}
               hasAvatar={Boolean(profile.hasAvatar)}
-              onChange={(present) =>
+              onChange={(present) => {
                 setProfile((current) =>
                   current
                     ? { ...current, hasAvatar: Number(present) }
                     : current,
-                )
-              }
+                );
+                setAvatarVersion((version) => version + 1);
+              }}
             />
             <ProfileForm profile={profile} onSave={saved} />
           </>
@@ -190,41 +185,14 @@ function MemberPages({
   }
   return (
     <>
-      <div className="member-toolbar">
-        <a href="#settings" aria-label="Settings">
-          Settings
-        </a>
-      </div>
-      <nav className="primary-nav" aria-label="Main navigation">
-        {(Object.keys(paths) as (keyof typeof paths)[]).map((item) => (
-          <a
-            key={item}
-            href={
-              ready
-                ? item === 'profile'
-                  ? profileRoute
-                  : `#${item}`
-                : '#profile'
-            }
-            aria-current={page === item ? 'page' : undefined}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d={paths[item]} />
-            </svg>
-            <span>{item === 'people' ? 'Find' : titles[item]}</span>
-          </a>
-        ))}
-      </nav>
+      <MemberNavigation
+        page={page}
+        profile={profile ?? null}
+        avatarVersion={avatarVersion}
+      />
       <section
         key={ready ? route : 'onboarding'}
+        data-page={page}
         className={`member-content ${ready && (page === 'feed' || page === 'profile') ? 'photo-screen' : ''}`}
         aria-labelledby="screen-title"
       >

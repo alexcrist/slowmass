@@ -132,6 +132,11 @@ export function Welcome() {
         <a className="site-name" href="/" aria-label="Slowmass home">
           slowmass
         </a>
+        {name !== null && (
+          <a className="mobile-settings" href="#settings">
+            Settings
+          </a>
+        )}
       </header>
       <section
         className="account-section"

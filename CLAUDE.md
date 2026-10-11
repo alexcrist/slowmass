@@ -60,7 +60,7 @@ AI-assisted work is held to the same bar as any other code. Fast generation is n
 
 ## Testing and UI quality
 
-Use the approved early photo-app direction in `docs/design.md`: a lowercase slowmass script wordmark, Douglas Fir green header, white photo frames, and understated off-white surfaces. Pair locally hosted Caveat with Source Sans 3. Keep copy functional, with clear labels and status messages; no slogans, marketing copy, decorative illustrations, or invented activity.
+Use the approved neutral photo-app direction in `docs/design.md`: white canvas and photo surrounds, black text and navigation, gray boundaries, and Douglas Fir green reserved for primary actions. Pair the lowercase Caveat slowmass wordmark with locally hosted Source Sans 3. Desktop navigation is an icon sidebar that reveals labels on hover or keyboard focus; mobile keeps bottom navigation. Keep copy functional, with clear labels and status messages; no slogans, marketing copy, decorative illustrations, or invented activity.
 
 - Add focused unit tests for domain rules and meaningful integration tests against the Workers/D1 runtime. Mock external providers only at their boundaries.
 - **Never perform browser testing or visual testing.** Do not launch browser automation, capture or inspect screenshots, or run visual regression checks. The user explicitly prohibits these because of time and token cost. Verify behavior with static analysis, type checks, unit/integration tests, database checks, and direct HTTP/API requests instead.

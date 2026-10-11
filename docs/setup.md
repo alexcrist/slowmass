@@ -72,3 +72,9 @@ Worker version `016a77d7-1165-49a1-be95-e2eb5e5393f9` separates profiles and Set
 The local check passed formatting, lint, types, 79 tests, and production build; local migrations also passed. A Node component regression test exercises repeated navigation without a browser. Direct production checks verified sign-in availability, anonymous access rejection for new endpoints and media, cross-origin mutation rejection, private response cache headers, and matching deployed HTML/JS/CSS. Authenticated social scenarios are covered in the local Workers/D1 tests; this release did not perform a signed-in multi-user production test or any browser/visual testing.
 
 The pre-migration encrypted production backup passed local quarantined restoration with SQL integrity and both stored image checksums verified. Production was not restored. The initial recovery kit was previously copied off-device by the owner; subsequent backup creation/copying remains manual.
+
+## White interface release (October 11, 2026)
+
+Worker version `67f6dcad-f3c3-407b-be28-ba852ac1d06f` deploys the white canvas, neutral photo surrounds, desktop expanding sidebar, and mobile header/bottom navigation. Browser and manifest theme/background colors are white; primary buttons retain Douglas Fir. There are no database or backend behavior changes.
+
+Formatting, lint, types, 79 existing tests, and production build passed. Direct HTTP checks confirmed the deployed HTML, CSS, JS, and manifest match the checked build and sign-in remains available. Verification used source review and CLI/component/API checks only; no browser or visual tests were performed.
