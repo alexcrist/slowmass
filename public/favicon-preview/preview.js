@@ -1,10 +1,12 @@
 const names = {
-  script: 'Caveat s',
-  cream: 'Cream tile',
-  circle: 'Round stamp',
-  monogram: 'sm monogram',
-  fir: 'Douglas fir',
-  frame: 'Photo frame',
+  monogram: 'Original sm',
+  'sm-large': 'Larger lettering',
+  'sm-airy': 'More breathing room',
+  'sm-spaced': 'Open spacing',
+  'sm-square': 'Square corners',
+  'sm-circle': 'Round stamp',
+  'sm-cream': 'Cream tile',
+  'sm-border': 'Inset border',
 };
 function select(id) {
   document.querySelector(`input[value="${id}"]`).checked = true;
@@ -17,7 +19,7 @@ function select(id) {
 }
 function fromUrl() {
   const id = new URLSearchParams(location.hash.slice(1)).get('icon');
-  select(Object.hasOwn(names, id) ? id : 'script');
+  select(Object.hasOwn(names, id) ? id : 'monogram');
 }
 fromUrl();
 window.addEventListener('hashchange', fromUrl);
