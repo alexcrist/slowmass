@@ -1,8 +1,6 @@
 # slowmass
 
-**Your friends. Their photos. In order.**
-
-Slowmass is a private, chronological photo-sharing app built around intentional connection. One photo per post. Only people you choose. A feed with an ending.
+Slowmass is a private, invitation-only photo-sharing app with a chronological feed and explicit pagination.
 
 ## Status
 

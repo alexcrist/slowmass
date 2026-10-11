@@ -1,6 +1,6 @@
 # Slowmass
 
-A quiet, mobile-first photo app for friends. The home feed contains only posts from accepted follows, newest first, with explicit pagination. One still image per post. Every profile is private. No recommendations, ads, videos, albums, stories, reels, or infinite scroll. Login uses verified one-time email links only. Every member after the bootstrap root must be invited by an active member; preserve the invitation tree permanently.
+A mobile-first photo app for friends. The home feed contains only posts from accepted follows, newest first, with explicit pagination. One still image per post. Every profile is private. No recommendations, ads, videos, albums, stories, reels, or infinite scroll. Login uses verified one-time email links only. Every member after the bootstrap root must be invited by an active member; preserve the invitation tree permanently.
 
 Initial operating target: $0/month within free allowances, with a measured path to paid capacity. Minimize both hosting cost and maintenance. Do not trade away authorization, data integrity, or recovery to save pennies.
 
@@ -58,6 +58,8 @@ Each feature/shared module gets a proportionate README, even if only a few sente
 AI-assisted work is held to the same bar as any other code. Fast generation is not evidence of correctness. Never claim a command, deployment, test, or restore succeeded without observing its result. Prefer direct CLI/API tools; use a browser to verify UI behavior. Follow existing user authorization and do not insert unnecessary approval gates.
 
 ## Testing and UI quality
+
+Keep the interface utilitarian. Use only the plain Slowmass name for identification. Do not introduce logos, slogans, marketing copy, decorative illustrations, or a brand identity. Use functional labels, neutral styling, and clear status messages.
 
 - Add focused unit tests for domain rules and meaningful integration tests against the Workers/D1 runtime. Mock external providers only at their boundaries.
 - Use a real browser for the critical multi-user flow and responsive/accessibility checks. Do not inherit Rhonda's project-specific prohibition on browser testing.

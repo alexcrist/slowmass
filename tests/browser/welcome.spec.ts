@@ -8,15 +8,14 @@ test('welcome is usable before external accounts are connected', async ({
   await page.goto('/');
   await expect(
     page.getByRole('heading', {
-      name: /Your friends\.\s*Their photos\.\s*In order\./,
+      name: 'Sign in',
+      exact: true,
     }),
   ).toBeVisible();
   await expect(
     page.getByRole('button', { name: 'Email me a sign-in link' }),
   ).toBeDisabled();
-  await expect(
-    page.getByText('We’re getting things ready. Sign-in opens soon.'),
-  ).toBeVisible();
+  await expect(page.getByText('Sign-in is not available yet.')).toBeVisible();
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,

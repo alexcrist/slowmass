@@ -19,7 +19,7 @@
     "type": "git",
     "url": "git+https://github.com/alexcrist/slowmass.git"
   },
-  "description": "Your friends. Their photos. In order.",
+  "description": "Private, invitation-only photo sharing.",
   "dependencies": {
     "better-auth": "1.7.7",
     "hono": "4.13.13",

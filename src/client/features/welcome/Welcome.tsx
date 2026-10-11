@@ -83,41 +83,19 @@ export function Welcome() {
   return (
     <main className="welcome">
       <header className="masthead">
-        <a className="wordmark" href="/" aria-label="Slowmass home">
-          slowmass<span aria-hidden="true">.</span>
+        <a className="site-name" href="/" aria-label="Slowmass home">
+          Slowmass
         </a>
-        <span className="invitation-note">A little closer.</span>
       </header>
-      <section className="introduction" aria-labelledby="welcome-title">
-        <div className="photo-mark" aria-hidden="true">
-          <svg viewBox="0 0 120 120">
-            <rect x="16" y="10" width="88" height="100" rx="3" />
-            <path d="M27 80 49 48 64 66 76 51 94 80Z" />
-            <circle cx="82" cy="33" r="8" />
-            <path d="M44 97h32" />
-          </svg>
-        </div>
-        <h1 id="welcome-title">
-          Your friends.
-          <br />
-          Their photos.
-          <br />
-          <span>In order.</span>
-        </h1>
-        <p className="intro-copy">
-          A place to keep up with each other.
-          <br />
-          And then get on with your day.
-        </p>
+      <section className="account-section" aria-labelledby="welcome-title">
+        <h1 id="welcome-title">{name !== null ? 'Account' : 'Sign in'}</h1>
         <div className="sign-in-area">
           {name !== null ? (
             <>
               <p className="signed-in">
                 {name ? `Welcome, ${name}.` : 'You’re signed in.'}
               </p>
-              <p className="status-copy">
-                Photo sharing is coming next. In the meantime, bring a friend.
-              </p>
+              <p className="status-copy">Photo sharing is not available yet.</p>
               <InvitationForm />
               <button
                 className="text-button"
@@ -168,10 +146,10 @@ export function Welcome() {
               </button>
               <p className="status-copy">
                 {state === 'unavailable'
-                  ? 'We’re getting things ready. Sign-in opens soon.'
+                  ? 'Sign-in is not available yet.'
                   : state === 'error'
                     ? 'We couldn’t connect. Refresh the page to try again.'
-                    : 'No password. An invitation from a friend is required to join.'}
+                    : 'Sign in by email. An invitation from an active member is required to join.'}
               </p>
             </form>
           )}
@@ -182,11 +160,6 @@ export function Welcome() {
           )}
         </div>
       </section>
-      <footer className="principles" aria-label="What Slowmass stands for">
-        <p>Only people you choose.</p>
-        <p>Photos, in their own time.</p>
-        <p>A feed with an ending.</p>
-      </footer>
     </main>
   );
 }

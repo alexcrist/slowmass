@@ -1,11 +1,11 @@
-# Visual direction
+# Interface guidance
 
-Status: welcome screen implemented; application screens planned.
+Status: account/sign-in screen implemented; application screens planned.
 
-Slowmass should feel like opening a small collection of friends' photos, not an engagement dashboard. The memorable element is the compact blue lowercase wordmark. Photos should carry the rest of the visual interest once the feed exists.
+Keep the interface utilitarian. Identify the app with the plain name Slowmass. Do not create a brand identity, logo, slogan, promotional message, or decorative illustration. Product copy should explain actions, requirements, status, and errors.
 
-Palette: paper blue `#f7f9fe`, white `#ffffff`, ink `#1e2a39`, cobalt `#254dcc`, slate `#526176`, and a small apricot detail `#ed835c`. Helvetica Neue with local sans-serif fallbacks keeps the interface fast and avoids third-party font requests. Use compact heavy lettering for the brand and clear regular type for captions and controls.
+Use the system sans-serif stack and a neutral palette: white background, dark text and buttons, gray secondary text and borders. Reserve color for functional states such as errors and keyboard focus. Use ordinary type sizes and weights with no stylized lettering.
 
-Welcome: compact header, centered introduction and sign-in, quiet footer. Feed: left-aligned captions below full-width photos, bounded single-column content, explicit navigation at the end. Phone navigation must leave photographs unobstructed. No gradients, engagement badges, auto-animation, or invented sample social activity.
+The account screen uses a compact header and a left-aligned form in a bounded column. Keep inputs readable on phones, controls at least 44px tall, and keyboard focus visible. Preserve clear loading, unavailable, error, and confirmation states.
 
-Review: keep warm cream/serif styling and generic dashboard cards out of this design. The welcome illustration is a simple photo symbol; it does not impersonate a real user's content. Each state has one clear action. Private profiles never cause requests to third-party image/font hosts.
+Future screens should follow the same approach: functional navigation, full-width photos in a bounded feed column, left-aligned captions, and explicit page controls. Private profiles must never cause requests to third-party image or font hosts. No decorative animations, engagement badges, or invented social activity.
