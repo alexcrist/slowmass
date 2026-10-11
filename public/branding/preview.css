@@ -5,40 +5,9 @@
   font-display: swap;
 }
 @font-face {
-  font-family: Fraunces;
-  src: url('/branding/fonts/fraunces.woff2') format('woff2');
-  font-weight: 600;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'DM Sans';
-  src: url('/branding/fonts/dmsans.woff2') format('woff2');
-  font-weight: 700;
-  font-display: swap;
-}
-@font-face {
-  font-family: Sora;
-  src: url('/branding/fonts/sora.woff2') format('woff2');
-  font-weight: 600;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Grand Hotel';
-  src: url('/branding/fonts/grandhotel.woff2') format('woff2');
-  font-weight: 400;
-  font-display: swap;
-}
-@font-face {
   font-family: Caveat;
-  src: url('/branding/fonts/caveat.woff2') format('woff2');
+  src: url('/fonts/caveat-bold.woff2') format('woff2');
   font-weight: 700;
-  font-display: swap;
-}
-@font-face {
-  font-family: 'Lobster Two';
-  src: url('/fonts/lobster-two-bold-italic.woff2') format('woff2');
-  font-weight: 700;
-  font-style: italic;
   font-display: swap;
 }
 * {
@@ -54,13 +23,6 @@
 body {
   margin: 0;
 }
-body[data-palette='forest'],
-.forest {
-  --brand: #234b38;
-  --ground: #f3f3ef;
-  --soft: #eaf1e9;
-  --cream: #fff9ec;
-}
 body[data-palette='pine'],
 .pine {
   --brand: #183f35;
@@ -68,60 +30,39 @@ body[data-palette='pine'],
   --soft: #e0ebe5;
   --cream: #f4f6ef;
 }
-body[data-palette='moss'],
-.moss {
-  --brand: #46563a;
-  --ground: #f5f2e8;
-  --soft: #eaeedc;
-  --cream: #fff8e7;
+body[data-palette='fir'],
+.fir {
+  --brand: #214c3b;
+  --ground: #f0f2ec;
+  --soft: #dde7d8;
+  --cream: #f6f7ed;
 }
-body[data-palette='fern'],
-.fern {
-  --brand: #326448;
-  --ground: #f4f6ee;
-  --soft: #e4efd9;
-  --cream: #fffced;
+body[data-palette='cedar'],
+.cedar {
+  --brand: #3d5140;
+  --ground: #f4f0e7;
+  --soft: #e4e8d8;
+  --cream: #fff8e9;
 }
-body[data-palette='slate'],
-.slate {
-  --brand: #294e62;
-  --ground: #f3f3ef;
-  --soft: #edf2f4;
-  --cream: #fff9ec;
+body[data-palette='spruce'],
+.spruce {
+  --brand: #294d49;
+  --ground: #eef3f1;
+  --soft: #dce9e6;
+  --cream: #f3f8f4;
 }
-body[data-font='fraunces'] .wordmark,
-.fraunces {
-  font-family: Fraunces, serif;
-  font-weight: 600;
+body[data-palette='hemlock'],
+.hemlock {
+  --brand: #293f2f;
+  --ground: #f0f1e8;
+  --soft: #e0e5d3;
+  --cream: #f7f7e9;
 }
-body[data-font='dmsans'] .wordmark,
-.dmsans {
-  font-family: 'DM Sans', sans-serif;
-  font-weight: 700;
-  letter-spacing: -0.04em;
-}
-body[data-font='sora'] .wordmark,
-.sora {
-  font-family: Sora, sans-serif;
-  font-weight: 600;
-  letter-spacing: -0.05em;
-}
-body[data-font='grandhotel'] .wordmark,
-.grandhotel {
-  font-family: 'Grand Hotel', cursive;
-  font-weight: 400;
-}
-body[data-font='caveat'] .wordmark,
-.caveat {
+.wordmark {
   font-family: Caveat, cursive;
   font-weight: 700;
 }
-body[data-font='lobster'] .wordmark,
-.lobster {
-  font-family: 'Lobster Two', cursive;
-  font-weight: 700;
-  font-style: italic;
-}
+
 a {
   color: #29362e;
   text-underline-offset: 4px;
@@ -497,4 +438,23 @@ button:focus-visible {
   .sample {
     font-size: 36px;
   }
+}
+
+.locked-font,
+.recommendation {
+  padding: 24px 0;
+  border-top: 1px solid #d5dbd4;
+}
+.locked-font h2,
+.recommendation h2 {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+.locked-font .wordmark {
+  font-size: 52px;
+  color: var(--brand);
+}
+.palettes {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }

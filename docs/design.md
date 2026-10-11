@@ -1,14 +1,14 @@
 # Interface guidance
 
-The interface takes its direction from early photo-sharing apps: a compact forest-green header, lowercase script wordmark, white photo frames, and a narrow chronological feed. This basic brand direction was approved on October 10, 2026. Copy remains functional, without slogans or marketing messages.
+The interface takes its direction from early photo-sharing apps: a compact Deep Pine green header, lowercase script wordmark, white photo frames, and a narrow chronological feed. This basic brand direction was approved on October 10, 2026. Copy remains functional, without slogans or marketing messages.
 
 ## Type and color
 
-- Lobster Two bold italic: the text-only `slowmass` wordmark.
+- Caveat bold: the text-only `slowmass` wordmark.
 - Source Sans 3: headings, controls, captions, and body text. Use 400 and 600 weights with system fallbacks.
-- Forest green `#234b38`: header, primary actions, selected navigation.
-- Cream `#fff9ec`: wordmark on the header.
-- Off-white `#f3f3ef`: page background; white `#ffffff`: forms and photo frames.
+- Deep Pine `#183f35`: header, primary actions, selected navigation.
+- Cream `#f4f6ef`: wordmark on the header.
+- Off-white `#eef2ef`: page background; white `#ffffff`: forms and photo frames.
 - Ink `#29362e`: body text; gray `#627066`: secondary text; pale gray `#dbe1da`: boundaries.
 
 Both fonts are served locally from `public/fonts`, with their SIL Open Font Licenses included. No third-party font or image requests. The reusable wordmark is also available at `/slowmass-wordmark.svg` as standalone vector outlines.
@@ -23,4 +23,4 @@ Verification uses static checks and API/integration tests only. Browser testing,
 
 ## Branding comparison
 
-`/branding/` is a standalone, public, noindex design preview. It offers five palettes and six wordmark fonts with a sample app frame. Selections are stored only in the URL fragment and do not change the application theme or account data. Its extra fonts and scripts load only on that page, are self-hosted with licenses, and make no API requests. The app continues to use Forest and Lobster Two until another combination is selected for implementation.
+`/branding/` is a standalone, public, noindex design preview. Caveat is the confirmed wordmark font. Five PNW evergreen-inspired palettes are available: Deep Pine (current), Douglas Fir (recommended), Western Redcedar, Sitka Spruce, and Western Hemlock. These are artistic color directions, not botanical color specifications. Selections are stored only in the URL fragment and do not change the application theme or account data. Preview scripts load only on that page and make no API requests. The app uses Deep Pine and Caveat.

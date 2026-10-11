@@ -8,126 +8,91 @@
     <link rel="stylesheet" href="/branding/preview.css" />
     <script src="/branding/preview.js" defer></script>
   </head>
-  <body data-palette="forest" data-font="fraunces">
+  <body data-palette="pine">
     <header class="page-header">
       <a href="/">Back to Slowmass</a><span>Design preview</span>
     </header>
     <main>
       <div class="intro">
-        <h1>Find the right slowmass.</h1>
+        <h1>Evergreen colors for slowmass.</h1>
         <p>
-          Choose a color and a wordmark. Mix them freely, then share the
-          combination you like. These choices only affect this preview.
+          Caveat is locked in. Explore five Pacific Northwest evergreen-inspired
+          palettes. Deep Pine is the current app color; selections here only
+          change the preview.
         </p>
       </div>
       <div class="workspace">
         <div class="choices">
           <fieldset>
-            <legend>Color palette</legend>
+            <legend>Evergreen palette</legend>
             <p class="hint">
-              Four greens, plus the original slate for comparison.
+              Inspired by forest shade, needles, bark, and coastal mist.
             </p>
             <div class="palettes">
-              <label class="palette forest"
-                ><input
-                  type="radio"
-                  name="palette"
-                  value="forest"
-                  checked
-                /><span class="swatches"><i></i><i></i><i></i></span
-                ><strong>Forest</strong><small>Balanced · #234B38</small></label
-              >
               <label class="palette pine"
-                ><input type="radio" name="palette" value="pine" /><span
+                ><input type="radio" name="palette" value="pine" checked /><span
                   class="swatches"
+                  aria-hidden="true"
                   ><i></i><i></i><i></i></span
-                ><strong>Deep pine</strong
-                ><small>Cooler · #183F35</small></label
-              >
-              <label class="palette moss"
-                ><input type="radio" name="palette" value="moss" /><span
+                ><strong>Deep Pine</strong><small>#183F35</small
+                ><small>Your current choice. Cool, shaded green.</small></label
+              ><label class="palette fir"
+                ><input type="radio" name="palette" value="fir" /><span
                   class="swatches"
+                  aria-hidden="true"
                   ><i></i><i></i><i></i></span
-                ><strong>Moss</strong><small>Earthier · #46563A</small></label
-              >
-              <label class="palette fern"
-                ><input type="radio" name="palette" value="fern" /><span
+                ><strong>Douglas Fir</strong><small>#214C3B</small
+                ><small
+                  >Recommended. Dark needles, mist, and sage.</small
+                ></label
+              ><label class="palette cedar"
+                ><input type="radio" name="palette" value="cedar" /><span
                   class="swatches"
+                  aria-hidden="true"
                   ><i></i><i></i><i></i></span
-                ><strong>Fern</strong><small>Brighter · #326448</small></label
-              >
-              <label class="palette slate"
-                ><input type="radio" name="palette" value="slate" /><span
+                ><strong>Western Redcedar</strong><small>#3D5140</small
+                ><small>Warmer, with bark-toned cream.</small></label
+              ><label class="palette spruce"
+                ><input type="radio" name="palette" value="spruce" /><span
                   class="swatches"
+                  aria-hidden="true"
                   ><i></i><i></i><i></i></span
-                ><strong>Original slate</strong
-                ><small>Blue · #294E62</small></label
+                ><strong>Sitka Spruce</strong><small>#294D49</small
+                ><small>Blue-green with a coastal feel.</small></label
+              ><label class="palette hemlock"
+                ><input type="radio" name="palette" value="hemlock" /><span
+                  class="swatches"
+                  aria-hidden="true"
+                  ><i></i><i></i><i></i></span
+                ><strong>Western Hemlock</strong><small>#293F2F</small
+                ><small>Deep olive green and soft lichen tones.</small></label
               >
             </div>
           </fieldset>
           <button class="preview-jump" type="button">
-            See selected combination
+            See selected palette
           </button>
-          <fieldset>
-            <legend>Wordmark font</legend>
-            <p class="hint">
-              All lowercase. Source Sans 3 stays the interface font.
+          <section class="locked-font">
+            <h2>Wordmark: Caveat</h2>
+            <span class="wordmark">slowmass</span>
+            <p>
+              Handwritten, lowercase, and now applied to the app. Source Sans 3
+              remains the interface font.
             </p>
-            <div class="fonts">
-              <label class="font-option"
-                ><input
-                  type="radio"
-                  name="font"
-                  value="fraunces"
-                  checked
-                /><span class="sample fraunces">slowmass</span
-                ><strong>Fraunces</strong
-                ><small>A soft, distinctive serif</small></label
-              >
-              <label class="font-option"
-                ><input type="radio" name="font" value="dmsans" /><span
-                  class="sample dmsans"
-                  >slowmass</span
-                ><strong>DM Sans</strong
-                ><small>Simple and understated</small></label
-              >
-              <label class="font-option"
-                ><input type="radio" name="font" value="sora" /><span
-                  class="sample sora"
-                  >slowmass</span
-                ><strong>Sora</strong
-                ><small>Geometric and compact</small></label
-              >
-              <label class="font-option"
-                ><input type="radio" name="font" value="grandhotel" /><span
-                  class="sample grandhotel"
-                  >slowmass</span
-                ><strong>Grand Hotel</strong
-                ><small>A lighter vintage script</small></label
-              >
-              <label class="font-option"
-                ><input type="radio" name="font" value="caveat" /><span
-                  class="sample caveat"
-                  >slowmass</span
-                ><strong>Caveat</strong
-                ><small>Loose, handwritten lettering</small></label
-              >
-              <label class="font-option"
-                ><input type="radio" name="font" value="lobster" /><span
-                  class="sample lobster"
-                  >slowmass</span
-                ><strong>Lobster Two</strong
-                ><small>Current font, for comparison</small></label
-              >
-            </div>
-          </fieldset>
-          <button class="preview-jump" type="button">
-            See selected combination
-          </button>
+          </section>
+          <section class="recommendation">
+            <h2>My pick: Douglas Fir</h2>
+            <p>
+              To my eye, this is the most PNW combination: dark needle green, a
+              misty off-white background, and sage accents. It feels like an
+              overcast forest without making the interface too dark.
+            </p>
+            <button id="try-fir" type="button">Try Douglas Fir</button>
+          </section>
         </div>
         <aside class="preview-column" id="preview" aria-label="Selected design">
           <div class="selection">
-            <h2 id="selection" aria-live="polite">Forest + Fraunces</h2>
+            <h2 id="selection" aria-live="polite">Deep Pine + Caveat</h2>
             <p>Sample app screen · not your live feed</p>
           </div>
           <div class="phone">
@@ -175,17 +140,13 @@
             <span class="wordmark">slowmass</span
             ><small>Wordmark on a light background</small>
           </div>
-          <button id="copy" type="button">Copy link to this combination</button>
+          <button id="copy" type="button">Copy link to this palette</button>
           <p id="copy-status" role="status"></p>
-          <p class="hint">
-            My starting pick: Forest + Fraunces. Try DM Sans for a simpler
-            direction, or Grand Hotel for a gentler script.
-          </p>
         </aside>
       </div>
       <noscript
         >JavaScript is needed to switch the live preview. You can still compare
-        the font and color samples above.</noscript
+        the color samples above.</noscript
       >
     </main>
   </body>
