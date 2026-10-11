@@ -6,7 +6,7 @@ Slowmass is a private, invitation-only photo-sharing app with a chronological fe
 
 Email-link authentication, invitations with permanent provenance/timestamps, profiles, private avatars, and follow relationships are deployed at https://slowmass.com. First-member email delivery and sign-in are verified.
 
-Single-photo publishing, chronological pagination, post deletion, likes, comments, and in-app notifications are implemented and API-tested; production deployment is pending. Trusted remote image checks verified orientation, metadata removal, and still-image processing. Account deletion, backup/restore exercises, aggregate storage limits, and hosted cost measurements remain beta-readiness work.
+Single-photo publishing, chronological pagination, post deletion, likes, comments, and in-app notifications are implemented, API-tested, and deployed. Trusted remote image checks verified orientation, metadata removal, and still-image processing. Account deletion, backup/restore exercises, aggregate storage limits, and hosted cost measurements remain beta-readiness work. Production HTTP checks confirm the new private routes reject signed-out access; the complete signed-in multi-user flow is verified in isolated integration tests, not yet against the live site.
 
 The operating target is $0/month within Cloudflare's free allowances, followed by measured upgrades. See [architecture](docs/architecture.md) for constraints and the scaling path.
 

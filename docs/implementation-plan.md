@@ -1,6 +1,6 @@
 # Implementation plan
 
-Status: authentication, invitations, profiles, avatars, and follows deployed. Posts, feed, interactions, and notifications are implemented and API-tested; deployment pending. Recovery, account deletion, cost measurements, and complete hosted beta verification remain open. Browser and visual testing are prohibited. Check boxes represent observed implementation/verification; a local check is not hosted verification.
+Status: authentication, invitations, profiles, avatars, and follows deployed. Posts, feed, interactions, and notifications are deployed and API-tested. Recovery, account deletion, cost measurements, and complete hosted beta verification remain open. Browser and visual testing are prohibited. Check boxes represent observed implementation/verification; a local check is not hosted verification.
 
 ## Approach
 

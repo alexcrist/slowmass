@@ -13,7 +13,7 @@ npx wrangler whoami
 
 Complete browser authorization using the account that owns slowmass.com. Keep tokens out of chat and source control. The implementation agent can then inspect the account, create the D1 database and private R2 bucket, replace the placeholder binding, and configure the production origin/domain. R2 may require billing activation even within free allowances; complete any account-owner action in Cloudflare's dashboard.
 
-The production Images binding processes private photo bytes. Remote checks verified JPEG orientation and metadata removal, still PNG/WebP conversion, animation rejection, and the complete avatar API using isolated local D1/R2 with remote image processing. The new quarter-hour cleanup schedule removes replaced/orphaned avatar and post objects in bounded batches. A direct post API check with real processing also passed against isolated synthetic D1/R2. Hosted CPU measurements and the full deployed multi-user flow remain open. No paid Workers or Images subscription has been enabled. R2 is activated with its usage-based billing and included allowances.
+The production Images binding processes private photo bytes. Remote checks verified JPEG orientation and metadata removal, still PNG/WebP conversion, animation rejection, and the complete avatar API using isolated local D1/R2 with remote image processing. The quarter-hour cleanup schedule removes replaced/orphaned avatar and post objects in bounded batches. A direct post API check with real processing also passed against isolated synthetic D1/R2. Hosted CPU measurements and the full deployed multi-user flow remain open. No paid Workers or Images subscription has been enabled. R2 is activated with its usage-based billing and included allowances.
 
 ## Email delivery
 
@@ -47,10 +47,14 @@ Browser and visual testing are prohibited. Integration tests run isolated Worker
 
 After a successful `npm run check`, deploy explicitly with `npx wrangler deploy --env production`. Production has a separate auth secret installed through Wrangler, and its only public app origin is https://slowmass.com. Worker preview URLs and workers.dev access are disabled for the app. The account workers.dev subdomain exists only to allow isolated remote-binding development.
 
-The initial migrations and profile/avatar migrations are applied before deploying their dependent code. Future migrations normally use `npx wrangler d1 migrations apply slowmass --env production --remote`.
+Migrations 0001–0008 are applied in production, including posts and interactions. Future migrations normally use `npx wrangler d1 migrations apply slowmass --env production --remote`.
 
 ### Initial trigger migration workaround
 
 The hosted query endpoint rejected migration 0002 with `incomplete input`, although the unchanged migration passes locally. Its failed transaction left no membership tables. The hosted file-import endpoint successfully applied the original SQL and its migration-history entry atomically. No applied migration was edited.
 
 For a fresh remote database that encounters this same error, first confirm 0002 is absent from `d1_migrations` and membership/invitation tables do not exist. Create a temporary SQL file containing the exact contents of `migrations/0002_membership.sql` followed by `INSERT INTO d1_migrations (name) VALUES ('0002_membership.sql');`. Apply that file with `npx wrangler d1 execute slowmass --env production --remote --file <temporary-file>`, then resume normal migrations. File import temporarily blocks database access and rolls back if it fails; do this during initial provisioning or a maintenance window.
+
+## Latest release verification (October 10, 2026)
+
+Worker version `869ab179-7a11-4f40-816b-cce46d422d0f` deploys photo publishing, feed, likes/comments, and notifications. The local gate passed formatting, lint, TypeScript, 54 unit/integration tests, and production build. Direct production HTTP checks returned 200 for sign-in availability, 401 for signed-out posts/comments/notifications, 404 for inaccessible media, and 403 for a foreign-origin mutation. Private responses use `private, no-store`; deployed frontend assets match the tested build. No browser or visual tests were performed. The full hosted signed-in multi-user flow, CPU measurements, and recovery readiness remain open.
