@@ -425,3 +425,40 @@ input::file-selector-button {
     padding: 24px;
   }
 }
+
+.install-help {
+  max-width: 640px;
+  margin: 12px auto;
+  padding: 0 16px;
+  color: var(--muted);
+  font-size: 15px;
+}
+.install-help summary,
+.login-link-help summary {
+  min-height: 44px;
+  padding-block: 12px;
+  cursor: pointer;
+  color: var(--brand);
+  font-weight: 600;
+}
+.install-help ul {
+  padding-left: 20px;
+}
+.install-help li {
+  margin-bottom: 12px;
+}
+.install-help .primary-button {
+  max-width: 320px;
+}
+.login-link-help {
+  margin-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.login-link-help p {
+  font-size: 15px;
+}
+@media (display-mode: standalone) {
+  .masthead {
+    padding-top: max(8px, env(safe-area-inset-top));
+  }
+}

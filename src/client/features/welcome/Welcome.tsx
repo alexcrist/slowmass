@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { createAuthClient } from 'better-auth/react';
 import { magicLinkClient } from 'better-auth/client/plugins';
+import { InstallApp } from '../install/InstallApp';
+import { PasteLoginLink } from './PasteLoginLink';
 import { MemberApp } from '../people/MemberApp';
 
 const auth = createAuthClient({ plugins: [magicLinkClient()] });
@@ -89,6 +91,7 @@ export function Welcome() {
           slowmass
         </a>
       </header>
+      <InstallApp />
       <section
         className="account-section"
         aria-label={name !== null ? 'Your account' : 'Sign in'}
@@ -145,6 +148,7 @@ export function Welcome() {
               </p>
             </form>
           )}
+          {name === null && state === 'ready' && <PasteLoginLink />}
           {message && (
             <p className="error-message" role="alert">
               {message}

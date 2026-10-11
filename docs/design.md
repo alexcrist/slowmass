@@ -28,3 +28,7 @@ Verification uses static checks and API/integration tests only. Browser testing,
 ## Favicon
 
 The selected favicon is the original lowercase `sm` monogram: Caveat bold in cream on a rounded Douglas Fir tile. `/favicon.svg` preserves the approved vector geometry. `/favicon.ico` contains 16px, 32px, and 48px versions; `/apple-touch-icon.png` is a 180px version with an opaque Douglas Fir background for home-screen use. These assets are linked from the application document. The temporary favicon comparison page was removed after selection.
+
+## Installed app
+
+The main document links `/manifest.webmanifest` for standalone launches from `/`. Home-screen installation uses the selected `sm` icon, including a maskable variant. A compact expandable Install Slowmass section provides native installation when supported and manual platform instructions otherwise; it is hidden in the installed window. Safe-area spacing accommodates the top status bar and bottom navigation. The app requires a network connection. It has no service worker, offline photo cache, or push notifications. The sign-in screen supports pasting an unused email link to authenticate within the installed app's own session.
