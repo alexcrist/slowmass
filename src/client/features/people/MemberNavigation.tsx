@@ -1,4 +1,5 @@
 import { currentRoute, profileHref } from '../../navigation';
+import { SettingsIcon } from '../../navigation/SettingsIcon';
 import type { Profile } from './ProfileForm';
 
 const destinations = [
@@ -17,9 +18,8 @@ const destinations = [
   {
     page: 'profile',
     label: 'Profile',
-    path: 'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0M4 21v-2a8 8 0 0 1 16 0v2',
   },
-];
+] as const;
 
 function Icon({ path }: { path: string }) {
   return (
@@ -41,11 +41,13 @@ export function MemberNavigation({
   page,
   profile,
   avatarVersion,
+  unreadCount,
   onReselect,
 }: {
   page: string;
-  profile: Profile | null;
+  profile: Profile;
   avatarVersion: number;
+  unreadCount: number | null;
   onReselect: () => void;
 }) {
   return (
@@ -53,28 +55,31 @@ export function MemberNavigation({
       <a
         className="site-name nav-brand"
         href="#feed"
-        aria-label="Slowmass home"
+        aria-label="slowmass home"
       >
-        <span className="nav-monogram" aria-hidden="true">
-          sm
-        </span>
-        <span className="nav-wordmark" aria-hidden="true">
-          slowmass
+        <span className="nav-logo" aria-hidden="true">
+          <span>s</span>
+          <span className="nav-logo-tail">
+            <span className="nav-monogram">m</span>
+            <span className="nav-wordmark">lowmass</span>
+          </span>
         </span>
       </a>
       <div className="primary-nav">
         {destinations.map((item) => {
-          const href = profile
-            ? item.page === 'profile'
+          const href =
+            item.page === 'profile'
               ? profileHref(profile.handle)
-              : `#${item.page}`
-            : '#profile';
+              : `#${item.page}`;
           const route = currentRoute();
           const canRefresh =
-            Boolean(profile) &&
             ['feed', 'notifications', 'profile'].includes(item.page) &&
             (href === `#${route}` ||
               (item.page === 'profile' && route === 'profile'));
+          const unread = item.page === 'notifications' ? unreadCount : null;
+          const unreadDescription = unread
+            ? `${unread >= 100 ? 'More than 99' : unread} unread ${unread === 1 ? 'notification' : 'notifications'}.`
+            : '';
           return (
             <a
               className="nav-link"
@@ -96,13 +101,16 @@ export function MemberNavigation({
               }}
               aria-label={item.label}
               aria-description={
-                canRefresh
-                  ? 'Select again to load the latest updates.'
-                  : undefined
+                [
+                  unreadDescription,
+                  canRefresh ? 'Select again to load the latest updates.' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ') || undefined
               }
               aria-current={page === item.page ? 'page' : undefined}
             >
-              {item.page === 'profile' && profile?.hasAvatar ? (
+              {item.page === 'profile' ? (
                 <img
                   className="nav-avatar"
                   src={`/media/avatar/${encodeURIComponent(profile.handle)}?v=${avatarVersion}`}
@@ -111,7 +119,14 @@ export function MemberNavigation({
                   alt=""
                 />
               ) : (
-                <Icon path={item.path} />
+                <span className="nav-icon">
+                  <Icon path={item.path} />
+                  {Boolean(unread) && (
+                    <span className="nav-badge" aria-hidden="true">
+                      {unread! >= 100 ? '99+' : unread}
+                    </span>
+                  )}
+                </span>
               )}
               <span className="nav-label" aria-hidden="true">
                 {item.label}
@@ -119,6 +134,19 @@ export function MemberNavigation({
             </a>
           );
         })}
+      </div>
+      <div className="sidebar-footer">
+        <a
+          className="nav-link"
+          href="#settings"
+          aria-label="Settings"
+          aria-current={page === 'settings' ? 'page' : undefined}
+        >
+          <SettingsIcon />
+          <span className="nav-label" aria-hidden="true">
+            Settings
+          </span>
+        </a>
       </div>
     </nav>
   );

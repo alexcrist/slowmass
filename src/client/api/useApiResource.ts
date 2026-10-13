@@ -13,6 +13,14 @@ export function useApiResource<T>(path: string) {
 
   useEffect(() => {
     const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort();
+      setResult({
+        request,
+        data: null,
+        error: 'This page took too long to load. Please try again.',
+      });
+    }, 15_000);
     api<T>(request.path, { signal: controller.signal })
       .then((data) => {
         if (!controller.signal.aborted) setResult({ request, data, error: '' });
@@ -27,8 +35,12 @@ export function useApiResource<T>(path: string) {
                 ? error.message
                 : 'Could not load this page. Please try again.',
           });
-      });
-    return () => controller.abort();
+      })
+      .finally(() => clearTimeout(timeout));
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
   }, [request]);
 
   const current =

@@ -1,8 +1,9 @@
+export { backfillThumbnail } from './thumbnails';
 import type { Env } from '../../env';
 import { PhotoError, processPhoto } from '../../photos';
 import {
   readPhoto,
-  reservePhoto,
+  photoReservation,
   reserveStorage,
   releaseStorage,
 } from '../../photos/storage';
@@ -43,16 +44,56 @@ export async function createDraft(db: D1Database, actor: string, draft: Draft) {
       prior.alt_text === draft.altText
       ? prior.state
       : 'conflict';
-  const reserved = await reservePhoto(db, actor, `post/${draft.id}`);
-  if (reserved !== 'reserved')
-    return reserved === 'quota' ? 'quota' : 'conflict';
-  const result = await db
-    .prepare(
-      `INSERT INTO post(id,user_id,caption,alt_text,created_at,state) SELECT ?,user_id,?,?,?,'pending' FROM membership WHERE user_id=? AND status='active' ON CONFLICT DO NOTHING`,
-    )
-    .bind(draft.id, draft.caption, draft.altText, Date.now(), actor)
-    .run();
-  return result.meta.changes ? 'pending' : 'conflict';
+  await db.batch([
+    photoReservation(db, actor, `post/${draft.id}`, 2),
+    db
+      .prepare(
+        `INSERT INTO post(id,user_id,caption,alt_text,created_at,state)
+       SELECT ?,user_id,?,?,?,'pending' FROM membership
+       WHERE user_id=? AND status='active' AND EXISTS (
+         SELECT 1 FROM photo_attempt WHERE id=? AND user_id=membership.user_id
+         AND state='pending' AND processing_units=2
+       ) ON CONFLICT DO NOTHING`,
+      )
+      .bind(
+        draft.id,
+        draft.caption,
+        draft.altText,
+        Date.now(),
+        actor,
+        `${actor}:post/${draft.id}`,
+      ),
+    // A concurrent claim of the same UUID by another owner must not leave an
+    // allowance reservation for a draft we could not create.
+    db
+      .prepare(
+        `DELETE FROM photo_attempt WHERE id=? AND state='pending'
+      AND EXISTS(SELECT 1 FROM post WHERE id=? AND user_id!=?)`,
+      )
+      .bind(`${actor}:post/${draft.id}`, draft.id, actor),
+  ]);
+  // Read the winning write: concurrent equal requests succeed, different payloads
+  // conflict. Existing pending reservations from interrupted older clients resume.
+  const saved = await db
+    .prepare('SELECT user_id,state,caption,alt_text FROM post WHERE id=?')
+    .bind(draft.id)
+    .first<{
+      user_id: string;
+      state: string;
+      caption: string;
+      alt_text: string;
+    }>();
+  if (saved)
+    return saved.user_id === actor &&
+      saved.caption === draft.caption &&
+      saved.alt_text === draft.altText
+      ? saved.state
+      : 'conflict';
+  const reservation = await db
+    .prepare('SELECT 1 FROM photo_attempt WHERE id=?')
+    .bind(`${actor}:post/${draft.id}`)
+    .first();
+  return reservation ? 'conflict' : 'quota';
 }
 export async function publishPhoto(
   env: Env,
@@ -83,21 +124,41 @@ export async function publishPhoto(
     .run();
   try {
     const photo = await processPhoto(env.IMAGES, await readPhoto(request));
+    const thumbnail =
+      photo.width <= 480 && photo.height <= 480
+        ? photo
+        : await processPhoto(env.IMAGES, photo.bytes, 480);
+    const thumbnailKey =
+      thumbnail === photo ? key : `posts/${crypto.randomUUID()}.webp`;
     await reserveStorage(env.DB, actor, key, photo.bytes.length);
     await env.PHOTOS.put(key, photo.bytes, {
       httpMetadata: { contentType: 'image/webp' },
     });
+    if (thumbnailKey !== key) {
+      await reserveStorage(env.DB, actor, thumbnailKey, thumbnail.bytes.length);
+      await env.PHOTOS.put(thumbnailKey, thumbnail.bytes, {
+        httpMetadata: { contentType: 'image/webp' },
+      });
+    }
     const results = await env.DB.batch([
       // Monotonic publication time makes snapshots stable even for same-millisecond writes.
       env.DB.prepare(
-        `UPDATE post SET state='published',object_key=?,width=?,height=?,published_at=MAX(?,COALESCE((SELECT MAX(published_at)+1 FROM post),0)) WHERE id=? AND user_id=? AND state='processing' AND EXISTS(SELECT 1 FROM membership WHERE user_id=post.user_id AND status='active')`,
-      ).bind(key, photo.width, photo.height, Date.now(), id, actor),
+        `UPDATE post SET state='published',object_key=?,thumbnail_key=?,width=?,height=?,published_at=MAX(?,COALESCE((SELECT MAX(published_at)+1 FROM post),0)) WHERE id=? AND user_id=? AND state='processing' AND EXISTS(SELECT 1 FROM membership WHERE user_id=post.user_id AND status='active')`,
+      ).bind(
+        key,
+        thumbnailKey,
+        photo.width,
+        photo.height,
+        Date.now(),
+        id,
+        actor,
+      ),
       env.DB.prepare(
         "UPDATE photo_attempt SET state='done' WHERE id=? AND EXISTS(SELECT 1 FROM post WHERE id=? AND state='published')",
       ).bind(`${actor}:post/${id}`, id),
       env.DB.prepare(
-        "DELETE FROM photo_cleanup WHERE object_key=? AND EXISTS(SELECT 1 FROM post WHERE id=? AND state='published' AND object_key=?)",
-      ).bind(key, id, key),
+        "DELETE FROM photo_cleanup WHERE object_key IN (?,?) AND EXISTS(SELECT 1 FROM post WHERE id=? AND state='published' AND object_key=? AND thumbnail_key=?)",
+      ).bind(key, thumbnailKey, id, key, thumbnailKey),
     ]);
     return results[0].meta.changes ? 'published' : 'conflict';
   } catch (error) {
@@ -117,11 +178,13 @@ const visibility = `m.status='active' AND NOT EXISTS(SELECT 1 FROM block b WHERE
 const countColumns = ` (SELECT COUNT(*) FROM post_like l JOIN membership lm ON lm.user_id=l.user_id AND lm.status='active' WHERE l.post_id=p.id AND NOT EXISTS(SELECT 1 FROM block WHERE (blocker_id=v.id AND target_id=l.user_id) OR (blocker_id=l.user_id AND target_id=v.id))) AS likeCount,
  EXISTS(SELECT 1 FROM post_like WHERE post_id=p.id AND user_id=v.id) AS liked,
  (SELECT COUNT(*) FROM comment c JOIN membership cm ON cm.user_id=c.user_id AND cm.status='active' WHERE c.post_id=p.id AND c.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM block WHERE (blocker_id=v.id AND target_id=c.user_id) OR (blocker_id=c.user_id AND target_id=v.id))) AS commentCount`;
-const select = (
+const columns = (
   includeCounts = true,
-) => `WITH viewer AS (SELECT ? AS id) SELECT p.id,p.caption,p.alt_text AS altText,p.width,p.height,p.published_at AS publishedAt,p.state,p.object_key AS objectKey,profile.handle,profile.display_name AS displayName,EXISTS(SELECT 1 FROM avatar WHERE avatar.user_id=p.user_id) AS hasAvatar,p.user_id AS ownerId,
- ${includeCounts ? countColumns : '0 AS likeCount,0 AS liked,0 AS commentCount'}
- FROM post p CROSS JOIN viewer v JOIN profile ON profile.user_id=p.user_id JOIN membership m ON m.user_id=p.user_id LEFT JOIN follow f ON f.target_id=p.user_id AND f.follower_id=v.id`;
+) => `p.id,p.caption,p.alt_text AS altText,p.width,p.height,p.published_at AS publishedAt,p.state,p.object_key AS objectKey,p.thumbnail_key AS thumbnailKey,profile.handle,profile.display_name AS displayName,p.user_id AS ownerId,
+ ${includeCounts ? countColumns : '0 AS likeCount,0 AS liked,0 AS commentCount'}`;
+const joins = `CROSS JOIN viewer v JOIN profile ON profile.user_id=p.user_id JOIN membership m ON m.user_id=p.user_id LEFT JOIN follow f ON f.target_id=p.user_id AND f.follower_id=v.id`;
+const select = (includeCounts = true) =>
+  `WITH viewer AS (SELECT ? AS id) SELECT ${columns(includeCounts)} FROM post p ${joins}`;
 export type PostRow = {
   id: string;
   caption: string;
@@ -131,21 +194,25 @@ export type PostRow = {
   publishedAt: number | null;
   state: string;
   objectKey: string | null;
+  thumbnailKey: string | null;
   handle: string;
   displayName: string;
-  hasAvatar: number;
   ownerId: string;
   likeCount: number;
   commentCount: number;
   liked: number;
 };
 export function publicPost(row: PostRow, actor: string) {
-  const { objectKey, ownerId, ...post } = row;
+  const { objectKey, thumbnailKey, ownerId, ...post } = row;
   void objectKey;
   return {
     ...post,
     isOwner: ownerId === actor,
     mediaUrl: row.state === 'published' ? `/media/posts/${row.id}` : null,
+    thumbnailUrl:
+      row.state === 'published'
+        ? `/media/posts/${row.id}${thumbnailKey ? '?size=grid' : ''}`
+        : null,
   };
 }
 export async function findPost(
@@ -193,18 +260,38 @@ export async function listPosts(
     (await db
       .prepare('SELECT COALESCE(MAX(published_at),0) AS value FROM post')
       .first<{ value: number }>())!.value;
+  const before = cursor?.before ?? snapshot + 1;
+  // Materialize IDs before hydration/counts. Starting from the viewer keeps the
+  // follow lookup indexed; each author contributes at most one page of candidates.
+  const eligible = handle
+    ? `SELECT user_id AS target_id FROM profile WHERE handle=?`
+    : `SELECT id AS target_id FROM viewer UNION ALL
+       SELECT f.target_id FROM viewer v CROSS JOIN follow f
+       JOIN membership m ON m.user_id=f.target_id AND m.status='active'
+       WHERE f.follower_id=v.id AND f.status='accepted'
+       AND NOT EXISTS(SELECT 1 FROM block WHERE (blocker_id=v.id AND target_id=f.target_id) OR (blocker_id=f.target_id AND target_id=v.id))`;
   const rows = await db
     .prepare(
-      `${select()} WHERE p.state='published' AND p.published_at<=? AND ${visibility}
- AND ${handle ? 'profile.handle=?' : "p.user_id!=v.id AND f.status='accepted'"}
- AND (p.published_at<? OR (p.published_at=? AND p.id<?)) ORDER BY p.published_at DESC,p.id DESC LIMIT 13`,
+      `WITH viewer AS (SELECT ? AS id), eligible AS MATERIALIZED (${eligible}),
+       candidates AS MATERIALIZED (
+         SELECT p.id,p.published_at FROM eligible e CROSS JOIN post p
+         WHERE p.id IN (
+           SELECT recent.id FROM post recent WHERE recent.user_id=e.target_id AND recent.state='published'
+           AND recent.published_at<=? AND (recent.published_at,recent.id)<(?,?)
+           ORDER BY recent.published_at DESC,recent.id DESC LIMIT 13
+         )
+       ), page AS MATERIALIZED (
+         SELECT id FROM candidates ORDER BY published_at DESC,id DESC LIMIT 13
+       )
+       SELECT ${columns()} FROM page chosen CROSS JOIN post p ON p.id=chosen.id ${joins}
+       WHERE p.state='published' AND ${visibility}
+       ORDER BY p.published_at DESC,p.id DESC`,
     )
     .bind(
       actor,
-      snapshot,
       ...(handle ? [handle] : []),
-      cursor?.before ?? snapshot + 1,
-      cursor?.before ?? snapshot + 1,
+      Math.min(snapshot, before),
+      before,
       cursor?.id ?? '',
     )
     .all<PostRow>();
@@ -220,6 +307,30 @@ export async function listPosts(
         : null,
   };
 }
+export function parseCaption(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const input = value as Record<string, unknown>;
+  return Object.keys(input).length === 1 &&
+    typeof input.caption === 'string' &&
+    input.caption.length <= 2000
+    ? input.caption.trim()
+    : null;
+}
+export async function editCaption(
+  db: D1Database,
+  actor: string,
+  id: string,
+  caption: string,
+) {
+  const result = await db
+    .prepare(
+      `UPDATE post SET caption=? WHERE id=? AND user_id=? AND state='published'
+     AND EXISTS(SELECT 1 FROM membership WHERE user_id=post.user_id AND status='active')`,
+    )
+    .bind(caption, id, actor)
+    .run();
+  return Boolean(result.meta.changes);
+}
 export async function deletePost(db: D1Database, actor: string, id: string) {
   const result = await db.batch([
     db
@@ -229,11 +340,16 @@ export async function deletePost(db: D1Database, actor: string, id: string) {
       .bind(Date.now(), id, actor),
     db
       .prepare(
-        "UPDATE post SET state='deleted',object_key=NULL,caption='',alt_text='' WHERE id=? AND user_id=?",
+        'INSERT INTO photo_cleanup(object_key,not_before) SELECT thumbnail_key,? FROM post WHERE id=? AND user_id=? AND thumbnail_key IS NOT NULL ON CONFLICT DO NOTHING',
+      )
+      .bind(Date.now(), id, actor),
+    db
+      .prepare(
+        "UPDATE post SET state='deleted',object_key=NULL,thumbnail_key=NULL,caption='',alt_text='' WHERE id=? AND user_id=?",
       )
       .bind(id, actor),
   ]);
-  return Boolean(result[1].meta.changes);
+  return Boolean(result[2].meta.changes);
 }
 export async function cleanupPosts(db: D1Database, bucket: R2Bucket) {
   const now = Date.now();
@@ -246,8 +362,8 @@ export async function cleanupPosts(db: D1Database, bucket: R2Bucket) {
   for (const row of due.results) {
     if (
       await db
-        .prepare('SELECT 1 FROM post WHERE object_key=?')
-        .bind(row.object_key)
+        .prepare('SELECT 1 FROM post WHERE object_key=? OR thumbnail_key=?')
+        .bind(row.object_key, row.object_key)
         .first()
     )
       continue;

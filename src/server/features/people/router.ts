@@ -1,14 +1,15 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import { getActiveUser } from '../../auth';
+import { getActiveSession } from '../../auth';
 import { authConfigured } from '../../auth/options';
 import type { Env } from '../../env';
 import {
   actions,
   discoverPeople,
-  changeRelationship,
+  changeRelationshipByHandle,
   findProfile,
   listConnections,
+  listProfileConnections,
   ownProfile,
   parseProfile,
   saveProfile,
@@ -23,8 +24,14 @@ export const people = new Hono<{
 people.use('*', async (c, next) => {
   if (!authConfigured(c.env))
     return c.json({ error: 'Sign-in is not available yet.' }, 503);
-  const user = await getActiveUser(c.env, c.req.raw.headers);
+  const session = await getActiveSession(c.env, c.req.raw.headers);
+  const user = session?.user;
   if (!user) return c.json({ error: 'Sign in to continue.' }, 401);
+  if (c.req.path !== '/api/people/self' && !session?.hasProfilePhoto)
+    return c.json(
+      { error: 'Add a profile photo to finish setting up your account.' },
+      409,
+    );
   c.set('userId', user.id);
   await next();
 });
@@ -45,8 +52,7 @@ people.put('/self', async (c) => {
   if (!(await saveProfile(c.env.DB, c.get('userId'), input)))
     return c.json(
       {
-        error:
-          'That username is unavailable. Existing usernames cannot be changed.',
+        error: 'That username is unavailable. Choose another.',
       },
       409,
     );
@@ -82,27 +88,41 @@ people.get('/discover', async (c) => {
       { error: 'Enter at least 3 characters, or clear the search to browse.' },
       400,
     );
-  const now = Date.now();
-  const reserved = await c.env.DB.prepare(
-    `INSERT INTO "rateLimit"(id,key,count,lastRequest) VALUES(?,?,1,?) ON CONFLICT(key) DO UPDATE SET count=CASE WHEN lastRequest<=? THEN 1 ELSE count+1 END,lastRequest=CASE WHEN lastRequest<=? THEN excluded.lastRequest ELSE lastRequest END WHERE lastRequest<=? OR count<30`,
-  )
-    .bind(
-      `discovery:${c.get('userId')}`,
-      `discovery:${c.get('userId')}`,
-      now,
-      now - 60000,
-      now - 60000,
-      now - 60000,
-    )
-    .run();
-  if (!reserved.meta.changes)
+  const page = await discoverPeople(
+    c.env.DB,
+    c.get('userId'),
+    query,
+    seed,
+    after,
+  );
+  if (!page)
     return c.json(
       { error: 'Please wait a minute before searching again.' },
       429,
     );
-  return c.json(
-    await discoverPeople(c.env.DB, c.get('userId'), query, seed, after),
+  return c.json(page);
+});
+people.get('/:handle/connections', async (c) => {
+  const kind = c.req.query('kind');
+  const after = c.req.query('after') ?? '';
+  if (
+    (kind !== 'followers' && kind !== 'following') ||
+    (after && !/^[a-z0-9_]{3,30}$/.test(after))
+  )
+    return c.json({ error: 'Invalid page.' }, 400);
+  const page = await listProfileConnections(
+    c.env.DB,
+    c.get('userId'),
+    c.req.param('handle').toLowerCase(),
+    kind,
+    after,
   );
+  if (!page)
+    return c.json(
+      { error: 'Follow this account to view its connections.' },
+      404,
+    );
+  return c.json(page);
 });
 people.get('/:handle', async (c) => {
   const profile = await findProfile(
@@ -119,40 +139,16 @@ people.post('/:handle/:action', async (c) => {
   const action = c.req.param('action');
   if (!actions.includes(action as FollowAction))
     return c.json({ error: 'Unknown action.' }, 400);
-  const actor = c.get('userId');
-  if (!(await ownProfile(c.env.DB, actor)))
+  const result = await changeRelationshipByHandle(
+    c.env.DB,
+    c.get('userId'),
+    c.req.param('handle').toLowerCase(),
+    action as FollowAction,
+  );
+  if (result === 'profile_required')
     return c.json({ error: 'Create your profile first.' }, 409);
-  // Blocking must work even when the other person has already blocked the actor.
-  const target =
-    action === 'block'
-      ? await c.env.DB.prepare(
-          "SELECT p.user_id AS id FROM profile p JOIN membership m ON m.user_id=p.user_id WHERE p.handle=? AND m.status='active'",
-        )
-          .bind(c.req.param('handle').toLowerCase())
-          .first<{ id: string }>()
-      : action === 'unblock'
-        ? await c.env.DB.prepare(
-            'SELECT p.user_id AS id FROM profile p JOIN block b ON b.target_id = p.user_id WHERE p.handle = ? AND b.blocker_id = ?',
-          )
-            .bind(c.req.param('handle').toLowerCase(), actor)
-            .first<{ id: string }>()
-        : await findProfile(
-            c.env.DB,
-            actor,
-            c.req.param('handle').toLowerCase(),
-          );
-  if (!target) {
-    if (action === 'unblock' || action === 'block') return c.json({ ok: true });
-    return c.json({ error: 'Profile not found.' }, 404);
-  }
-  if (
-    !(await changeRelationship(
-      c.env.DB,
-      actor,
-      target.id,
-      action as FollowAction,
-    ))
-  )
+  if (result === 'missing') return c.json({ error: 'Profile not found.' }, 404);
+  if (result === 'unavailable')
     return c.json(
       {
         error:

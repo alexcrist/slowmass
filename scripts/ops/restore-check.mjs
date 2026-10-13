@@ -6,6 +6,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { DatabaseSync } from 'node:sqlite';
 import { decrypt, readKey } from './archive.mjs';
+import { requiredPhotoKeys } from './photo-keys.mjs';
 const run = promisify(execFile);
 const [archive, keyFile] = process.argv.slice(2);
 if (!archive || !keyFile)
@@ -49,11 +50,7 @@ try {
     db.prepare('PRAGMA foreign_key_check').all().length
   )
     throw new Error('Database integrity check failed.');
-  const required = db
-    .prepare(
-      "SELECT object_key FROM post WHERE state='published' UNION SELECT object_key FROM avatar",
-    )
-    .all();
+  const required = requiredPhotoKeys(db);
   for (const { object_key: key } of required) {
     const photo = manifest.photos.find((p) => p.key === key);
     if (!photo || !/^[a-f0-9]{64}\.webp$/.test(photo.filename))
@@ -66,9 +63,61 @@ try {
       throw new Error('Photo checksum mismatch.');
   }
   // A restored snapshot is quarantined. Never reopen stale sessions or silently restore access.
+  for (const table of [
+    'push_delivery',
+    'push_subscription',
+    'invite_link_claim',
+  ]) {
+    if (
+      db
+        .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?")
+        .get(table)
+    ) {
+      db.exec(`DELETE FROM ${table}`);
+      if (db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get())
+        throw new Error('Push quarantine failed.');
+    }
+  }
   db.exec(
     "DELETE FROM session; DELETE FROM verification; UPDATE membership SET status='disabled' WHERE status='active';",
   );
+  // Join links are independent of the auth secret. Do not revive their access
+  // when an operator later re-enables a restored inviter's membership.
+  const invitationColumns = new Set(
+    db
+      .prepare('PRAGMA table_info(invitation)')
+      .all()
+      .map((column) => column.name),
+  );
+  for (const column of ['join_token_hash', 'email_payload']) {
+    if (!invitationColumns.has(column)) continue;
+    db.exec(`UPDATE invitation SET ${column}=NULL`);
+    if (
+      db
+        .prepare(`SELECT 1 FROM invitation WHERE ${column} IS NOT NULL LIMIT 1`)
+        .get()
+    )
+      throw new Error('Invitation credential quarantine failed.');
+  }
+  if (
+    db
+      .prepare(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='invite_link'",
+      )
+      .get()
+  ) {
+    db.exec(
+      'UPDATE invite_link SET token_encrypted=NULL,revoked_at=COALESCE(revoked_at,unixepoch()*1000)',
+    );
+    if (
+      db
+        .prepare(
+          'SELECT 1 FROM invite_link WHERE token_encrypted IS NOT NULL OR revoked_at IS NULL LIMIT 1',
+        )
+        .get()
+    )
+      throw new Error('Shared invitation quarantine failed.');
+  }
   if (
     db
       .prepare("SELECT COUNT(*) AS n FROM membership WHERE status='active'")
@@ -82,6 +131,8 @@ try {
       photosVerified: required.length,
       integrity: 'ok',
       sessionsCleared: true,
+      invitationCredentialsCleared: true,
+      pushSubscriptionsCleared: true,
       restoredAccess: 'disabled',
       productionModified: false,
     }),

@@ -1,25 +1,13 @@
 import { profileHref } from './index';
-export function PersonLink({
-  handle,
-  hasAvatar,
-}: {
-  handle: string;
-  hasAvatar: number;
-}) {
+export function PersonLink({ handle }: { handle: string }) {
   return (
     <a className="person-link" href={profileHref(handle)}>
-      {hasAvatar ? (
-        <img
-          src={`/media/avatar/${encodeURIComponent(handle)}`}
-          width={36}
-          height={36}
-          alt=""
-        />
-      ) : (
-        <span className="small-avatar" aria-hidden="true">
-          {handle[0]}
-        </span>
-      )}
+      <img
+        src={`/media/avatar/${encodeURIComponent(handle)}`}
+        width={36}
+        height={36}
+        alt=""
+      />
       <strong>@{handle}</strong>
     </a>
   );

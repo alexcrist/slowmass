@@ -1,47 +1,63 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { JoinSharedInvitation } from './JoinSharedInvitation';
+import { useEffect, useLayoutEffect, useState, type FormEvent } from 'react';
 import { createAuthClient } from 'better-auth/react';
 import { magicLinkClient } from 'better-auth/client/plugins';
 import { PasteLoginLink } from './PasteLoginLink';
-import { MemberApp } from '../people/MemberApp';
+import { MemberApp } from '../people';
+import { JoinInvitation } from './JoinInvitation';
+import { onUnauthorized } from '../../api';
+import { clearLocalPush } from '../push';
+import { loadStartup, type Bootstrap } from './startup';
 
 const auth = createAuthClient({ plugins: [magicLinkClient()] });
 type State = 'loading' | 'ready' | 'unavailable' | 'error';
 
 export function Welcome() {
+  return location.pathname === '/invite' ? (
+    <JoinSharedInvitation />
+  ) : location.pathname === '/join' ? (
+    <JoinInvitation />
+  ) : (
+    <AccountWelcome />
+  );
+}
+
+function AccountWelcome() {
   const [state, setState] = useState<State>('loading');
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [message, setMessage] = useState(() =>
-    new URLSearchParams(location.search).has('error')
-      ? 'That sign-in link could not be used. It may have expired, been used already, or your invitation may no longer be active. Request a new link below.'
-      : '',
+    new URLSearchParams(location.search).get('error') === 'invite'
+      ? 'This invitation could not be used. It may have expired, been replaced, or been revoked before verification. Ask your friend for a new invite link, or sign in if you already joined.'
+      : new URLSearchParams(location.search).has('error')
+        ? 'That sign-in link could not be used. It may have expired, been used already, or your invitation may no longer be active. Request a new link below.'
+        : '',
   );
   const [checking, setChecking] = useState(false);
   const [loginStatus, setLoginStatus] = useState('');
-  const [name, setName] = useState<string | null>(null);
+  const [member, setMember] = useState<Bootstrap | null>(null);
+  const name = member?.user?.name ?? null;
+  const memberId = member?.user?.id;
+
+  // Register before member screens start passive effects and API requests.
+  useLayoutEffect(() => {
+    if (!memberId) return;
+    return onUnauthorized(() => {
+      setMember(null);
+      setSent(false);
+      setMessage('Your session has expired. Sign in again to continue.');
+    });
+  }, [memberId]);
 
   useEffect(() => {
     const controller = new AbortController();
     async function load() {
       try {
-        const response = await fetch('/api/status', {
-          signal: controller.signal,
-        });
-        if (!response.ok) throw new Error('Status unavailable');
-        const status = (await response.json()) as { signInAvailable: boolean };
+        const status = await loadStartup(controller.signal);
         if (controller.signal.aborted) return;
-        if (status.signInAvailable) {
-          const me = await fetch('/api/me', { signal: controller.signal });
-          if (me.ok) {
-            const result = (await me.json()) as { user: { name: string } };
-            if (controller.signal.aborted) return;
-            setName(result.user.name);
-          } else if (me.status !== 401) {
-            throw new Error('Account unavailable');
-          }
-        }
+        setMember(status.user ? status : null);
         if (!controller.signal.aborted)
           setState(status.signInAvailable ? 'ready' : 'unavailable');
       } catch {
@@ -49,7 +65,9 @@ export function Welcome() {
       }
     }
     void load();
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+    };
   }, [attempt]);
 
   function retry() {
@@ -62,11 +80,11 @@ export function Welcome() {
     const controller = new AbortController();
     const check = () => {
       if (document.visibilityState === 'hidden') return;
-      fetch('/api/me', { signal: controller.signal })
+      fetch('/api/bootstrap', { signal: controller.signal })
         .then(async (response) => {
           if (response.ok) {
-            const data = (await response.json()) as { user: { name: string } };
-            if (!controller.signal.aborted) setName(data.user.name);
+            const data = (await response.json()) as Bootstrap;
+            if (!controller.signal.aborted && data.user) setMember(data);
           }
         })
         .catch(() => {});
@@ -83,15 +101,16 @@ export function Welcome() {
     setChecking(true);
     setLoginStatus('');
     try {
-      const response = await fetch('/api/me');
+      const response = await fetch('/api/bootstrap');
       if (response.ok) {
-        const data = (await response.json()) as { user: { name: string } };
-        setName(data.user.name);
-      } else if (response.status === 401)
-        setLoginStatus(
-          'No sign-in found in this window yet. Open your email link, then return here.',
-        );
-      else throw new Error();
+        const data = (await response.json()) as Bootstrap;
+        if (!data.signInAvailable) throw new Error();
+        if (data.user) setMember(data);
+        else
+          setLoginStatus(
+            'No sign-in found in this window yet. Open your email link, then return here.',
+          );
+      } else throw new Error();
     } catch {
       setLoginStatus('Could not check sign-in. Please try again.');
     } finally {
@@ -100,6 +119,7 @@ export function Welcome() {
   }
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy) return;
     setBusy(true);
     setMessage('');
     try {
@@ -108,6 +128,12 @@ export function Welcome() {
         callbackURL: '/',
         errorCallbackURL: '/?error=signin',
       });
+      if (result.error?.code === 'INVITATION_REQUIRED') {
+        setMessage(
+          'You need an invitation from a slowmass member to join. Ask them to invite this email address, then try again.',
+        );
+        return;
+      }
       if (result.error) throw new Error('Sign-in failed');
       setSent(true);
     } catch {
@@ -124,7 +150,8 @@ export function Welcome() {
     try {
       const result = await auth.signOut();
       if (result.error) throw new Error('Sign-out failed');
-      setName(null);
+      void clearLocalPush().catch(() => {});
+      setMember(null);
       setSent(false);
     } catch {
       setMessage('Sign-out could not be completed. Please try again.');
@@ -135,10 +162,10 @@ export function Welcome() {
 
   return (
     <main
-      className={`welcome ${name !== null ? 'member-shell' : 'guest-shell'}`}
+      className={`welcome ${name !== null ? 'member-shell' : 'guest-shell'}${state !== 'ready' ? ' startup-shell' : ''}`}
     >
       <header className="masthead">
-        <a className="site-name" href="/" aria-label="Slowmass home">
+        <a className="site-name" href="/" aria-label="slowmass home">
           slowmass
         </a>
       </header>
@@ -146,7 +173,7 @@ export function Welcome() {
         className="account-section"
         aria-label={
           state !== 'ready'
-            ? 'Slowmass'
+            ? 'slowmass'
             : name !== null
               ? 'Your account'
               : 'Sign in'
@@ -154,7 +181,7 @@ export function Welcome() {
       >
         {state === 'ready' && name === null && (
           <>
-            <h1>Welcome to Slowmass</h1>
+            <h1>Welcome to slowmass</h1>
             <p className="status-copy">
               Sign in or join with the email address your friend invited.
             </p>
@@ -162,26 +189,30 @@ export function Welcome() {
         )}
         <div className="sign-in-area">
           {state === 'loading' ? (
-            <p role="status">Loading Slowmass…</p>
+            <p role="status">Loading slowmass…</p>
           ) : state === 'error' || state === 'unavailable' ? (
             <div>
               <p role="alert">
                 {state === 'error'
-                  ? 'We couldn’t load Slowmass. Check your connection and try again.'
-                  : 'Slowmass is temporarily unavailable. Please try again.'}
+                  ? 'We couldn’t load slowmass. Please try again.'
+                  : 'slowmass is temporarily unavailable. Please try again.'}
               </p>
               <button onClick={retry}>Try again</button>
             </div>
-          ) : name !== null ? (
-            <MemberApp onSignOut={() => void signOut()} signingOut={busy} />
+          ) : member?.user ? (
+            <MemberApp
+              key={member.user.id}
+              initialProfile={member.profile}
+              onSignOut={() => void signOut()}
+              signingOut={busy}
+            />
           ) : sent ? (
             <div>
               <h2>Check your email</h2>
               <p className="status-copy">
-                We’ve requested a link for {email.trim().toLowerCase()}. If
-                you’re already a member or have an active invitation for this
-                address, it will arrive shortly. The link works once and expires
-                in 10 minutes.
+                We’ve requested a sign-in link for {email.trim().toLowerCase()}.
+                Check your inbox and spam folder. The link works once and
+                expires in 10 minutes.
               </p>
               <button
                 className="primary-button"

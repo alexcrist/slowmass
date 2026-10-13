@@ -23,7 +23,6 @@ vi.mock('../src/client/api', () => ({
               handle: 'alice',
               displayName: 'Alice',
               bio: 'Bio',
-              hasAvatar: 1,
               relationship: 'self',
             },
           }
@@ -54,10 +53,24 @@ it('unmounts edit forms across repeated feed/profile/settings navigation without
     }),
   });
   vi.stubGlobal('navigator', { standalone: false });
+  vi.stubGlobal('document', {
+    visibilityState: 'visible',
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  });
   const errors = vi.spyOn(console, 'error');
   await act(async () => {
     renderer = create(
-      createElement(MemberApp, { onSignOut: vi.fn(), signingOut: false }),
+      createElement(MemberApp, {
+        initialProfile: {
+          handle: 'alice',
+          displayName: 'Alice',
+          bio: 'Bio',
+          hasAvatar: 1,
+        },
+        onSignOut: vi.fn(),
+        signingOut: false,
+      }),
     );
   });
   expect(renderer!.root.findAllByType(AvatarForm)).toHaveLength(1);

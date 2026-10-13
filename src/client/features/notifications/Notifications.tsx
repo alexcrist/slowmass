@@ -1,26 +1,34 @@
 import { useState } from 'react';
-import { api, jsonRequest } from '../../api';
+import { api } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
-import { PostDetail } from '../posts/Posts';
-import { BackControl } from '../../navigation/BackControl';
-import { profileHref } from '../../navigation';
+import { postHref, profileHref } from '../../navigation';
+import { usePageHistory } from '../../navigation/PageHistory';
+import { useReadActivity } from './useReadActivity';
 type Item = {
   key: string;
-  kind: 'request' | 'likes' | 'comment';
-  postId: string | null;
-  handle: string | null;
-  body: string | null;
-  count: number;
+  version: number;
+  unread: boolean;
   createdAt: number;
-  unread: number;
-};
-type Page = { items: Item[]; next: string | null };
-export function Notifications() {
-  const [filter, setFilter] = useState<'all' | 'requests'>('all'),
-    [history, setHistory] = useState(['']),
-    [error, setError] = useState(''),
-    [busy, setBusy] = useState(false),
-    [postId, setPostId] = useState<string | null>(null);
+} & (
+  | { kind: 'request'; handle: string }
+  | { kind: 'follower'; handle: string }
+  | { kind: 'joined'; handle: string }
+  | { kind: 'likes'; postId: string; count: number }
+  | { kind: 'comment'; postId: string; handle: string; body: string }
+);
+type Page = { items: Item[]; next: string | null; focusFound?: boolean };
+export function Notifications({
+  onChange,
+  focus,
+}: {
+  onChange?: () => void;
+  focus?: string;
+}) {
+  const [history, setHistory] = usePageHistory(
+    focus ? `notifications/${focus}` : 'notifications',
+  );
+  const [error, setError] = useState(''),
+    [busy, setBusy] = useState(false);
   const cursor = history[history.length - 1];
   const {
     data: page,
@@ -28,9 +36,11 @@ export function Notifications() {
     loading,
     reload,
   } = useApiResource<Page>(
-    `/api/notifications?cursor=${encodeURIComponent(cursor)}${filter === 'requests' ? '&filter=requests' : ''}`,
+    `/api/notifications?cursor=${encodeURIComponent(cursor)}${focus ? `&focus=${encodeURIComponent(focus)}` : ''}&includeJoined=1`,
   );
+  const { list, readError } = useReadActivity(page?.items, onChange);
   async function act(handle: string, action: 'accept' | 'deny') {
+    if (busy) return;
     setBusy(true);
     setError('');
     try {
@@ -38,132 +48,111 @@ export function Notifications() {
         method: 'POST',
       });
       reload();
+      onChange?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not update request.');
     } finally {
       setBusy(false);
     }
   }
-  async function read() {
-    if (!page) return;
-    setBusy(true);
-    setError('');
-    try {
-      await api(
-        '/api/notifications/read',
-        jsonRequest('POST', {
-          items: page.items.map(({ key, createdAt }) => ({ key, createdAt })),
-        }),
-      );
-      reload();
-    } catch (e) {
-      setError(
-        e instanceof Error ? e.message : 'Could not mark notifications read.',
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-  if (postId)
-    return (
-      <>
-        <BackControl onClick={() => setPostId(null)} label="Back to activity" />
-        <PostDetail key={postId} id={postId} />
-      </>
-    );
   return (
     <>
-      <div
-        className="activity-filters"
-        role="group"
-        aria-label="Activity filters"
-      >
-        {(['all', 'requests'] as const).map((value) => (
-          <button
-            key={value}
-            className="activity-filter"
-            aria-pressed={filter === value}
-            disabled={busy}
-            onClick={() => {
-              if (value === filter) return;
-              setFilter(value);
-              setHistory(['']);
-              setError('');
-            }}
-          >
-            {value === 'all' ? 'All' : 'Follow requests'}
-          </button>
-        ))}
-      </div>
-      {page?.items.some((item) => item.unread) && (
-        <div className="actions">
-          <button disabled={busy || loading} onClick={() => void read()}>
-            Mark this page read
-          </button>
-        </div>
-      )}
       {loading && <p role="status">Loading notifications…</p>}
-      {page?.items.length === 0 && (
-        <p>
-          {filter === 'requests'
-            ? 'No pending follow requests on this page.'
-            : 'No activity on this page.'}
-        </p>
+      {page?.focusFound === false && (
+        <p role="status">That activity is no longer available.</p>
       )}
-      <ul className="notification-list">
+      {page?.items.length === 0 && <p>No activity on this page.</p>}
+      <ul className="notification-list" ref={list}>
         {page?.items.map((item) => (
-          <li key={item.key}>
-            {Boolean(item.unread) && <strong>Unread. </strong>}
-            {item.kind === 'request' ? (
-              <>
-                <p>
-                  <a href={profileHref(item.handle!)}>@{item.handle}</a>{' '}
-                  requested to follow you.
-                </p>
-                <div className="actions">
-                  <button
-                    disabled={busy || loading}
-                    onClick={() => void act(item.handle!, 'accept')}
-                  >
-                    Accept
-                  </button>
-                  <button
-                    disabled={busy || loading}
-                    onClick={() => void act(item.handle!, 'deny')}
-                  >
-                    Deny
-                  </button>
-                </div>
-              </>
-            ) : item.kind === 'likes' ? (
-              <p>
-                {item.count} {item.count === 1 ? 'person likes' : 'people like'}{' '}
-                your photo.
-              </p>
-            ) : (
-              <>
-                <p>
-                  <a href={profileHref(item.handle!)}>@{item.handle}</a>{' '}
-                  commented on your photo.
-                </p>
-                <p className="bio">{item.body}</p>
-              </>
-            )}
-            <time dateTime={new Date(item.createdAt).toISOString()}>
-              {new Date(item.createdAt).toLocaleString()}
-            </time>
-            {item.postId && (
-              <button
-                className="text-button"
-                onClick={() => setPostId(item.postId)}
+          <li key={`${item.key}:${item.version}`}>
+            {item.kind === 'joined' ? (
+              <a
+                className="notification-post notification-joined"
+                href={profileHref(item.handle)}
               >
-                View photo
-              </button>
+                <img
+                  className="notification-thumbnail"
+                  src={`/media/avatar/${encodeURIComponent(item.handle)}`}
+                  width={64}
+                  height={64}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                />
+                <div className="notification-content">
+                  <p data-notification-key={item.key}>
+                    @{item.handle} joined slowmass through your invitation.
+                  </p>
+                  <time dateTime={new Date(item.createdAt).toISOString()}>
+                    {new Date(item.createdAt).toLocaleString()}
+                  </time>
+                </div>
+              </a>
+            ) : item.kind === 'request' || item.kind === 'follower' ? (
+              <div className="notification-request">
+                <p data-notification-key={item.key}>
+                  <a href={profileHref(item.handle)}>@{item.handle}</a>{' '}
+                  {item.kind === 'request'
+                    ? 'requested to follow you.'
+                    : 'started following you.'}
+                </p>
+                {item.kind === 'request' && (
+                  <div className="actions">
+                    <button
+                      disabled={busy || loading}
+                      onClick={() => void act(item.handle, 'accept')}
+                    >
+                      Accept
+                    </button>
+                    <button
+                      disabled={busy || loading}
+                      onClick={() => void act(item.handle, 'deny')}
+                    >
+                      Deny
+                    </button>
+                  </div>
+                )}
+                <time dateTime={new Date(item.createdAt).toISOString()}>
+                  {new Date(item.createdAt).toLocaleString()}
+                </time>
+              </div>
+            ) : (
+              <a className="notification-post" href={postHref(item.postId)}>
+                <img
+                  className="notification-thumbnail"
+                  src={`/media/posts/${encodeURIComponent(item.postId)}?size=grid`}
+                  alt=""
+                  width={64}
+                  height={64}
+                  loading="lazy"
+                  decoding="async"
+                />
+                <div className="notification-content">
+                  {item.kind === 'likes' ? (
+                    <p data-notification-key={item.key}>
+                      {item.count}{' '}
+                      {item.count === 1 ? 'person likes' : 'people like'} your
+                      photo.
+                    </p>
+                  ) : (
+                    <>
+                      <p data-notification-key={item.key}>
+                        @{item.handle} commented on your photo.
+                      </p>
+                      <p className="bio">{item.body}</p>
+                    </>
+                  )}
+                  <time dateTime={new Date(item.createdAt).toISOString()}>
+                    {new Date(item.createdAt).toLocaleString()}
+                  </time>
+                </div>
+              </a>
             )}
           </li>
         ))}
       </ul>
       {error && <p role="alert">{error}</p>}
+      {readError && <p role="status">{readError}</p>}
       {loadError && (
         <div>
           <p role="alert">{loadError}</p>

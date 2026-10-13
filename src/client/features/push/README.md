@@ -1,0 +1,11 @@
+# Push settings
+
+Settings offers an expandable Push notifications section using the existing settings controls. Nothing registers, subscribes, or asks permission until the member clicks Enable notifications. Permission is requested directly in that click gesture. iPhone/iPad users outside a Home Screen app see installation guidance; other unsupported browsers get a clear status. Denied permission explains how to allow it in browser/device settings. API and browser operations have bounded waits and expose retryable failures.
+
+Alerts cover requests, new followers, comments, and likes. The permission dialog itself has no network deadline; registration starts after permission is granted. Component tests cover a delayed Android permission response with focus return and a retry after the server's temporary auth failure. They simulate browser API boundaries and do not establish real-device behavior or the cause of a production error.
+
+The server's current-session subscription and the browser's local subscription must match before showing enabled status. Changing accounts never adopts an old subscription. Disable revokes server delivery before attempting browser cleanup; successful sign-out also unsubscribes locally. Server session deletion/expiration remains authoritative if cleanup fails. Stale Settings reads cannot overwrite a later enable/disable action.
+
+`public/sw.js` only handles installation, activation, push, and notification clicks. It has no fetch handler, private cache, offline content, analytics, or silent pushes. It shows generic text without private names, comments, or images. Tapping an alert focuses/opens a same-origin Activity route for its validated logical key; unavailable targets show a status and the current timeline. Receipt does not acknowledge activity. Existing 250 ms visibility tracking remains the only automatic read action, then closes local alerts through that acknowledged version. Other devices' delivered OS alerts are not remotely dismissed.
+
+Node component and service-worker VM tests verify permission gestures, enabled/disabled/error/unsupported states, device guidance, safe destinations, and cleanup. Browser and visual testing are prohibited; actual device permission and OS delivery are not covered by those tests.

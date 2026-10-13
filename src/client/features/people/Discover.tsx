@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useApiResource } from '../../api/useApiResource';
 import { PersonLink } from '../../navigation/PersonLink';
 type Page = {
-  items: { handle: string; hasAvatar: number }[];
+  items: { handle: string }[];
   next: string | null;
 };
 export function Discover() {

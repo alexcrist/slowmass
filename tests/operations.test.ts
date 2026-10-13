@@ -1,5 +1,5 @@
 import { beforeAll, afterAll, it, expect } from 'vitest';
-import { testRuntime } from './support/runtime';
+import { testRuntime, seedProfilePhotos } from './support/runtime';
 import { reserveStorage, releaseStorage } from '../src/server/photos/storage';
 import { deleteAccount, cleanupAccounts } from '../src/server/features/account';
 import { cleanupPosts } from '../src/server/features/posts';
@@ -12,6 +12,7 @@ beforeAll(async () => {
       displayName: id,
       bio: 'Private bio',
     });
+  await seedProfilePhotos(runtime.db);
 });
 afterAll(async () => {
   await runtime?.worker.dispose();
@@ -92,6 +93,14 @@ it('deletes an account without deleting invitation ancestry, revokes access imme
       "SELECT invited_by,invitation_id,joined_at FROM membership WHERE user_id='bob'",
     )
     .first();
+  await runtime.db.batch([
+    runtime.db.prepare(
+      "INSERT INTO comment(id,post_id,user_id,body,created_at) VALUES('liked-comment','bob-0','alice','Hello',1)",
+    ),
+    runtime.db.prepare(
+      "INSERT INTO comment_like VALUES('liked-comment','bob',1)",
+    ),
+  ]);
   const issued = await runtime.db
     .prepare("SELECT inviter_id,created_at FROM invitation WHERE id='bob'")
     .first();
@@ -118,6 +127,11 @@ it('deletes an account without deleting invitation ancestry, revokes access imme
   await expect(reserveStorage(db, 'bob', 'posts/late', 1)).rejects.toThrow();
   await deleteAccount(db, 'bob');
   await cleanupAccounts(db);
+  expect(
+    await runtime.db
+      .prepare("SELECT COUNT(*) AS n FROM comment_like WHERE user_id='bob'")
+      .first(),
+  ).toEqual({ n: 0 });
   expect(
     await runtime.db
       .prepare(
@@ -164,7 +178,7 @@ it('deletes an account without deleting invitation ancestry, revokes access imme
   ).rejects.toThrow('immutable');
   expect(
     await runtime.db.prepare('SELECT COUNT(*) AS n FROM photo_cleanup').first(),
-  ).toEqual({ n: 7 });
+  ).toEqual({ n: 8 }); // Seven post objects and the required avatar.
 });
 
 it('fails closed during maintenance before API or media access', async () => {

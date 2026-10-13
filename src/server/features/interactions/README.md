@@ -6,4 +6,8 @@ Every route authenticates an active member. Insert statements also check current
 
 Comments use explicit pages of 20, newest first by server timestamp and UUID. Counts and viewer-like state are included in the posts query without per-card requests. Media authorization skips these aggregate queries. Notification reads derive current activity directly from these tables; there is no asynchronous delivery service.
 
-The Liked by list uses 20-row username-ordered pages. Both route and SQL enforce current post access; results exclude inactive members and either block direction. It returns usernames and avatar presence, with no emails or private profile fields.
+The Liked by list uses 20-row username-ordered pages. Both route and SQL enforce current post access; results exclude inactive members and either block direction. It returns usernames, with no emails or private profile fields; avatars use the existing authorized media route.
+
+Comment likes have one row per member/comment and a user index for bounded account cleanup. Like/unlike is idempotent and checks post access, active comment authorship, comment deletion, and both block directions inside the mutation. Counts are included in the comment-page query without per-row requests. A comment’s likers use the same 20-row username pagination and hide blocked/inactive identities. Access is rechecked on every list page and mutation. Comment likes do not create new Activity events.
+
+Post like/unlike responses include authoritative visible counts and the viewer’s like state, avoiding a second authenticated detail request. Unlike now checks current post access inside its delete statement, matching the insert’s revocation semantics. Counts are read after the mutation with current resource visibility; loss of access returns not-found even if a prior mutation committed. Retries remain idempotent.

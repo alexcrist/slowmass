@@ -1,5 +1,13 @@
-# Avatar form
+# Profile photo and cropping
 
-Uploads one JPEG, PNG, or WebP to the authenticated avatar endpoint. Each file selection generates an idempotency key retained across network retries. Server limits and processing remain authoritative. The image is fetched only through the private media route; no public preview or third-party host is used.
+Onboarding requires a photo after the username/name step. Interrupted onboarding resumes this step. Completed profiles always have a photo; there is no optional-avatar mode. Settings → Edit profile uses the same form to replace a photo; removal is unavailable. Successful uploads update the parent profile state and navigation avatar. The form discloses member visibility, subject to blocks.
 
-The form is under Settings → Edit profile. Successful upload/removal updates the parent profile's avatar state so returning to the form stays consistent. The form discloses that avatars are visible to signed-in members, subject to blocks.
+Choose profile photo / Change photo opens the file picker and immediately opens a native modal crop editor. Use photo both confirms the crop and saves it, without another upload action. Cancel/Escape discards an unsubmitted selection without network activity; while saving, duplicate submissions and dismissal are blocked. The modal traps focus natively and restores focus to its trigger when closed.
+
+JPEG, PNG, and WebP selections are limited to 8 MB and 40 megapixels. The browser respects image orientation, previews a square crop inside a circular mask, and supports drag, arrow keys, and zoom. The chosen crop is encoded at up to 1600px before upload, without upscaling small crops; the server still validates and re-encodes all submitted bytes. Client validation is only for usability. Decoded bitmaps are released on replacement/unmount, and obsolete decoding results are ignored.
+
+A prepared crop and idempotency key are retained together after a network failure, so retrying cannot upload a different image under the same key. Adjusting the crop or selecting another file starts a new operation. Confirmed server processing failures require a new attempt and count toward quotas. Unmounting aborts pending work; onboarding advances only after the server confirms success. Current photos remain intact until a replacement succeeds.
+
+Original files and previews stay in memory. Saved photos are fetched through the authorized private media route; there is no persistent client cache, public URL, or third-party image host.
+
+On profile and Edit profile pages, the photo opens an image-only native modal, with no white frame or visible heading. A labeled close icon sits at the viewport’s top right, outside the image. The viewer has loading, failure, and retry states and requests the large variant only after opening. Closing or navigating away discards the viewer; opening it again loads through the same private media route. This works for your own profile and other visible member profiles, including before a follow is accepted. Avatars elsewhere still link to profiles. Small avatars elsewhere still use the 320px version. Existing photos retain their current quality; new uploads store both sizes. Successful edits replace the viewer’s version and reset any open viewer.

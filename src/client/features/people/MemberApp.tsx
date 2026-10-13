@@ -1,18 +1,19 @@
-import { useEffect, useState } from 'react';
-import { api } from '../../api';
+import { useState } from 'react';
 import { profileHref, useRoute } from '../../navigation';
 import { BackControl } from '../../navigation/BackControl';
-import { DeleteAccount } from '../account/DeleteAccount';
-import { Notifications } from '../notifications/Notifications';
-import { Compose, PostList } from '../posts/Posts';
-import { AvatarForm } from '../avatars/AvatarForm';
-import { InvitationForm } from '../invitations/InvitationForm';
-import { InstallApp, InstallProvider } from '../install/InstallApp';
+import { PageHistoryProvider } from '../../navigation/PageHistory';
+import { DeleteAccount } from '../account';
+import { Notifications, useNotificationCount } from '../notifications';
+import { Compose, PostDetail, PostList } from '../posts';
+import { AvatarForm } from '../avatars';
+import { InvitationForm } from '../invitations';
+import { InstallApp, InstallProvider } from '../install';
 import { ProfileForm, type Profile } from './ProfileForm';
 import { ProfilePage } from './ProfilePage';
 import { Discover } from './Discover';
 import { Connections, type Kind } from './Connections';
 import { MemberNavigation } from './MemberNavigation';
+import { PushSettings } from '../push';
 
 const titles: Record<string, string> = {
   feed: 'Feed',
@@ -20,6 +21,7 @@ const titles: Record<string, string> = {
   compose: 'New post',
   notifications: 'Activity',
   profile: 'Profile',
+  post: 'Post',
   settings: 'Settings',
   edit: 'Edit profile',
   invitations: 'Invite friends',
@@ -28,6 +30,7 @@ const titles: Record<string, string> = {
   blocked: 'Blocked accounts',
 };
 export function MemberApp(props: {
+  initialProfile: Profile | null;
   onSignOut: () => void;
   signingOut: boolean;
 }) {
@@ -38,89 +41,80 @@ export function MemberApp(props: {
   );
 }
 function MemberPages({
+  initialProfile,
   onSignOut,
   signingOut,
 }: {
+  initialProfile: Profile | null;
   onSignOut: () => void;
   signingOut: boolean;
 }) {
-  const route = useRoute();
-  const [page, handle] = route.split('/');
-  const [profile, setProfile] = useState<Profile | null>();
+  const { route, backRoute } = useRoute();
+  const [page, handle, profileTab] = route.split('/');
+  const pageKey =
+    page === 'profile' ? route.split('/').slice(0, 2).join('/') : route;
+  const [profile, setProfile] = useState(initialProfile);
   const [avatarVersion, setAvatarVersion] = useState(0);
-  const [error, setError] = useState('');
-  const [retry, setRetry] = useState(0);
   const [pageVersion, setPageVersion] = useState(0);
-  useEffect(() => {
-    const controller = new AbortController();
-    api<{ profile: Profile | null }>('/api/people/self', {
-      signal: controller.signal,
-    })
-      .then((data) => {
-        if (!controller.signal.aborted) {
-          setProfile(data.profile);
-          setError('');
-        }
-      })
-      .catch((e) => {
-        if (!controller.signal.aborted) setError(e.message);
-      });
-    return () => controller.abort();
-  }, [retry]);
-  const ready = Boolean(profile);
+  const ready = Boolean(profile?.hasAvatar);
+  const notifications = useNotificationCount(ready);
   const profileRoute = profile ? profileHref(profile.handle) : '#profile';
   const back =
     page === 'settings' || page === 'following' || page === 'followers'
       ? { href: profileRoute, label: 'Back to profile' }
-      : ['edit', 'invitations', 'blocked'].includes(page)
-        ? { href: '#settings', label: 'Back to settings' }
-        : page === 'profile' && handle && handle !== profile?.handle
-          ? { href: '#feed', label: 'Back to feed' }
-          : null;
+      : page === 'invitations' && backRoute.startsWith('profile')
+        ? { href: `#${backRoute}`, label: 'Back to profile' }
+        : ['edit', 'invitations', 'blocked'].includes(page)
+          ? { href: '#settings', label: 'Back to settings' }
+          : page === 'post' ||
+              (page === 'profile' && handle && handle !== profile?.handle)
+            ? {
+                href: `#${backRoute}`,
+                label: `Back to ${(titles[backRoute.split('/')[0]] || 'Feed').toLowerCase()}`,
+              }
+            : null;
   function saved(value: Profile) {
     setProfile(value);
     location.hash = profileHref(value.handle);
   }
+  function photoSaved() {
+    setProfile((current) => (current ? { ...current, hasAvatar: 1 } : current));
+    setAvatarVersion((version) => version + 1);
+  }
   function screen() {
-    if (error)
-      return (
-        <>
-          <p role="alert">{error}</p>
-          <button
-            onClick={() => {
-              setError('');
-              setRetry((v) => v + 1);
-            }}
-          >
-            Retry
-          </button>
-          <button className="text-button" onClick={onSignOut}>
-            Sign out
-          </button>
-        </>
-      );
-    if (profile === undefined)
-      return <p role="status">Loading your account…</p>;
     if (!profile)
       return (
         <>
-          <p>
-            Choose a username and name to finish joining. You and the friend who
-            invited you will follow each other automatically.
+          <p className="onboarding-intro">
+            Choose a username and name, then add a profile photo.
           </p>
           <ProfileForm profile={null} onSave={saved} />
-          <button className="text-button" onClick={onSignOut}>
-            Sign out
-          </button>
+        </>
+      );
+    if (!profile.hasAvatar)
+      return (
+        <>
+          <p className="onboarding-intro">
+            Choose a photo, then crop it to fit. You can change it later.
+          </p>
+          <AvatarForm
+            handle={profile.handle}
+            onChange={photoSaved}
+            onboarding
+          />
         </>
       );
     switch (page) {
       case 'feed':
         return <PostList />;
+      case 'post':
+        return handle ? <PostDetail id={handle} /> : <p>Post not found.</p>;
       case 'people':
         return <Discover />;
       case 'profile':
-        return <ProfilePage handle={handle || profile.handle} />;
+        return (
+          <ProfilePage handle={handle || profile.handle} tab={profileTab} />
+        );
       case 'compose':
         return (
           <Compose
@@ -130,22 +124,13 @@ function MemberPages({
           />
         );
       case 'notifications':
-        return <Notifications />;
+        return (
+          <Notifications onChange={notifications.refresh} focus={handle} />
+        );
       case 'edit':
         return (
           <>
-            <AvatarForm
-              handle={profile.handle}
-              hasAvatar={Boolean(profile.hasAvatar)}
-              onChange={(present) => {
-                setProfile((current) =>
-                  current
-                    ? { ...current, hasAvatar: Number(present) }
-                    : current,
-                );
-                setAvatarVersion((version) => version + 1);
-              }}
-            />
+            <AvatarForm handle={profile.handle} onChange={photoSaved} />
             <ProfileForm profile={profile} onSave={saved} />
           </>
         );
@@ -159,33 +144,42 @@ function MemberPages({
         return (
           <>
             <nav className="settings-links" aria-label="Settings">
-              <a href="#edit">Edit profile</a>
-              <a href="#invitations">Invite friends</a>
-              <a href="#following">Following</a>
-              <a href="#followers">Followers</a>
-              <a href="#blocked">Blocked accounts</a>
+              <a className="settings-row" href="#edit">
+                Edit profile
+              </a>
+              <a className="settings-row" href="#invitations">
+                Invite friends
+              </a>
+              <a className="settings-row" href="#blocked">
+                Blocked accounts
+              </a>
             </nav>
+            <PushSettings />
             <InstallApp />
-            <div className="account-tools">
-              <button
-                className="text-button"
-                onClick={() => location.reload()}
-                disabled={signingOut}
-              >
-                Reload app
-              </button>
-              <button
-                className="text-button"
-                onClick={onSignOut}
-                disabled={signingOut}
-              >
-                {signingOut ? 'Signing out…' : 'Sign out'}
-              </button>
-              <details className="danger-zone">
-                <summary>Delete account</summary>
+            <button
+              type="button"
+              className="settings-row"
+              onClick={() => location.reload()}
+              disabled={signingOut}
+            >
+              Reload app
+            </button>
+            <button
+              type="button"
+              className="settings-row"
+              onClick={onSignOut}
+              disabled={signingOut}
+            >
+              {signingOut ? 'Signing out…' : 'Sign out'}
+            </button>
+            <details className="settings-disclosure">
+              <summary className="settings-row settings-danger">
+                Delete account
+              </summary>
+              <div className="settings-details">
                 <DeleteAccount />
-              </details>
-            </div>
+              </div>
+            </details>
           </>
         );
       default:
@@ -199,38 +193,50 @@ function MemberPages({
   }
   return (
     <>
-      {profile !== undefined && (
+      {ready && profile && (
         <MemberNavigation
           page={page}
-          profile={profile ?? null}
+          profile={profile}
           avatarVersion={avatarVersion}
+          unreadCount={notifications.count}
           onReselect={() => {
+            notifications.refresh();
             setPageVersion((version) => version + 1);
             window.scrollTo(0, 0);
           }}
         />
       )}
-      <section
-        key={ready ? `${route}:${pageVersion}` : 'onboarding'}
-        data-page={page}
-        className={`member-content ${ready && (page === 'feed' || page === 'profile') ? 'photo-screen' : ''}`}
-        aria-labelledby="screen-title"
-      >
-        {ready && back && <BackControl {...back} />}
-        <div className="screen-heading">
-          <h1 id="screen-title">
-            {profile === undefined
-              ? 'Slowmass'
-              : profile === null
-                ? 'Create your profile'
-                : titles[page] || 'Slowmass'}
+      <PageHistoryProvider key={pageVersion}>
+        <section
+          key={ready ? `${pageKey}:${pageVersion}` : 'onboarding'}
+          data-page={ready ? page : 'onboarding'}
+          className={`member-content ${!ready ? 'onboarding' : ['feed', 'profile', 'post'].includes(page) ? 'photo-screen' : ''}`}
+          aria-labelledby="screen-title"
+        >
+          {ready && back && <BackControl {...back} />}
+          <h1
+            id="screen-title"
+            className={ready ? 'visually-hidden' : undefined}
+          >
+            {profile === null
+              ? 'Create your profile'
+              : !ready
+                ? 'Add a profile photo'
+                : titles[page] || 'slowmass'}
           </h1>
-          {page === 'feed' && ready && (
-            <span className="field-help">Newest first</span>
+          {screen()}
+          {!ready && (
+            <button
+              type="button"
+              className="text-button onboarding-switch"
+              onClick={onSignOut}
+              disabled={signingOut}
+            >
+              {signingOut ? 'Signing out…' : 'Use a different account'}
+            </button>
           )}
-        </div>
-        {screen()}
-      </section>
+        </section>
+      </PageHistoryProvider>
     </>
   );
 }

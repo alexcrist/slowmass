@@ -1,11 +1,27 @@
 import { build } from 'esbuild';
-import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
-import { unstable_splitSqlQuery } from 'wrangler';
+import {
+  Miniflare,
+  convertV4MiniflareOptions,
+  Response as RuntimeResponse,
+} from 'miniflare';
+import { unstable_splitSqlQuery, unstable_readConfig } from 'wrangler';
 import { readFile, readdir } from 'node:fs/promises';
 import { makeSignature } from 'better-auth/crypto';
 
 const secret = 'test-only-secret-with-at-least-thirty-two-characters';
-export async function testRuntime(maintenance = false) {
+export async function testRuntime(
+  maintenance = false,
+  images = false,
+  mail?: (request: Request) => Promise<{ status: number; body: string }>,
+  push?: {
+    publicKey: string;
+    privateKey: string;
+    send: (
+      request: Request,
+    ) => Promise<{ status: number; headers?: Record<string, string> }>;
+  },
+  migrationCount?: number,
+) {
   const result = await build({
     entryPoints: ['src/server/index.ts'],
     bundle: true,
@@ -14,6 +30,7 @@ export async function testRuntime(maintenance = false) {
     platform: 'node',
     target: 'es2022',
     external: ['node:*'],
+    alias: unstable_readConfig({ config: 'wrangler.jsonc' }).alias,
   });
   const worker = new Miniflare(
     convertV4MiniflareOptions({
@@ -23,14 +40,35 @@ export async function testRuntime(maintenance = false) {
       compatibilityFlags: ['nodejs_compat'],
       d1Databases: ['DB'],
       r2Buckets: ['PHOTOS'],
+      ...(images ? { images: { binding: 'IMAGES' } } : {}),
       bindings: {
         APP_ORIGIN: 'http://localhost:8787',
         MAINTENANCE_MODE: maintenance ? 'true' : 'false',
         AUTH_SECRET: secret,
         RESEND_API_KEY: 'test-key',
         EMAIL_FROM: 'test@example.com',
+        ...(push
+          ? {
+              PUSH_PUBLIC_KEY: push.publicKey,
+              PUSH_PRIVATE_KEY: push.privateKey,
+            }
+          : {}),
       },
-      outboundService: async () => {
+      outboundService: async (request: Request) => {
+        if (push && request.url.startsWith('https://fcm.googleapis.com/')) {
+          const result = await push.send(request);
+          return new RuntimeResponse(null, {
+            status: result.status,
+            headers: result.headers,
+          });
+        }
+        if (mail && request.url === 'https://api.resend.com/emails') {
+          const result = await mail(request);
+          return new RuntimeResponse(result.body, {
+            status: result.status,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
         throw new Error('Network disabled in tests');
       },
     }),
@@ -38,7 +76,8 @@ export async function testRuntime(maintenance = false) {
   const db = await worker.getD1Database('DB');
   for (const file of (await readdir('migrations'))
     .filter((f) => f.endsWith('.sql'))
-    .sort()) {
+    .sort()
+    .slice(0, migrationCount)) {
     await db.batch(
       unstable_splitSqlQuery(await readFile(`migrations/${file}`, 'utf8')).map(
         (sql) => db.prepare(sql),
@@ -78,11 +117,20 @@ export async function testRuntime(maintenance = false) {
       .bind(id, id, `${id}-token`, now + 86400000, now, now)
       .run();
   }
+  // These four base fixtures represent existing members, not new join events.
+  if (
+    (
+      await db.prepare('PRAGMA table_info(membership)').all<{ name: string }>()
+    ).results.some((column) => column.name === 'join_activity_pending')
+  )
+    await db.prepare('UPDATE membership SET join_activity_pending=0').run();
   async function request(
     id: string | null,
     path: string,
     method = 'GET',
     body?: unknown,
+    extraHeaders: Record<string, string> = {},
+    signal?: AbortSignal,
   ) {
     const headers: Record<string, string> = {
       Origin: 'http://localhost:8787',
@@ -94,9 +142,28 @@ export async function testRuntime(maintenance = false) {
     }
     return worker.dispatchFetch(`http://localhost:8787${path}`, {
       method,
-      headers,
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal,
+      headers: { ...headers, ...extraHeaders },
+      ...(body === undefined
+        ? {}
+        : {
+            body:
+              body instanceof Blob
+                ? new Uint8Array(await body.arrayBuffer())
+                : JSON.stringify(body),
+          }),
     });
   }
   return { worker, db, request };
+}
+
+// Completed synthetic members for tests unrelated to onboarding.
+export async function seedProfilePhotos(
+  db: Awaited<ReturnType<typeof testRuntime>>['db'],
+) {
+  await db
+    .prepare(
+      "INSERT OR IGNORE INTO avatar(user_id,object_key,width,height) SELECT user_id,'test-avatar/'||user_id,1,1 FROM profile",
+    )
+    .run();
 }

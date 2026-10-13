@@ -1,6 +1,6 @@
 # Slowmass
 
-A mobile-first photo app for friends. The home feed contains only posts from accepted follows, newest first, with explicit pagination. One still image per post. Every profile is private. No recommendations, ads, videos, albums, stories, reels, or infinite scroll. Login uses verified one-time email links only. Every member after the bootstrap root must be invited by an active member; preserve the invitation tree permanently.
+A mobile-first photo app for friends. The home feed contains the member’s own posts and posts from accepted follows, newest first, with explicit pagination. One still image per post. Every profile is private. Onboarding requires a username, profile name, and profile photo before member features unlock; photos can be replaced, not removed. No recommendations, ads, videos, albums, stories, reels, or infinite scroll. Login uses verified one-time email links only. Every member after the bootstrap root must be invited by an active member; preserve the invitation tree permanently.
 
 Initial operating target: $0/month within free allowances, with a measured path to paid capacity. Minimize both hosting cost and maintenance. Do not trade away authorization, data integrity, or recovery to save pennies.
 
@@ -24,7 +24,7 @@ The repository contains email-link authentication, member invitations, profiles,
 - **One name per concept.** Keep domain names consistent across UI code, API, persistence, tests, and docs.
 - **Feature-based organization.** Put each feature's implementation, tests, and README together. Features spanning client and server use matching names. Keep migrations centralized.
 - **Code that changes together lives together.** Extract a shared module when a second real consumer needs it. Avoid global utility dumping grounds.
-- **Dependencies form a directed acyclic graph.** Features use another feature only through its public domain API. Shared infrastructure never imports feature code. Composition roots wire modules together and contain no business rules. Enforce import boundaries mechanically once code exists.
+- **Dependencies form a directed acyclic graph.** Features use another feature only through its public domain API. Shared infrastructure never imports feature code. Composition roots wire modules together and contain no business rules. Enforce import boundaries mechanically. Each feature exposes its public API through `index.ts`; other features import that entry point. Only the server composition root may also import a feature’s `router.ts` adapter. Boundary checks cover re-exports, dynamic imports, CommonJS imports, aliases, cycles, and database calls in routers/the composition root.
 - **Keep infrastructure at boundaries.** Route handlers parse and authenticate; domain functions enforce rules; feature-owned persistence functions use explicit queries. Isolate D1 and R2 access without pretending every database has identical semantics.
 - **Backend authority.** Permissions, publication states, quotas, timestamps, and valid transitions are enforced server-side. Frontend checks are UX, never security.
 - **TypeScript strict mode.** Validate untrusted input at runtime, model states explicitly, and avoid unchecked casts and `any`. Use parameterized SQL and database constraints for invariants.

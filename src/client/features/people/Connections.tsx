@@ -2,12 +2,21 @@ import { useState } from 'react';
 import { api } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
 import { profileHref } from '../../navigation';
+import { PersonLink } from '../../navigation/PersonLink';
+import { ConfirmDialog } from '../../ui/ConfirmDialog';
 export type Kind = 'following' | 'followers' | 'blocked';
-export function Connections({ kind }: { kind: Kind }) {
+type ConnectionsProps =
+  | { kind: Kind; handle?: undefined }
+  | { kind: 'following' | 'followers'; handle: string };
+export function Connections({ kind, handle }: ConnectionsProps) {
   const [pages, setPages] = useState(['']);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [confirming, setConfirming] = useState<string | null>(null);
   const after = pages[pages.length - 1];
+  const path = handle
+    ? `/api/people/${encodeURIComponent(handle)}/connections`
+    : '/api/people/connections';
   const {
     data,
     error: loadError,
@@ -16,14 +25,16 @@ export function Connections({ kind }: { kind: Kind }) {
   } = useApiResource<{
     items: { handle: string; displayName: string }[];
     next: string | null;
-  }>(`/api/people/connections?kind=${kind}&after=${encodeURIComponent(after)}`);
+  }>(`${path}?kind=${kind}&after=${encodeURIComponent(after)}`);
   async function act(handle: string, action: string) {
+    if (busy) return;
     setBusy(true);
     setError('');
     try {
       await api(`/api/people/${encodeURIComponent(handle)}/${action}`, {
         method: 'POST',
       });
+      setConfirming(null);
       reload();
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Action failed.');
@@ -41,28 +52,63 @@ export function Connections({ kind }: { kind: Kind }) {
     <>
       {loading && <p role="status">Loading…</p>}
       {data?.items.length === 0 && <p>No accounts on this page.</p>}
-      <ul className="people-list">
+      <ul className="people-list connection-list">
         {data?.items.map((person) => (
-          <li key={person.handle}>
-            <span>
+          <li className="connection-row" key={person.handle}>
+            {kind === 'blocked' ? (
               <a href={profileHref(person.handle)}>@{person.handle}</a>
-            </span>
-            <div className="actions">
+            ) : (
+              <PersonLink handle={person.handle} />
+            )}
+            {!handle && (
               <button
+                type="button"
+                className="compact-button"
                 disabled={busy || loading}
-                onClick={() => void act(person.handle, action)}
+                aria-label={
+                  kind === 'followers'
+                    ? `Remove @${person.handle} as a follower`
+                    : `${kind === 'following' ? 'Unfollow' : 'Unblock'} @${person.handle}`
+                }
+                aria-haspopup={kind === 'blocked' ? undefined : 'dialog'}
+                onClick={() => {
+                  setError('');
+                  if (kind === 'blocked') void act(person.handle, action);
+                  else setConfirming(person.handle);
+                }}
               >
-                {kind === 'following'
-                  ? 'Unfollow'
-                  : kind === 'followers'
-                    ? 'Remove follower'
-                    : 'Unblock'}
+                <span>
+                  {kind === 'following'
+                    ? 'Unfollow'
+                    : kind === 'followers'
+                      ? 'Remove'
+                      : 'Unblock'}
+                </span>
               </button>
-            </div>
+            )}
           </li>
         ))}
       </ul>
-      {error && <p role="alert">{error}</p>}
+      {confirming && (
+        <ConfirmDialog
+          title={kind === 'followers' ? 'Remove follower' : 'Unfollow'}
+          confirmLabel={kind === 'followers' ? 'Remove follower' : 'Unfollow'}
+          error={error}
+          onConfirm={() => void act(confirming, action)}
+          busy={busy}
+          onClose={() => {
+            setConfirming(null);
+            setError('');
+          }}
+        >
+          <p>
+            {kind === 'followers'
+              ? `@${confirming} will need to request to follow you again to see your posts.`
+              : `Stop following @${confirming}? You will need their approval to follow them again.`}
+          </p>
+        </ConfirmDialog>
+      )}
+      {error && !confirming && <p role="alert">{error}</p>}
       {loadError && (
         <div>
           <p role="alert" className="error-message">

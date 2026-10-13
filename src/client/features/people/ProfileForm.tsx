@@ -58,13 +58,15 @@ export function ProfileForm({
         minLength={3}
         maxLength={30}
         required
-        disabled={busy || Boolean(profile)}
+        disabled={busy}
         autoCapitalize="none"
         autoComplete="username"
         aria-describedby="handle-help"
       />
       <p id="handle-help" className="field-help">
-        3–30 letters, numbers, or underscores. Usernames cannot be changed yet.
+        3–30 letters, numbers, or underscores.
+        {profile &&
+          ' Changing it releases your old username and changes your profile link.'}
       </p>
       <label className="field-label" htmlFor="display-name">
         Profile name
@@ -90,7 +92,7 @@ export function ProfileForm({
         disabled={busy}
       />
       <button className="primary-button" disabled={busy}>
-        {busy ? 'Saving…' : profile ? 'Save profile' : 'Create profile'}
+        {busy ? 'Saving…' : profile ? 'Save profile' : 'Continue'}
       </button>
       {message && <p role="status">{message}</p>}
       {error && (

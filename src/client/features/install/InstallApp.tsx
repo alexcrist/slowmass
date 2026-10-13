@@ -16,7 +16,20 @@ function standalone() {
   );
 }
 
+function appleMobileDevice() {
+  return (
+    /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+}
+function mobileDevice() {
+  // iPadOS can identify as a Mac when requesting desktop websites.
+  return /Android/i.test(navigator.userAgent) || appleMobileDevice();
+}
+
 const InstallContext = createContext<{
+  mobile: boolean;
+  appleMobile: boolean;
   installed: boolean;
   prompt: InstallPrompt | null;
   busy: boolean;
@@ -24,6 +37,8 @@ const InstallContext = createContext<{
   install: () => Promise<void>;
 } | null>(null);
 export function InstallProvider({ children }: { children: ReactNode }) {
+  const [mobile] = useState(mobileDevice);
+  const [appleMobile] = useState(appleMobileDevice);
   const [installed, setInstalled] = useState(standalone);
   const [prompt, setPrompt] = useState<InstallPrompt | null>(null);
   const [busy, setBusy] = useState(false);
@@ -33,7 +48,7 @@ export function InstallProvider({ children }: { children: ReactNode }) {
     const ready = (event: Event) => {
       if (!('prompt' in event) || typeof event.prompt !== 'function') return;
       event.preventDefault();
-      setPrompt(event as InstallPrompt);
+      if (mobile) setPrompt(event as InstallPrompt);
     };
     const complete = () => {
       setInstalled(true);
@@ -48,21 +63,21 @@ export function InstallProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('appinstalled', complete);
       mode.removeEventListener('change', changed);
     };
-  }, []);
+  }, [mobile]);
   async function install() {
-    if (!prompt || busy) return;
+    if (!mobile || !prompt || busy) return;
     setBusy(true);
     setMessage('');
     try {
       const result = await prompt.prompt();
       setMessage(
         result.outcome === 'accepted'
-          ? 'Installation requested. Look for Slowmass on your home screen or in your apps.'
+          ? 'Installation requested. Look for slowmass on your home screen or in your apps.'
           : 'You can install later using your browser menu.',
       );
     } catch {
       setMessage(
-        'Use your browser menu to install Slowmass. Instructions are below.',
+        'Use your browser menu to install slowmass. Instructions are below.',
       );
     } finally {
       setPrompt(null);
@@ -71,55 +86,66 @@ export function InstallProvider({ children }: { children: ReactNode }) {
   }
   return (
     <InstallContext.Provider
-      value={{ installed, prompt, busy, message, install }}
+      value={{ mobile, appleMobile, installed, prompt, busy, message, install }}
     >
       {children}
     </InstallContext.Provider>
   );
 }
+export function useInstallState() {
+  return useContext(InstallContext);
+}
 export function InstallApp() {
   const context = useContext(InstallContext);
-  if (!context) return null;
+  if (!context?.mobile) return null;
   const { installed, prompt, busy, message, install } = context;
-  if (installed) return <p>Slowmass is running as an installed app.</p>;
+  if (installed)
+    return (
+      <p className="settings-row">slowmass is running as an installed app.</p>
+    );
 
   return (
-    <details className="install-help">
-      <summary>Install Slowmass</summary>
-      <p>
-        Add Slowmass to your home screen. An internet connection is required.
-      </p>
-      {prompt && (
-        <button
-          type="button"
-          className="primary-button"
-          disabled={busy}
-          onClick={() => void install()}
-        >
-          {busy ? 'Opening install prompt…' : 'Install app'}
-        </button>
-      )}
-      <ul>
-        <li>
-          <strong>iPhone / iPad:</strong> Open slowmass.com in Safari. Tap
-          Share, then Add to Home Screen. Leave Open as Web App enabled if
-          shown.
-        </li>
-        <li>
-          <strong>Android:</strong> Open slowmass.com in Chrome. Use Install app
-          above when available, or the browser menu’s Install app / Add to Home
-          screen option.
-        </li>
-        <li>
-          <strong>Computer:</strong> Use the install icon in Chrome or Edge’s
-          address bar. On supported Macs, Safari offers File → Add to Dock.
-        </li>
-      </ul>
-      <p>
-        If you opened Slowmass inside an email or social app, open it in your
-        regular browser first. Installation options vary by browser.
-      </p>
-      {message && <p role="status">{message}</p>}
+    <details className="settings-disclosure">
+      <summary className="settings-row">Install slowmass</summary>
+      <div className="settings-details install-help">
+        <p>
+          Open slowmass.com in your browser, then follow the steps for your
+          device. slowmass still needs an internet connection.
+        </p>
+        {prompt && (
+          <button
+            type="button"
+            className="primary-button"
+            disabled={busy}
+            onClick={() => void install()}
+          >
+            {busy ? 'Opening install prompt…' : 'Install app'}
+          </button>
+        )}
+        <ul>
+          <li>
+            <strong>iPhone — Safari:</strong> Tap Share (the square with an up
+            arrow), or open the page menu beside the address bar and choose
+            Share. Scroll to Add to Home Screen, keep Open as Web App on if
+            shown, then tap Add.
+          </li>
+          <li>
+            <strong>iPad — Safari:</strong> Tap Share → View More (or More) →
+            Add to Home Screen. Keep Open as Web App on if shown, then tap Add.
+          </li>
+          <li>
+            <strong>Android — Chrome:</strong> Tap the three-dot menu → Install
+            and create shortcut → Install. Some versions call this Add to Home
+            screen → Install. Confirm the installation when prompted.
+          </li>
+        </ul>
+        <p>
+          If you opened slowmass inside an email or social app, open it in your
+          regular browser first. After installing, open the slowmass icon. You
+          may need to sign in again in the app.
+        </p>
+        {message && <p role="status">{message}</p>}
+      </div>
     </details>
   );
 }

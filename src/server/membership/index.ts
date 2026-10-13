@@ -1,3 +1,16 @@
+export {
+  sharedInvitation,
+  bindSharedVerification,
+  sharedClaim,
+  hasSharedClaim,
+  acceptSharedVerification,
+} from './shared';
+export {
+  newInvitationCredential,
+  invitationJoin,
+  acceptInvitationJoin,
+} from './join';
+
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
@@ -16,6 +29,18 @@ export async function activeMember(
   );
 }
 
+// Fresh request authorization; never cache completion or membership across requests.
+export async function memberAccess(db: D1Database, userId: string) {
+  const row = await db
+    .prepare(
+      `SELECT EXISTS(SELECT 1 FROM avatar WHERE user_id=m.user_id) AS hasProfilePhoto
+       FROM membership m WHERE m.user_id=? AND m.status='active'`,
+    )
+    .bind(userId)
+    .first<{ hasProfilePhoto: number }>();
+  return row ? { hasProfilePhoto: Boolean(row.hasProfilePhoto) } : null;
+}
+
 export async function canJoin(
   db: D1Database,
   email: string,
@@ -32,7 +57,7 @@ export async function canJoin(
       .prepare(
         `SELECT 1 FROM invitation i
     JOIN membership m ON m.user_id = i.inviter_id
-    WHERE i.recipient_email = ? AND m.status = 'active'
+    WHERE i.kind='personal' AND i.recipient_email = ? AND m.status = 'active'
       AND i.accepted_by IS NULL AND i.revoked_at IS NULL AND i.expires_at > ? LIMIT 1`,
       )
       .bind(recipient, Date.now())
@@ -73,7 +98,7 @@ export async function ensureMembership(
     SELECT u.id, i.inviter_id, i.id, ? FROM user u
     JOIN invitation i ON i.recipient_email = lower(u.email)
     JOIN membership inviter ON inviter.user_id = i.inviter_id
-    WHERE u.id = ? AND u.emailVerified = 1 AND inviter.status = 'active'
+    WHERE i.kind='personal' AND u.id = ? AND u.emailVerified = 1 AND inviter.status = 'active'
       AND i.accepted_by IS NULL AND i.revoked_at IS NULL AND i.expires_at > ?
       AND NOT EXISTS (SELECT 1 FROM membership WHERE user_id = u.id)
     ORDER BY i.created_at, i.id LIMIT 1
@@ -97,9 +122,8 @@ export async function issueInvitation(
       `INSERT INTO invitation (id, inviter_id, recipient_email, created_at, expires_at)
     SELECT ?, user_id, ?, ?, ? FROM membership
     WHERE user_id = ? AND status = 'active'
-      AND (SELECT COUNT(*) FROM invitation WHERE inviter_id = ? AND created_at > ?) < 5
       AND NOT EXISTS (SELECT 1 FROM user u JOIN membership m ON m.user_id = u.id WHERE lower(u.email) = ?)
-      AND NOT EXISTS (SELECT 1 FROM invitation WHERE inviter_id = ? AND recipient_email = ? AND accepted_by IS NULL AND revoked_at IS NULL AND expires_at > ?)`,
+      AND NOT EXISTS (SELECT 1 FROM invitation WHERE kind='personal' AND inviter_id = ? AND recipient_email = ? AND accepted_by IS NULL AND revoked_at IS NULL AND expires_at > ?)`,
     )
     .bind(
       id,
@@ -107,8 +131,6 @@ export async function issueInvitation(
       now,
       expiresAt,
       inviterId,
-      inviterId,
-      now - 86400000,
       normalizeEmail(email),
       inviterId,
       normalizeEmail(email),

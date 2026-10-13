@@ -22,23 +22,46 @@ export async function readPhoto(request: Request) {
   }
   return bytes;
 }
-export async function reservePhoto(db: D1Database, userId: string, id: string) {
+// Expose a statement so publication can reserve allowance in its own D1 batch.
+export function photoReservation(
+  db: D1Database,
+  userId: string,
+  id: string,
+  processingUnits = 1,
+) {
   const now = Date.now();
   const date = new Date(now);
   const month = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1);
   const day = now - 86400000;
-  const result = await db
+  return db
     .prepare(
-      `INSERT INTO photo_attempt (id,user_id,created_at,state)
-    SELECT p.user_id || ':' || ?, p.user_id, ?, 'pending' FROM profile p JOIN membership m ON m.user_id=p.user_id
+      `INSERT INTO photo_attempt (id,user_id,created_at,state,processing_units)
+    SELECT p.user_id || ':' || ?, p.user_id, ?, 'pending', ? FROM profile p JOIN membership m ON m.user_id=p.user_id
     WHERE p.user_id=? AND m.status='active'
-    AND (SELECT COUNT(*) FROM photo_attempt WHERE created_at >= ?) < 3500
+    AND COALESCE((SELECT SUM(processing_units) FROM photo_attempt WHERE created_at >= ?),0)+? <= 3500
     AND (SELECT COUNT(*) FROM photo_attempt WHERE created_at >= ?) < 150
     AND (SELECT COUNT(*) FROM photo_attempt WHERE user_id=? AND created_at >= ?) < 5
     ON CONFLICT DO NOTHING`,
     )
-    .bind(id, now, userId, month, day, userId, day)
-    .run();
+    .bind(
+      id,
+      now,
+      processingUnits,
+      userId,
+      month,
+      processingUnits,
+      day,
+      userId,
+      day,
+    );
+}
+export async function reservePhoto(
+  db: D1Database,
+  userId: string,
+  id: string,
+  processingUnits = 1,
+) {
+  const result = await photoReservation(db, userId, id, processingUnits).run();
   if (result.meta.changes) return 'reserved';
   const prior = await db
     .prepare('SELECT state FROM photo_attempt WHERE id=? AND user_id=?')

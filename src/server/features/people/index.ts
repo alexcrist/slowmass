@@ -35,14 +35,16 @@ export async function saveProfile(
   id: string,
   input: ProfileInput,
 ) {
-  // Handle ownership is immutable for this MVP. The unique index arbitrates simultaneous claims.
+  // These names are literal API routes, not member profile addresses.
+  if (['self', 'discover', 'connections'].includes(input.handle)) return false;
+  // The single conditional write and unique index arbitrate simultaneous claims.
   const result = await db
     .prepare(
       `INSERT INTO profile (user_id, handle, display_name, bio, created_at)
     SELECT user_id, ?, ?, ?, ? FROM membership WHERE user_id = ? AND status = 'active'
     AND NOT EXISTS (SELECT 1 FROM profile WHERE handle = ? AND user_id != ?)
-    ON CONFLICT(user_id) DO UPDATE SET display_name = excluded.display_name, bio = excluded.bio
-    WHERE profile.handle = excluded.handle`,
+    ON CONFLICT(user_id) DO UPDATE SET handle = excluded.handle,
+    display_name = excluded.display_name, bio = excluded.bio`,
     )
     .bind(
       input.handle,
@@ -83,10 +85,9 @@ export async function findProfile(
   const row = await db
     .prepare(
       `SELECT p.user_id, p.handle, p.display_name AS displayName,
-    EXISTS(SELECT 1 FROM avatar WHERE avatar.user_id=p.user_id) AS hasAvatar,
     CASE WHEN p.user_id = ? OR f.status = 'accepted' THEN p.bio ELSE NULL END AS bio,
     CASE WHEN p.user_id = ? THEN 'self' ELSE COALESCE(f.status, 'none') END AS relationship
-    FROM profile p JOIN membership m ON m.user_id = p.user_id
+    FROM profile p JOIN avatar a ON a.user_id=p.user_id JOIN membership m ON m.user_id = p.user_id
     JOIN membership v ON v.user_id = ? AND v.status = 'active'
     LEFT JOIN follow f ON f.target_id = p.user_id AND f.follower_id = ?
     WHERE p.handle = ? AND m.status = 'active'
@@ -95,7 +96,6 @@ export async function findProfile(
     .bind(viewer, viewer, viewer, viewer, handle, viewer, viewer)
     .first<{
       user_id: string;
-      hasAvatar: number;
       handle: string;
       displayName: string;
       bio: string | null;
@@ -192,18 +192,53 @@ export async function listConnections(
   kind: ConnectionKind,
   after: string,
 ) {
+  return readConnections(db, actor, actor, kind, after);
+}
+
+export async function listProfileConnections(
+  db: D1Database,
+  viewer: string,
+  handle: string,
+  kind: 'followers' | 'following',
+  after: string,
+) {
+  const profile = await findProfile(db, viewer, handle);
+  if (
+    !profile ||
+    (profile.relationship !== 'self' && profile.relationship !== 'accepted')
+  )
+    return null;
+  return readConnections(db, viewer, profile.id, kind, after);
+}
+
+async function readConnections(
+  db: D1Database,
+  viewer: string,
+  owner: string,
+  kind: ConnectionKind,
+  after: string,
+) {
   const incoming = kind === 'requests' || kind === 'followers';
   const query =
     kind === 'blocked'
-      ? 'JOIN block f ON f.target_id = p.user_id AND f.blocker_id = ?'
-      : `JOIN follow f ON f.${incoming ? 'follower_id' : 'target_id'} = p.user_id AND f.${incoming ? 'target_id' : 'follower_id'} = ? AND f.status = '${kind === 'requests' ? 'pending' : 'accepted'}'`;
+      ? 'JOIN block f ON f.target_id = p.user_id AND f.blocker_id = owner.user_id'
+      : `JOIN follow f ON f.${incoming ? 'follower_id' : 'target_id'} = p.user_id AND f.${incoming ? 'target_id' : 'follower_id'} = owner.user_id AND f.status = '${kind === 'requests' ? 'pending' : 'accepted'}'`;
   const rows = await db
     .prepare(
-      `SELECT p.handle, p.display_name AS displayName FROM profile p ${query}
+      `SELECT p.handle, p.display_name AS displayName FROM profile p JOIN avatar a ON a.user_id=p.user_id
+    JOIN membership owner ON owner.user_id = ? AND owner.status = 'active'
+    JOIN membership viewer ON viewer.user_id = ? AND viewer.status = 'active'
+    JOIN avatar owner_avatar ON owner_avatar.user_id = owner.user_id
+    ${query}
     JOIN membership m ON m.user_id = p.user_id AND m.status = 'active'
-    WHERE p.handle > ? ORDER BY p.handle LIMIT 21`,
+    WHERE p.handle > ?
+    AND (owner.user_id = viewer.user_id OR EXISTS (
+      SELECT 1 FROM follow access WHERE access.follower_id = viewer.user_id AND access.target_id = owner.user_id AND access.status = 'accepted'))
+    AND NOT EXISTS (SELECT 1 FROM block WHERE (blocker_id = viewer.user_id AND target_id = owner.user_id) OR (blocker_id = owner.user_id AND target_id = viewer.user_id))
+    ${kind === 'blocked' ? '' : 'AND NOT EXISTS (SELECT 1 FROM block WHERE (blocker_id = viewer.user_id AND target_id = p.user_id) OR (blocker_id = p.user_id AND target_id = viewer.user_id))'}
+    ORDER BY p.handle LIMIT 21`,
     )
-    .bind(actor, after)
+    .bind(owner, viewer, after)
     .all<{ handle: string; displayName: string }>();
   return {
     items: rows.results.slice(0, 20),
@@ -218,6 +253,21 @@ export async function discoverPeople(
   seed: string,
   after: string,
 ) {
+  const now = Date.now();
+  const reserved = await db
+    .prepare(
+      `INSERT INTO "rateLimit"(id,key,count,lastRequest) VALUES(?,?,1,?) ON CONFLICT(key) DO UPDATE SET count=CASE WHEN lastRequest<=? THEN 1 ELSE count+1 END,lastRequest=CASE WHEN lastRequest<=? THEN excluded.lastRequest ELSE lastRequest END WHERE lastRequest<=? OR count<30`,
+    )
+    .bind(
+      `discovery:${actor}`,
+      `discovery:${actor}`,
+      now,
+      now - 60000,
+      now - 60000,
+      now - 60000,
+    )
+    .run();
+  if (!reserved.meta.changes) return null;
   const phase = after ? Number(after[0]) : 0;
   const last = after ? after.slice(2) : '';
   // Fuzzy finder semantics: characters may be omitted, but the remaining letters
@@ -232,16 +282,16 @@ export async function discoverPeople(
     .prepare(
       `WITH candidates AS (
     SELECT * FROM (SELECT p.handle,p.display_name AS displayName,p.discovery_key AS key,
-      EXISTS(SELECT 1 FROM avatar WHERE user_id=p.user_id) AS hasAvatar,0 AS phase
-      FROM profile p JOIN membership m ON m.user_id=p.user_id AND m.status='active'
+      0 AS phase
+      FROM profile p JOIN avatar a ON a.user_id=p.user_id JOIN membership m ON m.user_id=p.user_id AND m.status='active'
       WHERE ?=0 AND p.discovery_key>=? AND p.discovery_key>? AND p.user_id!=?
       AND (?='' OR p.handle LIKE ? ESCAPE '\\' OR lower(p.display_name) LIKE ? ESCAPE '\\')
       AND NOT EXISTS(SELECT 1 FROM block WHERE (blocker_id=? AND target_id=p.user_id) OR (blocker_id=p.user_id AND target_id=?))
       ORDER BY p.discovery_key LIMIT 21)
     UNION ALL
     SELECT * FROM (SELECT p.handle,p.display_name AS displayName,p.discovery_key AS key,
-      EXISTS(SELECT 1 FROM avatar WHERE user_id=p.user_id) AS hasAvatar,1 AS phase
-      FROM profile p JOIN membership m ON m.user_id=p.user_id AND m.status='active'
+      1 AS phase
+      FROM profile p JOIN avatar a ON a.user_id=p.user_id JOIN membership m ON m.user_id=p.user_id AND m.status='active'
       WHERE p.discovery_key<? AND p.discovery_key>? AND p.user_id!=?
       AND (?='' OR p.handle LIKE ? ESCAPE '\\' OR lower(p.display_name) LIKE ? ESCAPE '\\')
       AND NOT EXISTS(SELECT 1 FROM block WHERE (blocker_id=? AND target_id=p.user_id) OR (blocker_id=p.user_id AND target_id=?))
@@ -270,18 +320,47 @@ export async function discoverPeople(
     .all<{
       handle: string;
       displayName: string;
-      hasAvatar: number;
       key: string;
       phase: number;
     }>();
   const items = rows.results.slice(0, 20);
   const tail = items.at(-1);
   return {
-    items: items.map(({ handle, displayName, hasAvatar }) => ({
+    items: items.map(({ handle, displayName }) => ({
       handle,
       displayName,
-      hasAvatar,
     })),
     next: rows.results.length > 20 && tail ? `${tail.phase}:${tail.key}` : null,
   };
+}
+
+export async function changeRelationshipByHandle(
+  db: D1Database,
+  actor: string,
+  handle: string,
+  action: FollowAction,
+) {
+  if (!(await ownProfile(db, actor))) return 'profile_required';
+  // Blocking must remain available even when the target already blocked us.
+  const target =
+    action === 'block'
+      ? await db
+          .prepare(
+            "SELECT p.user_id AS id FROM profile p JOIN membership m ON m.user_id=p.user_id WHERE p.handle=? AND m.status='active'",
+          )
+          .bind(handle)
+          .first<{ id: string }>()
+      : action === 'unblock'
+        ? await db
+            .prepare(
+              'SELECT p.user_id AS id FROM profile p JOIN block b ON b.target_id=p.user_id WHERE p.handle=? AND b.blocker_id=?',
+            )
+            .bind(handle, actor)
+            .first<{ id: string }>()
+        : await findProfile(db, actor, handle);
+  if (!target)
+    return action === 'block' || action === 'unblock' ? 'ok' : 'missing';
+  return (await changeRelationship(db, actor, target.id, action))
+    ? 'ok'
+    : 'unavailable';
 }

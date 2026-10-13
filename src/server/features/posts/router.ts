@@ -1,17 +1,20 @@
 import { Hono } from 'hono';
+import { measuredObjectRead } from '../../telemetry';
 import { bodyLimit } from 'hono/body-limit';
 import type { Env } from '../../env';
-import { getActiveUser } from '../../auth';
+import { getActiveSession } from '../../auth';
 import { authConfigured } from '../../auth/options';
 import { ownProfile, findProfile } from '../people';
 import { PhotoError } from '../../photos';
 import {
   createDraft,
   deletePost,
+  editCaption,
   findPost,
   listPosts,
   parseCursor,
   parseDraft,
+  parseCaption,
   publicPost,
   publishPhoto,
 } from './index';
@@ -22,9 +25,15 @@ export const posts = new Hono<{
 export const postMedia = new Hono<{ Bindings: Env }>();
 posts.use('*', async (c, next) => {
   if (!authConfigured(c.env))
-    return c.json({ error: 'Sign in to continue.' }, 401);
-  const user = await getActiveUser(c.env, c.req.raw.headers);
+    return c.json({ error: 'Sign-in is not available yet.' }, 503);
+  const session = await getActiveSession(c.env, c.req.raw.headers);
+  const user = session?.user;
   if (!user) return c.json({ error: 'Sign in to continue.' }, 401);
+  if (!session?.hasProfilePhoto)
+    return c.json(
+      { error: 'Add a profile photo to finish setting up your account.' },
+      409,
+    );
   c.set('userId', user.id);
   await next();
 });
@@ -103,23 +112,43 @@ posts.get('/:id', async (c) => {
     ? c.json({ post: publicPost(post, c.get('userId')) })
     : c.json({ error: 'Post not found.' }, 404);
 });
+posts.patch('/:id', bodyLimit({ maxSize: 12000 }), async (c) => {
+  const caption = parseCaption(await c.req.json().catch(() => null));
+  if (caption === null)
+    return c.json(
+      { error: 'Provide only a caption of up to 2,000 characters.' },
+      400,
+    );
+  if (
+    !(await editCaption(c.env.DB, c.get('userId'), c.req.param('id'), caption))
+  )
+    return c.json({ error: 'Post not found.' }, 404);
+  return c.json({ caption });
+});
 posts.delete('/:id', async (c) =>
   (await deletePost(c.env.DB, c.get('userId'), c.req.param('id')))
     ? c.json({ ok: true })
     : c.json({ error: 'Post not found.' }, 404),
 );
 postMedia.get('/:id', async (c) => {
+  const size = c.req.query('size');
+  if (size !== undefined && size !== 'grid') return c.notFound();
   if (!authConfigured(c.env)) return c.notFound();
-  const user = await getActiveUser(c.env, c.req.raw.headers);
+  const session = await getActiveSession(c.env, c.req.raw.headers);
+  const user = session?.user;
   if (!user) return c.notFound();
   const post = await findPost(c.env.DB, user.id, c.req.param('id'), false);
   if (!post || post.state !== 'published' || !post.objectKey)
     return c.notFound();
-  const object = await c.env.PHOTOS.get(post.objectKey);
+  const object = await measuredObjectRead(
+    c.env.PHOTOS,
+    size === 'grid' ? (post.thumbnailKey ?? post.objectKey) : post.objectKey,
+  );
   if (!object) return c.notFound();
   return new Response(object.body, {
     headers: {
       'Content-Type': 'image/webp',
+      'Content-Length': String(object.size),
       'Cache-Control': 'private, no-store',
       'X-Content-Type-Options': 'nosniff',
     },

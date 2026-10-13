@@ -20,6 +20,7 @@
   },
   "description": "Private, invitation-only photo sharing.",
   "dependencies": {
+    "@block65/webcrypto-web-push": "2.0.0",
     "better-auth": "1.7.7",
     "hono": "4.13.13",
     "react": "19.3.0",
@@ -35,6 +36,7 @@
     "esbuild": "0.28.2",
     "eslint": "9.39.5",
     "eslint-plugin-react-hooks": "7.1.1",
+    "http_ece": "1.2.0",
     "miniflare": "5.20261006.1-alpha",
     "prettier": "3.9.10",
     "react-test-renderer": "19.3.0",

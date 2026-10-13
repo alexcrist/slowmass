@@ -1,20 +1,32 @@
+import { diagnostics } from './diagnostics/router';
+import { cleanupDiagnostics } from './diagnostics';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import { createAuth } from './auth';
+import { handleAuthRequest, AuthUnavailableError, cleanupAuth } from './auth';
 import { authConfigured } from './auth/options';
 import { cleanupAccounts } from './features/account';
-import { account } from './features/account/router';
-import { invitations } from './features/invitations/router';
+import { account, bootstrap } from './features/account/router';
+import { invitations, inviteLink } from './features/invitations/router';
 import { avatars, avatarMedia } from './features/avatars/router';
-import { cleanupAvatars } from './features/avatars/cleanup';
+import { cleanupAvatars } from './features/avatars';
 import { posts, postMedia } from './features/posts/router';
-import { cleanupPosts } from './features/posts';
+import { cleanupPosts, backfillThumbnail } from './features/posts';
+import {
+  cleanupInvitationPayloads,
+  cleanupInviteLinks,
+} from './features/invitations';
+import { cleanupEmailBudgets } from './email';
 import { interactions } from './features/interactions/router';
 import { notifications } from './features/notifications/router';
 import { people } from './features/people/router';
+import { push, pushAfterMutation } from './features/push/router';
+import { dispatchPush } from './features/push';
 import type { Env } from './env';
+import { measuredEnvironment, performanceMetrics } from './telemetry';
 
 const app = new Hono<{ Bindings: Env }>();
+app.use('*', performanceMetrics);
+app.use('/api/*', pushAfterMutation);
 
 app.use('*', async (c, next) => {
   const requestId = crypto.randomUUID();
@@ -50,29 +62,42 @@ app.use('/api/auth/*', bodyLimit({ maxSize: 4096 }));
 app.on(['GET', 'POST'], '/api/auth/*', async (c) => {
   if (!authConfigured(c.env))
     return c.json({ error: 'Sign-in is not available yet.' }, 503);
-  const response = await createAuth(c.env).handler(c.req.raw);
+  const response = await handleAuthRequest(c.env, c.req.raw);
   if (
     c.req.method === 'GET' &&
     c.req.path === '/api/auth/magic-link/verify' &&
     response.status >= 400
   )
-    return c.redirect('/?error=signin', 303);
-  return response;
+    return c.redirect(
+      c.req.query('errorCallbackURL') === '/?error=invite'
+        ? '/?error=invite'
+        : '/?error=signin',
+      303,
+    );
+  // Preserve our privacy headers when returning the auth library's raw response.
+  response.headers.set('Cache-Control', 'private, no-store');
+  return c.newResponse(response.body, response);
 });
 app.route('/api/me', account);
+app.route('/api/bootstrap', bootstrap);
+app.route('/api/startup-diagnostics', diagnostics);
 app.route('/api/people', people);
 app.route('/api/avatar', avatars);
 app.route('/api/posts', posts);
 app.route('/api/interactions', interactions);
 app.route('/api/notifications', notifications);
+app.route('/api/push', push);
 app.route('/media/posts', postMedia);
 app.route('/media/avatar', avatarMedia);
 app.route('/api/invitations', invitations);
+app.route('/api/invite-link', inviteLink);
 // No media route is public, even before media implementation exists.
 app.all('/media/*', (c) => c.json({ error: 'Not found.' }, 404));
 app.all('/api/*', (c) => c.json({ error: 'Not found.' }, 404));
 app.all('*', (c) => c.env.ASSETS.fetch(c.req.raw));
 app.onError((error, c) => {
+  if (error instanceof AuthUnavailableError)
+    return c.json({ error: error.message }, 503);
   console.error(
     JSON.stringify({
       event: 'request.failed',
@@ -83,22 +108,23 @@ app.onError((error, c) => {
   return c.json({ error: 'Something went wrong. Please try again.' }, 500);
 });
 export default {
-  fetch: app.fetch,
-  scheduled: async (_controller: ScheduledController, env: Env) => {
+  fetch: (request: Request, env: Env, context: ExecutionContext) =>
+    app.fetch(request, measuredEnvironment(env), context),
+  scheduled: async (controller: ScheduledController, env: Env) => {
     if (env.MAINTENANCE_MODE === 'true') return;
+    if (controller.cron === '0 * * * *') {
+      await dispatchPush(env);
+      return;
+    }
+    if (controller.cron !== '*/15 * * * *') return;
+    await cleanupDiagnostics(env.DB);
     await cleanupAccounts(env.DB);
     await cleanupAvatars(env.DB, env.PHOTOS);
     await cleanupPosts(env.DB, env.PHOTOS);
-    await env.DB.batch([
-      env.DB.prepare(
-        'DELETE FROM verification WHERE id IN(SELECT id FROM verification WHERE expiresAt<? LIMIT 100)',
-      ).bind(Date.now()),
-      env.DB.prepare(
-        'DELETE FROM session WHERE id IN(SELECT id FROM session WHERE expiresAt<? LIMIT 100)',
-      ).bind(Date.now()),
-      env.DB.prepare(
-        'DELETE FROM email_budget WHERE budget_key IN(SELECT budget_key FROM email_budget WHERE expires_at<? LIMIT 100)',
-      ).bind(Date.now()),
-    ]);
+    await backfillThumbnail(env);
+    await cleanupInvitationPayloads(env.DB);
+    await cleanupInviteLinks(env.DB);
+    await cleanupAuth(env.DB);
+    await cleanupEmailBudgets(env.DB);
   },
 };

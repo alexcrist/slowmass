@@ -21,8 +21,7 @@ export function DeleteAccount() {
     }
   }
   return (
-    <section>
-      <h3>Delete account</h3>
+    <div>
       <p>
         This permanently removes your account and hides your photos and comments
         immediately. Stored files are deleted in the background. Invitation
@@ -48,6 +47,6 @@ export function DeleteAccount() {
         </button>
       </form>
       {error && <p role="alert">{error}</p>}
-    </section>
+    </div>
   );
 }

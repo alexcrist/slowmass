@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#ffffff" />
     <meta
       name="description"
-      content="Slowmass is an invitation-only photo-sharing app."
+      content="slowmass is an invitation-only photo-sharing app."
     />
     <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" sizes="any" />
@@ -17,21 +17,22 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="Slowmass" />
-    <title>Slowmass</title>
+    <meta name="apple-mobile-web-app-title" content="slowmass" />
+    <title>slowmass</title>
   </head>
   <body>
     <div id="root">
-      <main class="welcome guest-shell">
+      <main class="welcome guest-shell startup-shell">
         <header class="masthead">
-          <a class="site-name" href="/" aria-label="Slowmass home">slowmass</a>
+          <a class="site-name" href="/" aria-label="slowmass home">slowmass</a>
         </header>
-        <section class="account-section" aria-label="Loading Slowmass">
-          <p role="status">Loading Slowmass…</p>
-          <noscript>Enable JavaScript to use Slowmass.</noscript>
+        <section class="account-section" aria-label="Loading slowmass">
+          <p role="status" data-startup-status>Starting slowmass…</p>
+          <noscript>Enable JavaScript to use slowmass.</noscript>
         </section>
       </main>
     </div>
+    <script src="/startup.js" async></script>
     <script type="module" src="/src/client/main.tsx"></script>
   </body>
 </html>

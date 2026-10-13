@@ -4,7 +4,7 @@ Status: proposed design. Provider documentation reviewed October 10, 2026; accou
 
 ## Purpose
 
-Give people control over their attention and private social connections. The product serves relationships rather than engagement metrics: chronological follows-only feeds, finite pages, explicit consent to follow, no advertising or behavioral tracking. Cost decisions should preserve that purpose.
+Give people control over their attention and private social connections. The product serves relationships rather than engagement metrics: chronological feeds of own posts and accepted follows, finite pages, explicit consent to follow, no advertising or behavioral tracking. Cost decisions should preserve that purpose.
 
 ## Initial stack
 
@@ -20,7 +20,7 @@ Concepts: user/profile, session/account (auth library), membership with immutabl
 
 Use validated client UUIDs for retryable posts/comments and server timestamps. Make publish, follow transitions, and notification creation retry-safe with scoped idempotency keys or natural unique constraints. Use D1-supported atomic batches/conditional SQL, not assumptions about interactive transactions. Check permissions in the mutation's SQL/atomic operation where a preceding check could race with removal or blocking.
 
-Notifications are derived from current requests, grouped likes, and comments on the viewer's posts. This avoids asynchronous projections and an outbox at low usage. Read acknowledgements are atomic, per event version, and verified against currently visible activity. Introduce projections only if measured query costs justify them; preserve visibility and mutation consistency.
+Notifications use an indexed directory of interaction sources maintained by database triggers in the same transaction as the source mutation. This was introduced after a local 3,000-post benchmark showed lifetime aggregation reading 216,000 rows to display and acknowledge 20 events. The indexed version read 320 rows for that workload in the October 11 benchmark, before acknowledgement tracking was removed. Reads still evaluate current membership, blocks, publication state, and visible like-group ordering; the index grants no access. Activity remains one chronological list. Migration 0018 adds per-source read receipts with monotonically increasing versions and an index of unread sources. Page reads are read-only; a separate authenticated acknowledgement validates the displayed version and clears only visible sources through that version. Badge reads seek unread sources rather than scanning read history. Legacy read markers are imported once, and source deletion cascades to receipts. Logical event keys and versions are shared by the list, badge, and acknowledgements, and identify Web Push deliveries. Migration 0019 adds an opt-in subscription and transactional delivery queue using the same identities. A bounded dispatcher runs after interactions and on an hourly cron in the existing Worker, with leases and bounded retries. Delayed like groups and failed immediate deliveries wait for another dispatch opportunity; an idle backlog drains at most five deliveries per hour. Generic encrypted payloads avoid lock-screen disclosure, and current authorization is checked before sending and on opening Activity. Migration 0020 adds follower events after acceptance or invitation photo completion, atomically preserving existing receipt versions and pending deliveries without backfilling old accepted follows. Follower visibility additionally requires the live accepted relationship and completed profiles. No new hosted service is introduced. See the notifications and push READMEs for tradeoffs and limits.
 
 ## Authorization and sessions
 
@@ -28,11 +28,13 @@ Same-origin secure HTTP-only cookies; use the auth library for single-use email 
 
 A viewer can access a post only as its owner or through a current accepted follow, subject to blocks and deletion. Reuse this predicate for feeds, detail views, media, likes, comments, and notifications. Notification ownership alone never grants access to its target.
 
-Profile usernames, names, and avatars are visible to active signed-in members unless either member blocked the other. Bios and posts still require ownership or an accepted follow. Avatar media remains in private R2 and every request checks membership and blocks.
+Profile usernames, names, and avatars are visible to active signed-in members unless either member blocked the other. Bios, posts, and Following/Followers lists require ownership or an accepted follow. Relationship pages recheck access and filter accounts blocked in either direction with the viewer before pagination; requests and blocked-account lists remain owner-only. Avatar media remains in private R2 and every request checks membership and blocks.
 
 Private media is served through an authenticated Worker route with a resource ID and allowlisted variant. Keep R2 public access disabled. Recheck authorization on every request, including conditional requests. Initially use `Cache-Control: private, no-store` for private content and avoid CDN/service-worker caching. This sacrifices cache efficiency for clear revocation semantics at small scale. Later, cached object bytes may be reused only behind authorization that runs on every request; never cache an authorized HTTP response publicly. Signed-link delivery is a future tradeoff, not an implicit weakening of revocation.
 
 Membership retains a permanent parent pointer to the inviter and the accepted invitation. D1 triggers atomically consume invitations and reject changes to provenance. Issuance and acceptance require an active inviter. The single bootstrap root is protected by a unique index. Preserve minimal tombstones through account deletion; do not build mass-ban tools yet.
+
+Invitation email links are seven-day, join-only credentials. Their confirmation page does not accept on load, avoiding consumption by email prefetchers. A Better Auth plugin uses a same-origin POST and the conditional membership insert to accept exactly once, then uses the library's identity/session APIs. An indexed credential hash is separate from the invitation ID exposed to the inviter. Retry email payloads are encrypted with the library until delivery is confirmed. Joining through any path disables invitation credentials for that email; returning-member login links remain valid for ten minutes. This reuses the existing Worker, D1, and Resend setup.
 
 An initial-profile trigger creates mutual accepted follows between inviter and invitee once both profiles exist. It checks active membership and blocks in the same transaction. It does not run on profile edits or sign-in, and does not backfill completed profiles, so historical unfollows remain respected.
 
@@ -42,7 +44,7 @@ Email delivery uses Resend with explicit application-wide and per-recipient budg
 
 Client resizing improves upload speed but is not validation. Accept bounded uploads from authenticated eligible users, enforce per-user quotas, and reject oversized bodies while streaming. Restrict input formats to still formats verified by the processor; reject animation and SVG. Handle phone orientation and unsupported HEIC explicitly.
 
-Use the Cloudflare Images binding to inspect/decode/re-encode private bytes and generate one bounded WebP per post (1600px) or avatar (320px) at upload, storing the result in R2. Set pixel limits, output dimensions/quality, and metadata stripping explicitly. Retain no original after successful processing. Never resize on each view. Verify binding availability, remote test support, format detection, metadata removal, CPU usage, and free-tier accounting before committing to this path.
+Use the Cloudflare Images binding to inspect/decode/re-encode private bytes and generate bounded WebP variants per post (1600px full and 480px grid, reusing the processed full image for small posts) or avatar (320px small and 1600px large, sharing the object for small inputs) at upload, storing the result in R2. Set pixel limits, output dimensions/quality, and metadata stripping explicitly. Retain no original after successful processing. Never resize on each view. Verify binding availability, remote test support, format detection, metadata removal, CPU usage, and free-tier accounting before committing to this path.
 
 Lifecycle: reserve an upload record and idempotency key, process into private temporary/final objects, then atomically publish the post only after required variants exist. Publication retries return the same post. Processing errors expose no post or original and can be retried. A scheduled bounded cleanup pass removes expired uploads and retries deletion tasks. D1 and R2 cannot commit together, so write durable intent and reconcile orphan objects; do not imply distributed transactions exist.
 
@@ -50,7 +52,7 @@ If the image binding cannot meet the free-tier/runtime requirements, stop that i
 
 ## Feed and pagination
 
-Query current accepted follows and visible published posts in descending `(published_at, id)` order. Use a validated cursor with a bounded page size and an upper snapshot boundary so newer inserts do not shift an ongoing pagination session. Preserve cursor history for Newer/Older navigation; a refresh starts a new snapshot. Current access and deletion always override the snapshot.
+Query the viewer’s own published posts and current accepted follows in descending `(published_at, id)` order. Include the viewer directly in the eligible author set without creating a self-follow; each author contributes the same bounded number of candidates. Use a validated cursor with a bounded page size and an upper snapshot boundary so newer inserts do not shift an ongoing pagination session. Preserve cursor history for Newer/Older navigation; a refresh starts a new snapshot. Current access and deletion always override the snapshot.
 
 Index actual query patterns and inspect query plans/rows scanned. Batch aggregate like/comment counts and viewer-like state per page. Avoid one query per card. Comments and notifications also have bounded cursor pagination. Do not precompute timelines until measurements justify the additional writes and revocation work.
 
@@ -73,6 +75,8 @@ The operations tooling now verifies encrypted exports and synthetic photo restor
 
 ## Growth path
 
+Production fetch handlers use a Washington-region placement hint to reduce round trips to the D1 primary observed in Seattle. Cloudflare chooses the nearby execution location; this is not an exact-city guarantee and does not provision Azure resources. Static assets retain edge delivery, and this setting does not relocate D1/R2 or scheduled handlers. See the dated measurements in the operations runbook before attributing improvements to placement.
+
 1. Near free limits: upgrade Workers/D1 together as needed (Workers Paid starts at $5/month plus usage), and enable paid Images only when required. No application rewrite.
 2. Excess scans or latency: fix indexes, queries, page sizes, and repeated reads before adding services. Add a durable queue for processing/cleanup only if synchronous latency or backlog warrants it.
 3. Media delivery pressure: cache immutable bytes behind per-request authorization, use bounded authorization batching, and measure revocation correctness. Do not make private photos public for CDN convenience.
@@ -87,3 +91,9 @@ The operations tooling now verifies encrypted exports and synthetic photo restor
 - [R2 pricing](https://developers.cloudflare.com/r2/pricing/)
 - [Images pricing](https://developers.cloudflare.com/images/pricing/) and [private byte processing binding](https://developers.cloudflare.com/images/optimization/binding/)
 - [Better Auth database support](https://better-auth.com/docs/adapters/other-relational-databases)
+
+## Current shared invitation model
+
+Admission, email authentication, and private-post access use the existing Worker, D1, Better Auth magic-link delivery, and membership graph. Migration 0025 stores one rotating credential per inviter with fixed seven-day expiry and no sign-up cap. Conditional writes converge concurrent copies and compare versions on replacement. Short-lived claims pin the chosen inviter and exact credential hash/version across browsers; membership checks them inside the atomic invitation/membership batch. Shared invitations grant no automatic follows. Each successful join retains immutable invitation type, inviter, and timestamps independently of the rotating credential. Join Activity waits for required photo completion and uses existing indexed sources, read receipts, and opt-in push.
+
+The current model is deployed with migration 0025; see the dated release record in setup.md. It replaces the original multi-link/capacity model from migrations 0022–0024. Migration 0025 requires unused shared-link state, preserves personal invitations and existing membership, and removes the old history/capacity schema. See the invitations README and operations runbook for failure and rollout behavior.

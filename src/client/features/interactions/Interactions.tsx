@@ -3,6 +3,9 @@ import { PersonLink } from '../../navigation/PersonLink';
 import { profileHref } from '../../navigation';
 import { api, jsonRequest } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
+import { Dialog } from '../../ui/Dialog';
+import { ConfirmDialog } from '../../ui/ConfirmDialog';
+import { RelativeTime } from '../../ui/RelativeTime';
 type Counts = { likeCount: number; commentCount: number; liked: number };
 type Comment = {
   id: string;
@@ -11,17 +14,21 @@ type Comment = {
   handle: string;
   displayName: string;
   canDelete: number;
+  likeCount: number;
+  liked: number;
 };
 type Page = { items: Comment[]; next: string | null };
 export function Interactions({
   postId,
   initial,
+  commentsInitiallyOpen = false,
 }: {
   postId: string;
   initial: Counts;
+  commentsInitiallyOpen?: boolean;
 }) {
   const [counts, setCounts] = useState(initial),
-    [open, setOpen] = useState(false),
+    [open, setOpen] = useState(commentsInitiallyOpen),
     [likesOpen, setLikesOpen] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
@@ -33,10 +40,10 @@ export function Interactions({
     setBusy(true);
     setError('');
     try {
-      await api(`/api/interactions/${postId}/like`, {
+      const updated = await api<Counts>(`/api/interactions/${postId}/like`, {
         method: counts.liked ? 'DELETE' : 'PUT',
       });
-      await refresh();
+      setCounts(updated);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not update like.');
     } finally {
@@ -46,35 +53,30 @@ export function Interactions({
   return (
     <section aria-label="Likes and comments">
       <div className="post-interactions">
-        <button
-          className="icon-button"
-          disabled={busy}
-          aria-label={counts.liked ? 'Unlike photo' : 'Like photo'}
-          aria-pressed={Boolean(counts.liked)}
-          onClick={() => void like()}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-            fill={counts.liked ? 'currentColor' : 'none'}
-            stroke="currentColor"
-            strokeWidth="1.8"
-          >
-            <path d="M20 5c-3-3-6-1-8 1-2-2-5-4-8-1-4 4 1 9 8 15 7-6 12-11 8-15Z" />
-          </svg>
-        </button>
-        {counts.likeCount > 0 && (
+        <div className="reaction-pair">
           <button
-            className="count-button"
-            aria-label={`See ${counts.likeCount} likes`}
-            aria-expanded={likesOpen}
-            onClick={() => setLikesOpen(!likesOpen)}
+            className="icon-button"
+            disabled={busy}
+            aria-label={counts.liked ? 'Unlike photo' : 'Like photo'}
+            aria-pressed={Boolean(counts.liked)}
+            onClick={() => void like()}
           >
-            {counts.likeCount}
+            <HeartIcon liked={counts.liked} />
           </button>
-        )}
+          {counts.likeCount > 0 && (
+            <button
+              className="count-button"
+              aria-label={`See ${counts.likeCount} likes`}
+              aria-expanded={likesOpen}
+              aria-haspopup="dialog"
+              onClick={() => setLikesOpen(!likesOpen)}
+            >
+              {counts.likeCount}
+            </button>
+          )}
+        </div>
         <button
-          className="icon-button"
+          className="icon-button comment-toggle"
           aria-label={open ? 'Hide comments' : 'Show comments'}
           aria-expanded={open}
           onClick={() => setOpen(!open)}
@@ -92,7 +94,10 @@ export function Interactions({
         </button>
       </div>
       {likesOpen && (
-        <Likes key={`${postId}:${counts.likeCount}`} postId={postId} />
+        <Likes
+          path={`/api/interactions/${postId}/likes`}
+          onClose={() => setLikesOpen(false)}
+        />
       )}
       {error && <p role="alert">{error}</p>}
       {open && <Comments postId={postId} onChange={refresh} />}
@@ -113,6 +118,7 @@ function Comments({
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   const after = history[history.length - 1];
+  const [confirming, setConfirming] = useState<Comment | null>(null);
   const {
     data: page,
     error: loadError,
@@ -123,6 +129,7 @@ function Comments({
   );
   async function add(event: FormEvent) {
     event.preventDefault();
+    if (busy || !body.trim()) return;
     setBusy(true);
     setError('');
     try {
@@ -142,12 +149,18 @@ function Comments({
     }
   }
   async function remove(id: string) {
+    if (busy) return;
     setBusy(true);
     setError('');
     try {
       await api(`/api/interactions/comments/${id}`, { method: 'DELETE' });
+      setConfirming(null);
       reload();
-      await onChange();
+      try {
+        await onChange();
+      } catch {
+        setError('Comment deleted. Reload to update the comment count.');
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not delete comment.');
     } finally {
@@ -160,24 +173,35 @@ function Comments({
       {page?.items.length === 0 && <p>No comments on this page.</p>}
       <ul className="comment-list">
         {page?.items.map((comment) => (
-          <li key={comment.id}>
-            <a href={profileHref(comment.handle)}>@{comment.handle}</a>
-            <p className="bio">{comment.body}</p>
-            <time dateTime={new Date(comment.createdAt).toISOString()}>
-              {new Date(comment.createdAt).toLocaleString()}
-            </time>
-            {Boolean(comment.canDelete) && (
-              <button
-                disabled={busy}
-                className="text-button"
-                onClick={() => void remove(comment.id)}
-              >
-                Delete comment
-              </button>
-            )}
-          </li>
+          <CommentRow
+            key={`${comment.id}:${comment.likeCount}:${comment.liked}`}
+            comment={comment}
+            busy={busy}
+            onDelete={() => {
+              setError('');
+              setConfirming(comment);
+            }}
+          />
         ))}
       </ul>
+      {confirming && (
+        <ConfirmDialog
+          title="Delete comment"
+          confirmLabel="Delete comment"
+          danger
+          busy={busy}
+          error={error}
+          onClose={() => {
+            setConfirming(null);
+            setError('');
+          }}
+          onConfirm={() => void remove(confirming.id)}
+        >
+          <p>
+            Delete this comment by @{confirming.handle}? This cannot be undone.
+          </p>
+        </ConfirmDialog>
+      )}
       <nav className="actions" aria-label="Comment pages">
         {history.length > 1 && (
           <button
@@ -200,15 +224,16 @@ function Comments({
           </button>
         )}
       </nav>
-      <form onSubmit={(e) => void add(e)}>
-        <label className="field-label" htmlFor={label}>
+      <form className="comment-composer" onSubmit={(e) => void add(e)}>
+        <label className="visually-hidden" htmlFor={label}>
           Add a comment
         </label>
         <textarea
           id={label}
           required
           maxLength={1000}
-          rows={2}
+          rows={1}
+          placeholder="Add a comment…"
           value={body}
           disabled={busy}
           onChange={(e) => {
@@ -216,9 +241,16 @@ function Comments({
             setId(crypto.randomUUID());
           }}
         />
-        <button disabled={busy || !body.trim()}>Post comment</button>
+        <button
+          className="comment-submit"
+          type="submit"
+          disabled={busy || !body.trim()}
+          aria-label={busy ? 'Posting comment' : 'Post comment'}
+        >
+          {busy ? 'Posting…' : 'Post'}
+        </button>
       </form>
-      {error && <p role="alert">{error}</p>}
+      {error && !confirming && <p role="alert">{error}</p>}
       {loadError && (
         <div>
           <p role="alert">{loadError}</p>
@@ -228,7 +260,139 @@ function Comments({
     </div>
   );
 }
-function Likes({ postId }: { postId: string }) {
+function HeartIcon({ liked }: { liked: number }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill={liked ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      strokeWidth="1.8"
+    >
+      <path d="M20 5c-3-3-6-1-8 1-2-2-5-4-8-1-4 4 1 9 8 15 7-6 12-11 8-15Z" />
+    </svg>
+  );
+}
+function CommentRow({
+  comment,
+  busy,
+  onDelete,
+}: {
+  comment: Comment;
+  busy: boolean;
+  onDelete: () => void;
+}) {
+  const [counts, setCounts] = useState({
+    likeCount: comment.likeCount,
+    liked: comment.liked,
+  });
+  const [liking, setLiking] = useState(false);
+  const [likesOpen, setLikesOpen] = useState(false);
+  const [error, setError] = useState('');
+  async function toggleLike() {
+    if (liking) return;
+    setLiking(true);
+    setError('');
+    try {
+      setCounts(
+        await api<{ likeCount: number; liked: number }>(
+          `/api/interactions/comments/${comment.id}/like`,
+          { method: counts.liked ? 'DELETE' : 'PUT' },
+        ),
+      );
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : 'Could not update like.',
+      );
+    } finally {
+      setLiking(false);
+    }
+  }
+  return (
+    <li className="comment-row">
+      <a
+        className="comment-avatar"
+        href={profileHref(comment.handle)}
+        aria-label={`View @${comment.handle}'s profile`}
+      >
+        <img
+          src={`/media/avatar/${encodeURIComponent(comment.handle)}`}
+          width={32}
+          height={32}
+          alt=""
+          loading="lazy"
+        />
+      </a>
+      <div className="comment-content">
+        <p className="comment-text">
+          <a href={profileHref(comment.handle)}>
+            <strong>@{comment.handle}</strong>
+          </a>{' '}
+          {comment.body}
+        </p>
+        <div className="comment-meta">
+          <RelativeTime timestamp={comment.createdAt} />
+          {counts.likeCount > 0 && (
+            <button
+              type="button"
+              className="comment-likes"
+              aria-haspopup="dialog"
+              aria-label={`See ${counts.likeCount} comment likes`}
+              onClick={() => setLikesOpen(true)}
+            >
+              {counts.likeCount} {counts.likeCount === 1 ? 'like' : 'likes'}
+            </button>
+          )}
+          {Boolean(comment.canDelete) && (
+            <button
+              type="button"
+              className="icon-button comment-delete"
+              aria-label="Delete comment"
+              title="Delete comment"
+              aria-haspopup="dialog"
+              disabled={busy || liking}
+              onClick={onDelete}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7" />
+              </svg>
+            </button>
+          )}
+        </div>
+        {error && (
+          <p role="alert" className="error-message">
+            {error}
+          </p>
+        )}
+      </div>
+      <button
+        type="button"
+        className="icon-button comment-heart"
+        aria-label={counts.liked ? 'Unlike comment' : 'Like comment'}
+        aria-pressed={Boolean(counts.liked)}
+        disabled={busy || liking}
+        onClick={() => void toggleLike()}
+      >
+        <HeartIcon liked={counts.liked} />
+      </button>
+      {likesOpen && (
+        <Likes
+          path={`/api/interactions/comments/${comment.id}/likes`}
+          onClose={() => setLikesOpen(false)}
+        />
+      )}
+    </li>
+  );
+}
+function Likes({ path, onClose }: { path: string; onClose: () => void }) {
   const [history, setHistory] = useState(['']);
   const after = history[history.length - 1];
   const {
@@ -237,12 +401,11 @@ function Likes({ postId }: { postId: string }) {
     loading,
     reload,
   } = useApiResource<{
-    items: { handle: string; hasAvatar: number }[];
+    items: { handle: string }[];
     next: string | null;
-  }>(`/api/interactions/${postId}/likes?after=${encodeURIComponent(after)}`);
+  }>(`${path}?after=${encodeURIComponent(after)}`);
   return (
-    <section aria-label="People who liked this photo">
-      <h3>Liked by</h3>
+    <Dialog title="Liked by" onClose={onClose}>
       {loading && <p role="status">Loading likes…</p>}
       {error && (
         <div>
@@ -250,7 +413,7 @@ function Likes({ postId }: { postId: string }) {
           <button onClick={reload}>Retry</button>
         </div>
       )}
-      <ul className="people-list">
+      <ul className="people-list likers-list">
         {page?.items.map((person) => (
           <li key={person.handle}>
             <PersonLink {...person} />
@@ -280,6 +443,6 @@ function Likes({ postId }: { postId: string }) {
           </button>
         )}
       </nav>
-    </section>
+    </Dialog>
   );
 }

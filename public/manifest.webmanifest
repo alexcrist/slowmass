@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Slowmass",
-  "short_name": "Slowmass",
+  "name": "slowmass",
+  "short_name": "slowmass",
   "description": "Private, invitation-only photo sharing.",
   "lang": "en",
   "start_url": "/",

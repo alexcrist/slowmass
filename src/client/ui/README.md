@@ -1,0 +1,11 @@
+# Shared interface controls
+
+`Dialog` uses the native modal dialog for focus containment and an inert background, locks document scrolling, and restores the connected opener on close. Escape, the labeled Close button, and clicking the backdrop dismiss it unless a mutation is pending. Backdrop dismissal requires a press and release outside the dialog bounds: clicks in its padding and drags that begin inside it do not dismiss. Route unmounts close it and discard its contents. The image appearance removes the panel frame, hides the visible heading while retaining its accessible name, and places its close button at the viewport’s top right. It retains the same backdrop, Escape, and focus behavior. Avatar/post cropping, enlarged profile photos, relationship confirmations, post editing/deletion, and post/comment likers use the same primitive; no third-party UI dependency or private-content cache is added.
+
+`RelativeTime` displays `now`, then whole minutes, hours, days, weeks, and 365-day years. Posts and comments keep an ISO datetime plus the full local date as the title and accessible name. A local minute timer refreshes the text and is cleared on unmount; it never requests server data.
+
+`ImageViewer` composes the image dialog for profile photos and focused post photos. Callers supply an authorized media URL, dimensions, alt text, and title. It preserves aspect ratio within the viewport, hides incomplete images behind loading/error status, and allows retry. It mounts only when opened and is discarded on close or route changes; profile and post features own their respective open/availability rules.
+
+`OverflowMenu` owns the shared vertical three-dot trigger, keyboard navigation, outside dismissal, and focus restoration. Post owners supply Edit caption/Delete post actions; other profiles supply Unfollow for accepted follows and Block account. Invitations puts Replace link in this menu. Selecting an action restores trigger focus before opening a dialog.
+
+`ConfirmDialog` composes `Dialog` with shared Cancel/confirm actions, pending controls, and an inline failure message. Connections, profile unfollow/block actions, and comment deletion keep their selected target and mutation logic in the owning feature. Confirmation is a client safeguard; server authorization remains authoritative.

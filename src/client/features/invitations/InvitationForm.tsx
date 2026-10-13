@@ -1,3 +1,4 @@
+import { InviteLink } from './InviteLink';
 import { useState, type FormEvent } from 'react';
 import { api, jsonRequest } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
@@ -9,13 +10,14 @@ type Item = {
   accepted: boolean;
   expired: boolean;
   revokedAt: number | null;
+  sentAt: number | null;
+  attemptedAt: number | null;
 };
 export function InvitationForm() {
   const [email, setEmail] = useState(''),
     [busy, setBusy] = useState(false),
     [invited, setInvited] = useState(''),
     [error, setError] = useState(''),
-    [copyStatus, setCopyStatus] = useState(''),
     [history, setHistory] = useState(['']);
   const after = history[history.length - 1];
   const {
@@ -32,7 +34,6 @@ export function InvitationForm() {
     setBusy(true);
     setError('');
     setInvited('');
-    setCopyStatus('');
     try {
       await api('/api/invitations', jsonRequest('POST', { email }));
       setInvited(email.trim().toLowerCase());
@@ -41,6 +42,7 @@ export function InvitationForm() {
       reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not create invitation.');
+      reload();
     } finally {
       setBusy(false);
     }
@@ -59,21 +61,26 @@ export function InvitationForm() {
       setBusy(false);
     }
   }
-  const message = `I invited you to Slowmass. Go to ${location.origin} and sign in with ${invited} within 7 days. We'll automatically follow each other when you finish creating your profile.`;
-  async function copy() {
+  async function send(id: string) {
+    setBusy(true);
+    setError('');
     try {
-      await navigator.clipboard.writeText(message);
-      setCopyStatus('Message copied.');
-    } catch {
-      setCopyStatus('Select and copy the message above.');
+      await api(`/api/invitations/${id}/send`, { method: 'POST' });
+      reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not send invitation.');
+    } finally {
+      setBusy(false);
     }
   }
   return (
     <>
+      <InviteLink />
+      <h2>Invite by email</h2>
       <p>
-        Invite a friend using the email they’ll sign in with. Then send them the
-        message below yourself. You’ll follow each other automatically once they
-        join.
+        Invite a friend using the email they’ll sign in with. We’ll email them a
+        personal link to join directly. You’ll follow each other automatically
+        once they join.
       </p>
       <form onSubmit={(e) => void invite(e)}>
         <label className="field-label" htmlFor="invite-email">
@@ -88,20 +95,14 @@ export function InvitationForm() {
           maxLength={254}
           disabled={busy}
         />
-        <p className="field-help">
-          Up to 5 invitations per day. Each lasts 7 days.
-        </p>
+        <p className="field-help">Invitations last 7 days.</p>
         <button className="primary-button" disabled={busy}>
-          {busy ? 'Saving…' : 'Create invitation'}
+          {busy ? 'Sending…' : 'Send invitation'}
         </button>
       </form>
       {invited && (
-        <div className="invitation-result">
-          <h2>Invitation ready</h2>
-          <p>Send this to your friend. No invitation email has been sent.</p>
-          <p>{message}</p>
-          <button onClick={() => void copy()}>Copy invitation message</button>
-          <p role="status">{copyStatus}</p>
+        <div className="invitation-result" role="status">
+          <p>Invitation emailed to {invited}.</p>
         </div>
       )}
       {error && <p role="alert">{error}</p>}
@@ -114,7 +115,7 @@ export function InvitationForm() {
         </div>
       )}
       {page?.items.length === 0 && <p>No invitations yet.</p>}
-      <ul className="people-list">
+      <ul className="people-list invitation-list">
         {page?.items.map((item) => (
           <li key={item.id}>
             <strong>{item.email}</strong>
@@ -125,18 +126,41 @@ export function InvitationForm() {
                   ? 'Cancelled'
                   : item.expired
                     ? 'Expired'
-                    : 'Waiting to join'}
+                    : item.sentAt
+                      ? 'Email sent · Waiting to join'
+                      : item.attemptedAt
+                        ? 'Email delivery unconfirmed'
+                        : 'Email not sent'}
             </p>
-            <small>Created {new Date(item.createdAt).toLocaleString()}</small>
-            {!item.accepted && !item.revokedAt && !item.expired && (
-              <button
-                className="text-button"
-                disabled={busy}
-                onClick={() => void revoke(item.id)}
+            <div className="invitation-meta">
+              <time
+                dateTime={new Date(item.sentAt ?? item.createdAt).toISOString()}
               >
-                Cancel invitation
-              </button>
-            )}
+                {item.sentAt ? 'Sent' : 'Created'}{' '}
+                {new Date(item.sentAt ?? item.createdAt).toLocaleString()}
+              </time>
+              {!item.accepted && !item.revokedAt && !item.expired && (
+                <div className="invitation-actions">
+                  {!item.sentAt && (
+                    <button
+                      type="button"
+                      className="text-button"
+                      disabled={busy}
+                      onClick={() => void send(item.id)}
+                    >
+                      {item.attemptedAt ? 'Retry email' : 'Send email'}
+                    </button>
+                  )}
+                  <button
+                    className="text-button"
+                    disabled={busy}
+                    onClick={() => void revoke(item.id)}
+                  >
+                    Cancel invitation
+                  </button>
+                </div>
+              )}
+            </div>
           </li>
         ))}
       </ul>

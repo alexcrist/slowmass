@@ -1,9 +1,15 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { PersonLink } from '../../navigation/PersonLink';
-import { BackControl } from '../../navigation/BackControl';
-import { Interactions } from '../interactions/Interactions';
+import { postHref } from '../../navigation';
+import { usePageHistory } from '../../navigation/PageHistory';
+import { Interactions } from '../interactions';
 import { api, jsonRequest } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
+import { RelativeTime } from '../../ui/RelativeTime';
+import { PostActions } from './PostActions';
+import { PostCropEditor } from './PostCropEditor';
+import { FocusedPhoto } from './FocusedPhoto';
+import { fullPhoto, type Rectangle } from './crop';
 type Post = {
   id: string;
   caption: string;
@@ -13,9 +19,9 @@ type Post = {
   publishedAt: number;
   handle: string;
   displayName: string;
-  hasAvatar: number;
   isOwner: boolean;
   mediaUrl: string;
+  thumbnailUrl: string;
   likeCount: number;
   commentCount: number;
   liked: number;
@@ -24,12 +30,15 @@ type Page = { items: Post[]; next: string | null };
 export function PostList({
   handle,
   grid = false,
+  pending = false,
 }: {
   handle?: string;
   grid?: boolean;
+  pending?: boolean;
 }) {
-  const [selected, setSelected] = useState<string | null>(null);
-  const [history, setHistory] = useState(['']);
+  const [history, setHistory] = usePageHistory(
+    handle ? `posts:profile:${handle}` : 'posts:feed',
+  );
   const cursor = history[history.length - 1];
   const params = new URLSearchParams();
   if (handle) params.set('handle', handle);
@@ -40,13 +49,7 @@ export function PostList({
     loading,
     reload,
   } = useApiResource<Page>(`/api/posts?${params}`);
-  if (selected)
-    return (
-      <>
-        <BackControl onClick={() => setSelected(null)} label="Back to photos" />
-        <PostDetail key={selected} id={selected} onDeleted={reload} />
-      </>
-    );
+  if (pending) return null;
   return (
     <>
       {loading && <p role="status">Loading posts…</p>}
@@ -67,30 +70,36 @@ export function PostList({
       )}
       {grid ? (
         <div className="post-grid">
-          {page?.items.map((post) => (
-            <button
+          {page?.items.map((post, index) => (
+            <a
               key={post.id}
               className="grid-photo"
-              onClick={() => setSelected(post.id)}
+              href={postHref(post.id)}
               aria-label={
                 post.caption
-                  ? `Open photo: ${post.caption.slice(0, 100)}`
-                  : `Open photo by @${post.handle}`
+                  ? `Open post: ${post.caption.slice(0, 100)}`
+                  : `Open post by @${post.handle}`
               }
             >
               <img
-                src={post.mediaUrl}
+                src={post.thumbnailUrl}
                 alt={post.altText || ''}
                 width={post.width}
                 height={post.height}
-                loading="lazy"
+                loading={index < 3 ? 'eager' : 'lazy'}
+                decoding="async"
               />
-            </button>
+            </a>
           ))}
         </div>
       ) : (
-        page?.items.map((post) => (
-          <PostCard key={post.id} post={post} onDelete={reload} />
+        page?.items.map((post, index) => (
+          <PostCard
+            key={post.id}
+            post={post}
+            onDelete={reload}
+            priority={index === 0}
+          />
         ))
       )}
       {page && (
@@ -117,17 +126,14 @@ export function PostList({
               className="end-of-posts"
               role="img"
               aria-label="End of posts"
-              width={32}
-              height={32}
-              viewBox="0 0 24 24"
+              width={48}
+              height={16}
+              viewBox="0 0 48 16"
               fill="none"
               stroke="currentColor"
-              strokeWidth={1.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
+              strokeWidth={1}
             >
-              <circle cx="12" cy="12" r="9" />
-              <path d="m8 12 3 3 5-6" />
+              <path d="M0 8h48" />
             </svg>
           )}
         </nav>
@@ -135,68 +141,70 @@ export function PostList({
     </>
   );
 }
-function PostCard({ post, onDelete }: { post: Post; onDelete: () => void }) {
-  const [confirm, setConfirm] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  async function remove() {
-    setBusy(true);
-    setError('');
-    try {
-      await api(`/api/posts/${post.id}`, { method: 'DELETE' });
-      onDelete();
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Deletion failed.');
-    } finally {
-      setBusy(false);
-    }
-  }
+function PostCard({
+  post,
+  onDelete,
+  priority = true,
+  focused = false,
+}: {
+  post: Post;
+  onDelete: () => void;
+  priority?: boolean;
+  focused?: boolean;
+}) {
+  const [caption, setCaption] = useState(post.caption);
+  const photo = (
+    <img
+      className="post-photo"
+      src={post.mediaUrl}
+      alt={post.altText || `Photo by @${post.handle}`}
+      width={post.width}
+      height={post.height}
+      loading={priority ? 'eager' : 'lazy'}
+      fetchPriority={priority ? 'high' : 'auto'}
+      decoding="async"
+    />
+  );
   return (
-    <article className="post">
+    <article className="post" data-focused={focused || undefined}>
       <header>
-        <PersonLink handle={post.handle} hasAvatar={post.hasAvatar} />
-        <time dateTime={new Date(post.publishedAt).toISOString()}>
-          {new Date(post.publishedAt).toLocaleString()}
-        </time>
+        <PersonLink handle={post.handle} />
+        <RelativeTime timestamp={post.publishedAt} />
+        {post.isOwner && (
+          <PostActions
+            id={post.id}
+            caption={caption}
+            onEdited={setCaption}
+            onDeleted={onDelete}
+          />
+        )}
       </header>
-      <img
-        src={post.mediaUrl}
-        alt={post.altText || `Photo by @${post.handle}`}
-        width={post.width}
-        height={post.height}
-        loading="lazy"
-        decoding="async"
-      />
+      {focused ? (
+        <FocusedPhoto
+          src={post.mediaUrl}
+          alt={post.altText || `Photo by @${post.handle}`}
+          width={post.width}
+          height={post.height}
+        >
+          {photo}
+        </FocusedPhoto>
+      ) : (
+        <a
+          className="post-photo-link"
+          href={postHref(post.id)}
+          aria-label={`Open post by @${post.handle}`}
+        >
+          {photo}
+        </a>
+      )}
       <div className="post-body">
-        {post.caption && <p className="bio">{post.caption}</p>}
+        {caption && <p className="bio">{caption}</p>}
         <Interactions
           key={`${post.id}:${post.likeCount}:${post.commentCount}:${post.liked}`}
           postId={post.id}
           initial={post}
+          commentsInitiallyOpen={focused}
         />
-        {post.isOwner &&
-          (confirm ? (
-            <div>
-              <p>Delete this photo? This cannot be undone.</p>
-              <div className="actions">
-                <button disabled={busy} onClick={() => void remove()}>
-                  Delete photo
-                </button>
-                <button disabled={busy} onClick={() => setConfirm(false)}>
-                  Keep photo
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button className="text-button" onClick={() => setConfirm(true)}>
-              Delete
-            </button>
-          ))}
-        {error && (
-          <p role="alert" className="error-message">
-            {error}
-          </p>
-        )}
       </div>
     </article>
   );
@@ -204,8 +212,14 @@ function PostCard({ post, onDelete }: { post: Post; onDelete: () => void }) {
 export function Compose({ onPublished }: { onPublished: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState('');
+  const [source, setSource] = useState<{ file: File; crop: Rectangle } | null>(
+    null,
+  );
+  const [editing, setEditing] = useState<{
+    file: File;
+    crop: Rectangle;
+  } | null>(null);
   const [caption, setCaption] = useState('');
-  const [altText, setAltText] = useState('');
   const [id, setId] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -219,38 +233,44 @@ export function Compose({ onPublished }: { onPublished: () => void }) {
   useEffect(() => () => controller.current?.abort(), []);
   async function publish(event: FormEvent) {
     event.preventDefault();
-    if (!file) return;
+    if (!file || busy || controller.current || editing) return;
     setBusy(true);
     setError('');
-    controller.current = new AbortController();
+    const request = new AbortController();
+    controller.current = request;
     try {
       if (file.size > 8 * 1024 * 1024)
         throw new Error('Choose a photo smaller than 8 MB.');
       const draft = await api<{ state: string }>('/api/posts', {
-        ...jsonRequest('POST', { id, caption, altText }),
-        signal: controller.current.signal,
+        ...jsonRequest('POST', { id, caption, altText: '' }),
+        signal: request.signal,
       });
+      if (request.signal.aborted) return;
       if (draft.state !== 'published')
         await api(`/api/posts/${id}/photo`, {
           method: 'PUT',
           headers: { 'Content-Type': file.type || 'application/octet-stream' },
           body: file,
-          signal: controller.current.signal,
+          signal: request.signal,
         });
-      onPublished();
+      if (!request.signal.aborted) onPublished();
     } catch (error) {
-      if (!controller.current?.signal.aborted)
+      if (!request.signal.aborted)
         setError(
           error instanceof Error
             ? error.message
             : 'Upload failed. You can retry this upload.',
         );
     } finally {
-      setBusy(false);
+      if (controller.current === request) {
+        controller.current = null;
+        setBusy(false);
+      }
     }
   }
   async function cancel() {
     controller.current?.abort();
+    controller.current = null;
     let confirmed = false;
     try {
       await api(`/api/posts/${id}`, { method: 'DELETE' });
@@ -267,93 +287,94 @@ export function Compose({ onPublished }: { onPublished: () => void }) {
     );
   }
   return (
-    <form onSubmit={(event) => void publish(event)}>
-      <label htmlFor="post-file" className="field-label">
-        Photo
-      </label>
-      <input
-        id="post-file"
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        required
-        disabled={busy}
-        onChange={(event) => {
-          setFile(event.target.files?.[0] ?? null);
-          setId(crypto.randomUUID());
-          setError('');
-          setPreview(
-            event.target.files?.[0]
-              ? URL.createObjectURL(event.target.files[0])
-              : '',
-          );
-        }}
-      />
-      <p className="field-help">
-        One still JPEG, PNG, or WebP. Up to 8 MB and 40 megapixels.
-      </p>
-      {file && preview && (
-        <img
-          className="photo-preview"
-          src={preview}
-          alt="Selected photo preview"
+    <>
+      <form className="post-compose" onSubmit={(event) => void publish(event)}>
+        <label htmlFor="post-file" className="field-label">
+          Photo
+        </label>
+        <input
+          id="post-file"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          disabled={busy}
+          onChange={(event) => {
+            const selected = event.target.files?.[0];
+            event.target.value = '';
+            if (selected) setEditing({ file: selected, crop: fullPhoto });
+          }}
+        />
+        <p className="field-help">
+          One still JPEG, PNG, or WebP. Up to 8 MB and 40 megapixels.
+        </p>
+        {file && preview && (
+          <>
+            <img
+              className="photo-preview"
+              src={preview}
+              alt="Selected photo preview"
+            />
+            <button
+              type="button"
+              className="text-button"
+              disabled={busy}
+              onClick={() => setEditing(source)}
+            >
+              Adjust crop
+            </button>
+          </>
+        )}
+        <label htmlFor="caption" className="field-label">
+          Caption
+        </label>
+        <textarea
+          id="caption"
+          rows={3}
+          maxLength={2000}
+          value={caption}
+          disabled={busy}
+          onChange={(event) => setCaption(event.target.value)}
+        />
+        <button className="primary-button" disabled={busy || !file}>
+          {busy ? 'Uploading and processing…' : 'Publish photo'}
+        </button>
+        {busy && (
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => void cancel()}
+          >
+            Cancel upload
+          </button>
+        )}
+        {error && (
+          <p role="alert" className="error-message">
+            {error}
+          </p>
+        )}
+      </form>
+      {editing && (
+        <PostCropEditor
+          file={editing.file}
+          initial={editing.crop}
+          onClose={() => setEditing(null)}
+          onApply={(cropped, crop) => {
+            setFile(cropped);
+            setSource({ file: editing.file, crop });
+            setPreview(URL.createObjectURL(cropped));
+            setId(crypto.randomUUID());
+            setError('');
+            setEditing(null);
+          }}
         />
       )}
-      <label htmlFor="caption" className="field-label">
-        Caption
-      </label>
-      <textarea
-        id="caption"
-        rows={3}
-        maxLength={2000}
-        value={caption}
-        disabled={busy}
-        onChange={(event) => setCaption(event.target.value)}
-      />
-      <label htmlFor="alt-text" className="field-label">
-        Photo description (optional)
-      </label>
-      <textarea
-        id="alt-text"
-        rows={2}
-        maxLength={500}
-        value={altText}
-        disabled={busy}
-        onChange={(event) => setAltText(event.target.value)}
-      />
-      <p className="field-help">
-        Describe the photo for people using screen readers.
-      </p>
-      <button className="primary-button" disabled={busy || !file}>
-        {busy ? 'Uploading and processing…' : 'Publish photo'}
-      </button>
-      {busy && (
-        <button
-          type="button"
-          className="text-button"
-          onClick={() => void cancel()}
-        >
-          Cancel upload
-        </button>
-      )}
-      {error && (
-        <p role="alert" className="error-message">
-          {error}
-        </p>
-      )}
-    </form>
+    </>
   );
 }
 
-export function PostDetail({
-  id,
-  onDeleted,
-}: {
-  id: string;
-  onDeleted?: () => void;
-}) {
+export function PostDetail({ id }: { id: string }) {
   const [deleted, setDeleted] = useState(false);
   const { data, error, reload } = useApiResource<{ post: Post }>(
-    `/api/posts/${id}`,
+    `/api/posts/${encodeURIComponent(id)}`,
   );
   const post = data?.post;
   return deleted ? (
@@ -365,11 +386,10 @@ export function PostDetail({
     </div>
   ) : post ? (
     <PostCard
+      key={post.id}
       post={post}
-      onDelete={() => {
-        setDeleted(true);
-        onDeleted?.();
-      }}
+      focused
+      onDelete={() => setDeleted(true)}
     />
   ) : (
     <p role="status">Loading photo…</p>

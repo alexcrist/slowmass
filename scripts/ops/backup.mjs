@@ -14,6 +14,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { DatabaseSync } from 'node:sqlite';
 import { encrypt, readKey } from './archive.mjs';
+import { requiredPhotoKeys } from './photo-keys.mjs';
 const run = promisify(execFile);
 const [targetArg, keyArg] = process.argv.slice(2);
 if (!targetArg || !keyArg)
@@ -61,11 +62,7 @@ try {
   const db = new DatabaseSync(':memory:');
   db.exec('PRAGMA foreign_keys=OFF');
   db.exec(sql);
-  const keys = db
-    .prepare(
-      "SELECT object_key FROM post WHERE state='published' UNION SELECT object_key FROM avatar",
-    )
-    .all();
+  const keys = requiredPhotoKeys(db);
   const manifest = {
     version: 1,
     createdAt: new Date().toISOString(),

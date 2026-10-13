@@ -8,7 +8,7 @@ export function PasteLoginLink() {
     event.preventDefault();
     const target = loginLinkTarget(link, location.origin);
     if (!target) {
-      setError('Paste the complete Slowmass sign-in link from your email.');
+      setError('Paste the complete slowmass sign-in link from your email.');
       return;
     }
     setLink('');
@@ -25,7 +25,7 @@ export function PasteLoginLink() {
       <p>
         If your email link opens a separate browser, request a new link above.
         In your email, press and hold the sign-in link and copy it{' '}
-        <strong>without opening it</strong>. Return to the Slowmass app and
+        <strong>without opening it</strong>. Return to the slowmass app and
         paste it here. Links work once and expire after 10 minutes.
       </p>
       <form onSubmit={submit}>

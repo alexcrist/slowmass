@@ -57,7 +57,7 @@ beforeAll(async () => {
     APP_ORIGIN: origin,
     AUTH_SECRET: secret,
     RESEND_API_KEY: 'test-key-never-used-on-network',
-    EMAIL_FROM: 'Slowmass <hello@example.com>',
+    EMAIL_FROM: 'slowmass <hello@example.com>',
     BOOTSTRAP_EMAIL: 'founder@example.com',
   };
   worker = new Miniflare(convertV4MiniflareOptions({ ...common, bindings }));
@@ -260,13 +260,38 @@ describe('verified email and permanent invitation provenance', () => {
   let founderId: string;
   let friendId: string;
   let friendCookie: string;
-  it('returns generic success without sending mail to uninvited addresses', async () => {
+  it('returns an invitation-required error without sending mail to uninvited addresses', async () => {
     const count = emails.length;
-    expect((await requestLink('uninvited@example.com')).status).toBe(200);
+    const response = await requestLink('uninvited@example.com');
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({
+      code: 'INVITATION_REQUIRED',
+      message: 'You need an invitation from a slowmass member to join.',
+    });
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(emails).toHaveLength(count);
+  });
+  it('rate limits repeated eligibility checks through the existing magic-link endpoint', async () => {
+    const count = emails.length;
+    const headers = requestHeaders();
+    for (const expected of [403, 403, 403, 429]) {
+      const response = await emailWorker.dispatchFetch(
+        `${origin}/api/auth/sign-in/magic-link`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ email: 'uninvited@example.com' }),
+        },
+      );
+      expect(response.status).toBe(expected);
+    }
     expect(emails).toHaveLength(count);
   });
   it('creates only the configured first member after email verification', async () => {
-    expect((await requestLink('founder@example.com')).status).toBe(200);
+    const linkRequest = await requestLink('founder@example.com');
+    expect(linkRequest.status).toBe(200);
+    expect(linkRequest.headers.get('Cache-Control')).toBe('private, no-store');
     const db = await emailWorker.getD1Database('DB');
     expect(await db.prepare('SELECT 1 FROM membership').first()).toBeNull();
     const response = await emailWorker.dispatchFetch(
@@ -274,12 +299,25 @@ describe('verified email and permanent invitation provenance', () => {
       { redirect: 'manual', headers: requestHeaders() },
     );
     expect(response.status).toBe(302);
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     founderCookie = sessionCookie(response);
     const member = await db
       .prepare('SELECT user_id, invited_by FROM membership')
       .first<{ user_id: string; invited_by: string | null }>();
     expect(member?.invited_by).toBeNull();
     founderId = member!.user_id;
+    await db
+      .prepare(
+        "INSERT INTO profile(user_id,handle,display_name,bio,created_at) VALUES(?,?,'Test member','',0)",
+      )
+      .bind(founderId, 'founder')
+      .run();
+    await db
+      .prepare(
+        'INSERT INTO avatar(user_id,object_key,width,height) VALUES(?,?,1,1)',
+      )
+      .bind(founderId, 'test-avatar/' + founderId)
+      .run();
     expect(
       (
         await db
@@ -318,7 +356,7 @@ describe('verified email and permanent invitation provenance', () => {
     expect(
       (await emailWorker.dispatchFetch(`${origin}/api/invitations`, options))
         .status,
-    ).toBe(409);
+    ).toBe(200);
   });
   it('atomically joins the invited member and records who invited whom', async () => {
     expect((await requestLink('friend@example.com')).status).toBe(200);
@@ -337,6 +375,18 @@ describe('verified email and permanent invitation provenance', () => {
     expect(row?.invited_by).toBe(founderId);
     expect(row?.accepted_by).toBe(row?.user_id);
     friendId = row!.user_id;
+    await db
+      .prepare(
+        "INSERT INTO profile(user_id,handle,display_name,bio,created_at) VALUES(?,?,'Test member','',0)",
+      )
+      .bind(friendId, 'friend')
+      .run();
+    await db
+      .prepare(
+        'INSERT INTO avatar(user_id,object_key,width,height) VALUES(?,?,1,1)',
+      )
+      .bind(friendId, 'test-avatar/' + friendId)
+      .run();
     expect(
       (
         await emailWorker.dispatchFetch(`${origin}/api/me`, {
@@ -406,6 +456,13 @@ describe('verified email and permanent invitation provenance', () => {
     )!;
     expect(cancelled.revokedAt).toBeGreaterThan(0);
     expect(cancelled.createdAt).toBe(item.createdAt);
+    const count = emails.length;
+    const linkRequest = await requestLink('cancelled@example.com');
+    expect(linkRequest.status).toBe(403);
+    expect(await linkRequest.json()).toMatchObject({
+      code: 'INVITATION_REQUIRED',
+    });
+    expect(emails).toHaveLength(count);
     const rejected = await emailWorker.dispatchFetch(unusedLink, {
       redirect: 'manual',
       headers: requestHeaders(),
@@ -488,6 +545,15 @@ describe('verified email and permanent invitation provenance', () => {
       .prepare("UPDATE membership SET status = 'disabled' WHERE user_id = ?")
       .bind(friendId)
       .run();
+    const count = emails.length;
+    for (const email of ['next@example.com', 'friend@example.com']) {
+      const linkRequest = await requestLink(email);
+      expect(linkRequest.status).toBe(403);
+      expect(await linkRequest.json()).toMatchObject({
+        code: 'INVITATION_REQUIRED',
+      });
+    }
+    expect(emails).toHaveLength(count);
     const response = await emailWorker.dispatchFetch(
       lastLink('next@example.com'),
       { redirect: 'manual', headers: requestHeaders() },
@@ -549,7 +615,11 @@ describe('verified email and permanent invitation provenance', () => {
       )
       .run();
     const count = emails.length;
-    expect((await requestLink('late@example.com')).status).toBe(200);
+    const response = await requestLink('late@example.com');
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      code: 'INVITATION_REQUIRED',
+    });
     expect(emails).toHaveLength(count);
   });
   it('enforces the single-root database constraint', async () => {

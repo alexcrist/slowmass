@@ -1,10 +1,6 @@
-type Props = { label: string } & (
-  { href: string; onClick?: never } | { onClick: () => void; href?: never }
-);
-
-export function BackControl(props: Props) {
-  const content = (
-    <>
+export function BackControl({ href, label }: { href: string; label: string }) {
+  return (
+    <a className="back-control" href={href}>
       <svg
         viewBox="0 0 24 24"
         width={20}
@@ -18,16 +14,7 @@ export function BackControl(props: Props) {
       >
         <path d="m14 5-7 7 7 7M7 12h14" />
       </svg>
-      {props.label}
-    </>
-  );
-  return props.href !== undefined ? (
-    <a className="back-control" href={props.href}>
-      {content}
+      {label}
     </a>
-  ) : (
-    <button className="back-control" type="button" onClick={props.onClick}>
-      {content}
-    </button>
   );
 }

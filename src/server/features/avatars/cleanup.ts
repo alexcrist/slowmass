@@ -11,8 +11,8 @@ export async function cleanupAvatars(db: D1Database, bucket: R2Bucket) {
     // Never delete a key still referenced by a current avatar, even if an earlier cleanup entry survived.
     if (
       await db
-        .prepare('SELECT 1 FROM avatar WHERE object_key=?')
-        .bind(row.object_key)
+        .prepare('SELECT 1 FROM avatar WHERE object_key=? OR large_key=?')
+        .bind(row.object_key, row.object_key)
         .first()
     ) {
       await db
