@@ -1,0 +1,9 @@
+# Database migrations
+
+SQL files are immutable after application. Add each new filename to `deployment-policy.json` as either `automatic` or `manual`; CI rejects missing or invalid classifications. The policy expresses a reviewed compatibility decision, not an automatic SQL safety analysis.
+
+Use `automatic` for bounded, backward-compatible changes that preserve existing data and allow the currently deployed Worker to keep serving correctly, including if only a prefix of the migrations succeeds or the subsequent deployment fails. Test the previous application's reads/writes against the expanded schema. Push to `main` runs the checks, records the current D1 Time Travel bookmark in deployment logs, applies migrations, verifies the resulting history, then deploys.
+
+Use `manual` for destructive changes, incompatible constraints/triggers, large backfills, or work needing a verified backup or maintenance window. Any pending manual migration stops the job before any migration is applied. Follow the [operations runbook](../docs/operations.md#release-and-rollback), apply it explicitly, then rerun the latest compatible `main` workflow. Already-applied manual migrations do not block deployments. The existing migrations are classified as manual to preserve their historical rollout requirements and keep fresh production provisioning deliberate; their SQL is unchanged.
+
+A failed migration stops deployment. Previously completed migrations remain applied; reruns resume from D1's migration history. A failed Worker deployment leaves the expanded schema in place. Never automatically restore the database or reverse migrations, because that can discard intervening writes or resurrect deleted access. Time Travel is database recovery, not a photo backup; retain the existing encrypted backup cadence. See [setup](../docs/setup.md#production-deployment) for credentials and release controls.

@@ -466,3 +466,12 @@ Private image bytes remain uncached by the browser (`private, no-store`). A futu
 - [x] Configure the GitHub account variable and production environment restricted to `main`; document credentials, the deployment pause switch, and manual schema/recovery sequencing.
 - [x] Pass Node 24 formatting, lint, types, all 442 tests, frontend build, clean local migrations, and production Worker dry-run packaging. Verify the read-only production history gate; configure the dedicated Cloudflare token in GitHub Actions secrets.
 - [x] Observe [GitHub run 38822812306](https://github.com/alexcrist/slowmass/actions/runs/38822812306) pass both checks and deployment for commit `aa546f2`. Worker `4acdc576-f79a-4401-a8a6-0c8af0b0153b` deployed successfully; the production history guard and post-deploy HTTP verification passed. No production migration or browser/visual app testing was performed.
+
+## Automatic routine migrations — October 15, 2026
+
+- [x] Require complete per-file automatic/manual classification; reject pending manual migrations and unknown production history before any migration. Preserve historical SQL and its manual rollout requirements.
+- [x] Record a D1 Time Travel bookmark, apply routine migrations in the serialized production job, and verify complete history before publishing. Preserve successful migrations on failure and document retry/forward-fix behavior and backup requirements.
+- [x] Upgrade the existing deployment token to D1 Write and verify the saved permission through Cloudflare administration; no app browser/visual testing.
+- [x] Pass the focused synthetic policy tests and local Wrangler/D1 migration failure, partial-success, old-client compatibility and retry checks.
+- [x] Pass Node 24 formatting, lint, types, boundaries, all 452 tests and the production frontend build; verify production history passes the new preflight without pending migrations.
+- [ ] Observe the updated production workflow record a recovery bookmark, run the migration command, and deploy successfully.

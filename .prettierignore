@@ -3,6 +3,6 @@ dist
 .wrangler
 package-lock.json
 AGENTS.md
-migrations
+migrations/**/*.sql
 playwright-report
 test-results

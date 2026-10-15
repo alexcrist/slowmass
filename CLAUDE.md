@@ -75,4 +75,6 @@ Start with one deployable application, one D1 database, and private R2 storage. 
 
 Prefer local development and CI emulation over idle hosted staging resources. Migrations run explicitly, never opportunistically during requests. Separate preview and production data. Maintain a tested restore procedure and deletion cleanup. Do not silently provision paid services or enable automatic production deployment as an incidental code change.
 
+Pushes to `main` run checks, apply reviewed backward-compatible migrations, and deploy automatically. Classify every new migration in `migrations/deployment-policy.json`; `automatic` must preserve existing data and support the previously deployed Worker even if deployment fails. Use `manual` for destructive/incompatible changes or work requiring a fresh backup and maintenance. Follow `migrations/README.md` and the operations runbook; never edit applied SQL or automatically reverse a successful migration after a deployment failure.
+
 `CLAUDE.md` is the canonical agent instruction file. `AGENTS.md` must be a relative symlink to `CLAUDE.md`, not a second copy.
