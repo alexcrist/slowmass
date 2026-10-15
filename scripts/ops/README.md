@@ -8,6 +8,10 @@ Run from the repository root with Node 24 and authenticated Wrangler. No browser
 
 See [operations](../../docs/operations.md) for retention, recovery sequencing, and cost thresholds. These tools do not automatically schedule backups or manage off-device copies.
 
+`check-deploy-migrations.mjs <query-json>` validates Wrangler's JSON response from `SELECT name FROM d1_migrations ORDER BY name` against checked-in SQL filenames. It fails closed on invalid output or either missing or unknown migrations; it never applies a migration. The GitHub production job supplies the read-only production query after isolated checks pass. Focused synthetic tests cover matching, pending, newer-production, and malformed histories.
+
+`verify-deployment.mjs` compares production assets with `dist`, checks sign-in availability and signed-out private-resource boundaries using direct HTTP, and retries a bounded number of times for propagation. It uses no accounts or private data and performs no browser testing. A final failure requires operator investigation; it never automatically rolls back. Run only after deploying the matching build, outside the isolated test gate.
+
 `push-keys.mjs <new-private-file>` generates a P-256 VAPID keypair through Node crypto and writes a mode-600 JSON file suitable for Wrangler secret bulk upload. It refuses to overwrite an existing file. Keep and back up this file outside the repository; reusing keys preserves browser subscriptions.
 
 Restore quarantine also deletes shared-invite verification claims and permanently revokes shared links while clearing their encrypted bearer copies, so re-enabling a restored inviter cannot revive old links. Older snapshots without these tables remain supported.

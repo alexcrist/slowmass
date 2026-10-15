@@ -56,7 +56,7 @@ On October 11, before migration 0011, a fresh encrypted production archive passe
 
 Run `npm run check` before deployment. For schema/data migrations or recovery, create and verify a backup and apply migrations before dependent code serves traffic. Routine code-only deployments use the existing backup cadence. For storage-ledger initialization, deploy the checked code in maintenance mode first, allow existing requests to drain, apply migrations, and redeploy without maintenance. Trigger migrations may require the documented atomic file-import workaround; include their `d1_migrations` entries in the same import. Never edit an applied migration.
 
-Prefer code rollback with forward-compatible schema. Do not roll back to code that permits unmetered uploads after enabling storage limits, or that ignores deleted memberships. Maintain the maintenance gate if correctness is uncertain. No automatic production deployment is enabled.
+Prefer code rollback with forward-compatible schema. Do not roll back to code that permits unmetered uploads after enabling storage limits, or that ignores deleted memberships. Maintain the maintenance gate if correctness is uncertain. Pushes to `main` use the checked, serialized GitHub production deployment described in [setup](setup.md#production-deployment). Before maintenance, migrations, recovery, or manual rollback, set `AUTO_DEPLOY_DISABLED=true` in repository variables, let active deployments finish, and cancel queued releases. Automatic deployments reject migration-history mismatches and never apply migrations or roll back a failed release automatically. Resume only after the latest `main` code is compatible with production.
 
 ## Initial usage observation — October 10, 2026
 

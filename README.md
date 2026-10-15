@@ -1,6 +1,6 @@
 # slowmass
 
-Slowmass is a private, invitation-only photo-sharing app with a chronological feed of your own posts and accepted follows, with explicit pagination.
+Slowmass is a private photo-sharing app with a chronological feed of your own posts and accepted follows, with explicit pagination.
 
 ## Status
 
@@ -47,6 +47,8 @@ npm run check
 ```
 
 `npm run check` runs formatting, lint, types, unit/Worker integration tests, and the production frontend build. Worker tests run real local D1 and the auth library, including one-time email verification through a simulated email transport. They do not send real emails or prove hosted delivery. Browser and visual testing are prohibited. Multi-user integration tests verify profile/media visibility, follows, blocks, upload retries and cancellation, feed pagination, interaction permissions/counts, notifications, and quotas through the API. No production resources are accessed.
+
+Pushes to `main` deploy through GitHub Actions after checks and local migrations pass. The production job requires matching migration history and verifies deployed assets and signed-out boundaries by HTTP. See [deployment setup](docs/setup.md#production-deployment) for credentials, pausing releases, and explicit migration handling.
 
 ## Project map
 

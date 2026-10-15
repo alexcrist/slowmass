@@ -67,7 +67,7 @@ Exit: three-user API flow covers following, posting, liking, commenting, accepti
 - [x] Add aggregate usage inspection, bounded cleanup, cost monitoring instructions, encrypted backup/export tooling, synthetic SQL/photo restore verification, and a hosted Time Travel drill on a disposable database.
 - [x] Hand off the initial private recovery kit; the owner confirmed copying it off-device.
 - [ ] Establish recurring backups. Current backup creation and off-device copying remain manual.
-- [x] Add CI checks for format, lint, types, import boundaries, meaningful tests, migrations on a clean database, and production build. Keep production deploy explicit initially.
+- [x] Add CI checks for format, lint, types, import boundaries, meaningful tests, migrations on a clean database, and production build. Production deployment was initially explicit; the authorized push-to-main workflow is tracked below.
 
 Exit: real photos survive a documented restore in a nonproduction environment; deletion remains respected. No credentials or production data appear in test artifacts or logs.
 
@@ -459,3 +459,10 @@ Private image bytes remain uncached by the browser (`private, no-store`). A futu
 - [x] Separate the local source-file limit (32 MiB) from the encoded upload limit (8 MiB) for posts and avatars, allowing the existing 1600px crop encoder to process larger originals. Preserve the 40-megapixel decoded-source ceiling, quality settings, server validation, and upload retry bytes.
 - [x] Pass the Node 24 repository gate: formatting, lint, types, boundaries, all 434 unit/integration tests, and the production build. Verify a 12 MiB original reaches cropping and uploads only the encoded bytes, retries reuse them, all supported formats accept the 32 MiB boundary, and oversized/undecodable sources fail. Canvas and decoder calls are mocked in Node; no browser or visual testing or new real-device quality measurement.
 - [x] Deploy Worker `680137f1-413f-4117-b08f-46172c8adabb` at 100% and pass all 32 direct HTTP checks, including exact deployed assets, sign-in/bootstrap availability, private API/media rejection, and origin enforcement. The backend bundle matches the preceding release; no migrations, maintenance window, browser or visual testing.
+
+## Deploy on push to main — October 15, 2026
+
+- [x] Add a production job after the existing isolated checks and local migration gate, with checked frontend artifacts, serialized deploys, superseded-commit skipping, a migration-history guard, and bounded direct HTTP verification.
+- [x] Configure the GitHub account variable and production environment restricted to `main`; document credentials, the deployment pause switch, and manual schema/recovery sequencing.
+- [x] Pass Node 24 formatting, lint, types, all 442 tests, frontend build, clean local migrations, and production Worker dry-run packaging. Verify the read-only production history gate; configure the dedicated Cloudflare token in GitHub Actions secrets.
+- [ ] Observe the first successful GitHub-triggered production deployment.

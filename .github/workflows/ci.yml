@@ -16,3 +16,62 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run db:migrate
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        with:
+          name: production-assets
+          path: dist
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+  deploy:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'alexcrist/slowmass' && vars.AUTO_DEPLOY_DISABLED != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: https://slowmass.com
+    concurrency:
+      group: slowmass-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: production-assets
+          path: dist
+      - name: Check current main commit
+        id: current
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          current_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+          if [ "$current_sha" = "$GITHUB_SHA" ]; then
+            echo 'deploy=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'Skipping superseded main commit.'
+          fi
+      - name: Verify production migration history
+        if: steps.current.outputs.deploy == 'true'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          test -n "$CLOUDFLARE_ACCOUNT_ID" && test -n "$CLOUDFLARE_API_TOKEN"
+          npx wrangler d1 execute slowmass --env production --remote --command 'SELECT name FROM d1_migrations ORDER BY name' --json > "$RUNNER_TEMP/migrations.json"
+          node scripts/ops/check-deploy-migrations.mjs "$RUNNER_TEMP/migrations.json"
+      - name: Deploy production
+        if: steps.current.outputs.deploy == 'true'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: npx wrangler deploy --env production
+      - name: Verify deployed assets and private boundaries
+        if: steps.current.outputs.deploy == 'true'
+        run: node scripts/ops/verify-deployment.mjs

@@ -18,7 +18,7 @@
     "type": "git",
     "url": "git+https://github.com/alexcrist/slowmass.git"
   },
-  "description": "Private, invitation-only photo sharing.",
+  "description": "Private photo sharing.",
   "dependencies": {
     "@block65/webcrypto-web-push": "2.0.0",
     "better-auth": "1.7.7",

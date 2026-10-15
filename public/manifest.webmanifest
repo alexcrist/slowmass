@@ -2,7 +2,7 @@
   "id": "/",
   "name": "slowmass",
   "short_name": "slowmass",
-  "description": "Private, invitation-only photo sharing.",
+  "description": "Private photo sharing.",
   "lang": "en",
   "start_url": "/",
   "scope": "/",
