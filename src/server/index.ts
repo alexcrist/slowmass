@@ -21,6 +21,7 @@ import { notifications } from './features/notifications/router';
 import { people } from './features/people/router';
 import { push, pushAfterMutation } from './features/push/router';
 import { dispatchPush } from './features/push';
+import { deviceSetup } from './features/device-setup/router';
 import type { Env } from './env';
 import { measuredEnvironment, performanceMetrics } from './telemetry';
 
@@ -87,6 +88,7 @@ app.route('/api/posts', posts);
 app.route('/api/interactions', interactions);
 app.route('/api/notifications', notifications);
 app.route('/api/push', push);
+app.route('/api/device-setup', deviceSetup);
 app.route('/media/posts', postMedia);
 app.route('/media/avatar', avatarMedia);
 app.route('/api/invitations', invitations);

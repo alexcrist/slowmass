@@ -1,10 +1,9 @@
 import { Hono } from 'hono';
-import { measuredObjectRead } from '../../telemetry';
 import type { Env } from '../../env';
 import { getActiveUser } from '../../auth';
 import { authConfigured } from '../../auth/options';
 import { ownProfile } from '../people';
-import { PhotoError } from '../../photos';
+import { PhotoError, privatePhoto } from '../../photos';
 import { saveAvatar, findAvatar } from './index';
 export const avatars = new Hono<{ Bindings: Env }>();
 export const avatarMedia = new Hono<{ Bindings: Env }>();
@@ -66,19 +65,12 @@ avatarMedia.get('/:handle', async (c) => {
     c.req.param('handle').toLowerCase(),
   );
   if (!avatar) return c.notFound();
-  const object = await measuredObjectRead(
-    c.env.PHOTOS,
+  const response = await privatePhoto(
+    c.env,
     size === 'large'
       ? (avatar.large_key ?? avatar.object_key)
       : avatar.object_key,
+    c.executionCtx,
   );
-  if (!object) return c.notFound();
-  return new Response(object.body, {
-    headers: {
-      'Content-Type': 'image/webp',
-      'Content-Length': String(object.size),
-      'Cache-Control': 'private, no-store',
-      'X-Content-Type-Options': 'nosniff',
-    },
-  });
+  return response ?? c.notFound();
 });

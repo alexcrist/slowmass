@@ -1,6 +1,7 @@
 export async function decodePhoto(file: File) {
-  if (file.size > 8 * 1024 * 1024)
-    throw new Error('Choose a photo smaller than 8 MB.');
+  // Bound local originals separately from the smaller, encoded upload.
+  if (file.size > 32 * 1024 * 1024)
+    throw new Error('Choose a photo no larger than 32 MB.');
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type))
     throw new Error('Choose a JPEG, PNG, or WebP photo.');
   let bitmap: ImageBitmap;

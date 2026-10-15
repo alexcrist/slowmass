@@ -229,6 +229,9 @@ it('backfills existing interactions and continues indexing mutations from the pr
       ...unstable_splitSqlQuery(
         readFileSync('migrations/0018_activity_read_state.sql', 'utf8'),
       ),
+      ...unstable_splitSqlQuery(
+        readFileSync('migrations/0026_follow_back_dismissal.sql', 'utf8'),
+      ),
     ].map((sql) => runtime.db.prepare(sql)),
   );
   expect(await notificationPage(db, 'alice', null)).toMatchObject({
@@ -369,6 +372,9 @@ it('backfills old read markers once and creates new versions atomically for old 
       'DROP TABLE activity_read_state',
       ...unstable_splitSqlQuery(
         readFileSync('migrations/0018_activity_read_state.sql', 'utf8'),
+      ),
+      ...unstable_splitSqlQuery(
+        readFileSync('migrations/0026_follow_back_dismissal.sql', 'utf8'),
       ),
     ].map((sql) => db.prepare(sql)),
   );

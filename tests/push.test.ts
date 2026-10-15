@@ -71,7 +71,7 @@ beforeEach(async () => {
   ]);
 });
 async function enable(actor = 'alice', endpoint = subscription.endpoint) {
-  const result = await runtime.request(actor, '/api/push', 'PUT', {
+  const result = await runtime.request(actor, '/api/push/device', 'PUT', {
     ...subscription,
     endpoint,
   });
@@ -132,7 +132,7 @@ it('keeps hourly delivery separate from maintenance and ignores obsolete schedul
 });
 it('requires explicit opt-in and authenticates settings, subscriptions and revocation', async () => {
   expect(
-    await (await runtime.request('alice', '/api/push')).json(),
+    await (await runtime.request('alice', '/api/push/device')).json(),
   ).toMatchObject({
     available: true,
     subscription: null,
@@ -149,7 +149,7 @@ it('requires explicit opt-in and authenticates settings, subscriptions and revoc
       (
         await runtime.request(
           null,
-          '/api/push',
+          '/api/push/device',
           method,
           method === 'PUT' ? subscription : undefined,
         )
@@ -157,17 +157,21 @@ it('requires explicit opt-in and authenticates settings, subscriptions and revoc
     ).toBe(401);
   expect(
     (
-      await runtime.request('alice', '/api/push', 'PUT', subscription, {
+      await runtime.request('alice', '/api/push/device', 'PUT', subscription, {
         Origin: 'https://elsewhere.test',
       })
     ).status,
   ).toBe(403);
   expect(
-    await (await runtime.request('bob', '/api/push')).json(),
+    await (await runtime.request('bob', '/api/push/device')).json(),
   ).toMatchObject({ subscription: null });
-  await runtime.request('bob', '/api/push', 'DELETE');
+  await runtime.request('bob', '/api/push/device', 'DELETE', undefined, {
+    'X-Push-Endpoint': subscription.endpoint,
+  });
   expect(await count('push_subscription')).toBe(1);
-  await runtime.request('alice', '/api/push', 'DELETE');
+  await runtime.request('alice', '/api/push/device', 'DELETE', undefined, {
+    'X-Push-Endpoint': subscription.endpoint,
+  });
   expect(await count('push_subscription')).toBe(0);
 });
 it('rejects unsafe endpoints and malformed encryption keys without issuing outbound requests', async () => {
@@ -182,7 +186,7 @@ it('rejects unsafe endpoints and malformed encryption keys without issuing outbo
   ])
     expect(
       (
-        await runtime.request('alice', '/api/push', 'PUT', {
+        await runtime.request('alice', '/api/push/device', 'PUT', {
           ...subscription,
           endpoint,
         })
@@ -197,7 +201,7 @@ it('rejects unsafe endpoints and malformed encryption keys without issuing outbo
   ])
     expect(
       (
-        await runtime.request('alice', '/api/push', 'PUT', {
+        await runtime.request('alice', '/api/push/device', 'PUT', {
           ...subscription,
           keys,
         })
@@ -486,6 +490,144 @@ it('rolls back the source mutation when its delivery intent cannot commit', asyn
     await runtime.db.exec('DROP TRIGGER fail_push');
   }
 });
+it('keeps isolated installations sharing a copied session independent and protects endpoint ownership', async () => {
+  const device = '/api/push/device';
+  const one = { ...subscription, endpoint: subscription.endpoint + '/one' };
+  const two = { ...subscription, endpoint: subscription.endpoint + '/two' };
+  for (const value of [one, two, one])
+    expect((await runtime.request('alice', device, 'PUT', value)).status).toBe(
+      200,
+    );
+  expect(await count('push_subscription')).toBe(2);
+  expect(await (await runtime.request('alice', device)).json()).toMatchObject({
+    subscription: null,
+  });
+  const headers = { 'X-Push-Endpoint': one.endpoint };
+  expect(
+    await (
+      await runtime.request('alice', device, 'GET', undefined, headers)
+    ).json(),
+  ).toMatchObject({ subscription: { endpoint: one.endpoint } });
+  expect(
+    await (
+      await runtime.request('bob', device, 'GET', undefined, headers)
+    ).json(),
+  ).toMatchObject({ subscription: null });
+  expect((await runtime.request('bob', device, 'PUT', one)).status).toBe(409);
+  await runtime.request('bob', device, 'DELETE', undefined, headers);
+  expect(await count('push_subscription')).toBe(2);
+  // An old open client cannot replace or revoke multiple installations.
+  expect(
+    (await runtime.request('alice', '/api/push', 'PUT', subscription)).status,
+  ).toBe(409);
+  expect((await runtime.request('alice', '/api/push', 'DELETE')).status).toBe(
+    409,
+  );
+  expect(await count('push_subscription')).toBe(2);
+  await pendingRequest();
+  expect(await count('push_delivery')).toBe(2);
+  await runtime.request('alice', device, 'PUT', one);
+  expect(await count('push_delivery')).toBe(2);
+  await runtime.request('alice', device, 'DELETE', undefined, headers);
+  expect(await count('push_subscription')).toBe(1);
+  expect(await count('push_delivery')).toBe(1);
+  expect(
+    await (
+      await runtime.request('alice', device, 'GET', undefined, {
+        'X-Push-Endpoint': two.endpoint,
+      })
+    ).json(),
+  ).toMatchObject({ subscription: { endpoint: two.endpoint } });
+});
+it('atomically enforces the per-member cap across installations without preventing idempotent registration', async () => {
+  const attempts = Array.from({ length: 12 }, (_, i) => ({
+    ...subscription,
+    endpoint: subscription.endpoint + '/' + i,
+  }));
+  const responses = await Promise.all(
+    attempts.map((value) =>
+      runtime.request('alice', '/api/push/device', 'PUT', value),
+    ),
+  );
+  expect(responses.filter((response) => response.status === 200)).toHaveLength(
+    10,
+  );
+  expect(responses.filter((response) => response.status === 409)).toHaveLength(
+    2,
+  );
+  expect(await count('push_subscription')).toBe(10);
+  const accepted =
+    attempts[responses.findIndex((response) => response.status === 200)];
+  expect(
+    (await runtime.request('alice', '/api/push/device', 'PUT', accepted))
+      .status,
+  ).toBe(200);
+  expect(await count('push_subscription')).toBe(10);
+  await pendingRequest();
+  expect(await count('push_delivery')).toBe(10);
+  // All copies of this login are revoked together; session ownership is unchanged.
+  await runtime.db
+    .prepare("UPDATE session SET expiresAt=0 WHERE id='alice'")
+    .run();
+  expect((await runtime.request('alice', '/api/push/device')).status).toBe(401);
+  await tick();
+  expect(sent).toHaveLength(0);
+  await runtime.db
+    .prepare(
+      'INSERT INTO session(id,userId,token,expiresAt,createdAt,updatedAt) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET expiresAt=excluded.expiresAt',
+    )
+    .bind('alice', 'alice', 'alice-token', Date.now() + 86400000, 1, 1)
+    .run();
+});
+
+it('revokes every installation sharing a cookie through library sign-out while preserving other sign-ins', async () => {
+  await runtime.db
+    .prepare(
+      'INSERT INTO session(id,userId,token,expiresAt,createdAt,updatedAt) VALUES(?,?,?,?,?,?)',
+    )
+    .bind('copied', 'alice', 'copied-token', Date.now() + 86400000, 1, 1)
+    .run();
+  await enable();
+  expect(
+    (await runtime.request('copied', '/api/push/device', 'PUT', subscription))
+      .status,
+  ).toBe(409);
+  expect(
+    await (
+      await runtime.request('copied', '/api/push/device', 'GET', undefined, {
+        'X-Push-Endpoint': subscription.endpoint,
+      })
+    ).json(),
+  ).toMatchObject({ subscription: null });
+  await runtime.request('copied', '/api/push/device', 'DELETE', undefined, {
+    'X-Push-Endpoint': subscription.endpoint,
+  });
+  expect(await count('push_subscription')).toBe(1);
+
+  for (const suffix of ['one', 'two'])
+    expect(
+      (
+        await runtime.request('copied', '/api/push/device', 'PUT', {
+          ...subscription,
+          endpoint: subscription.endpoint + '/' + suffix,
+        })
+      ).status,
+    ).toBe(200);
+  await pendingRequest();
+  expect(await count('push_delivery')).toBe(3);
+  expect(
+    (await runtime.request('copied', '/api/auth/sign-out', 'POST', {})).status,
+  ).toBe(200);
+  expect(await count('push_subscription')).toBe(1);
+  expect(await count('push_delivery')).toBe(1);
+  expect(
+    await (
+      await runtime.request('alice', '/api/push/device', 'GET', undefined, {
+        'X-Push-Endpoint': subscription.endpoint,
+      })
+    ).json(),
+  ).toMatchObject({ subscription: { endpoint: subscription.endpoint } });
+});
 it('revokes the device subscription and queued alerts through real library sign-out', async () => {
   await enable('bob');
   await runtime.db
@@ -530,7 +672,9 @@ it.each([
       .prepare("UPDATE session SET expiresAt=0 WHERE id='alice'")
       .run();
   if (reason === 'disable')
-    await runtime.request('alice', '/api/push', 'DELETE');
+    await runtime.request('alice', '/api/push/device', 'DELETE', undefined, {
+      'X-Push-Endpoint': subscription.endpoint,
+    });
   if (reason === 'delete')
     await runtime.request('alice', '/api/me', 'DELETE', {
       confirmation: 'DELETE',

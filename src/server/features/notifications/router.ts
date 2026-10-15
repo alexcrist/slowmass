@@ -5,6 +5,7 @@ import { getActiveSession } from '../../auth';
 import { authConfigured } from '../../auth/options';
 import {
   markRead,
+  dismissFollowBack,
   notificationPage,
   notificationStart,
   validNotificationKey,
@@ -102,3 +103,30 @@ notifications.post('/read', bodyLimit({ maxSize: 6000 }), async (c) => {
   await markRead(c.env.DB, c.get('userId'), body.items as ReadReceipt[]);
   return c.json({ ok: true });
 });
+
+notifications.post(
+  '/dismiss-follow-back',
+  bodyLimit({ maxSize: 1000 }),
+  async (c) => {
+    const body: unknown = await c.req.json().catch(() => null);
+    if (
+      !body ||
+      typeof body !== 'object' ||
+      !('key' in body) ||
+      typeof body.key !== 'string' ||
+      !validNotificationKey(body.key) ||
+      !body.key.startsWith('follower:') ||
+      !('version' in body) ||
+      typeof body.version !== 'number' ||
+      !Number.isSafeInteger(body.version) ||
+      body.version <= 0
+    ) {
+      return c.json({ error: 'Invalid follow-back dismissal.' }, 400);
+    }
+    await dismissFollowBack(c.env.DB, c.get('userId'), {
+      key: body.key,
+      version: body.version,
+    });
+    return c.json({ ok: true });
+  },
+);

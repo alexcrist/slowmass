@@ -3,13 +3,13 @@ import { api } from './index';
 
 export function useApiResource<T>(path: string) {
   // A fresh object identifies each read, including retries of the same URL.
-  const [request, setRequest] = useState(() => ({ path }));
+  const [request, setRequest] = useState(() => ({ path, preserveData: false }));
   const [result, setResult] = useState<{
     request: typeof request;
     data: T | null;
     error: string;
   } | null>(null);
-  if (request.path !== path) setRequest({ path });
+  if (request.path !== path) setRequest({ path, preserveData: false });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -44,11 +44,30 @@ export function useApiResource<T>(path: string) {
   }, [request]);
 
   const current =
-    request.path === path && result?.request === request ? result : null;
+    request.path === path &&
+    (result?.request === request ||
+      (request.preserveData && result?.request.path === path))
+      ? result
+      : null;
+  const loading = request.path !== path || result?.request !== request;
   return {
     data: current?.data ?? null,
-    error: current?.error ?? '',
-    loading: current === null,
-    reload: () => setRequest({ path }),
+    error: loading ? '' : (current?.error ?? ''),
+    loading,
+    reload: () => setRequest({ path, preserveData: false }),
+    refresh: (update?: (data: T) => T) => {
+      // Apply only a confirmed mutation to this read's data. The new GET still
+      // owns authorization, pagination, and any concurrent changes.
+      if (update)
+        setResult((current) =>
+          current &&
+          current.data !== null &&
+          (current.request === request ||
+            (request.preserveData && current.request.path === path))
+            ? { ...current, data: update(current.data) }
+            : current,
+        );
+      setRequest({ path, preserveData: true });
+    },
   };
 }

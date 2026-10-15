@@ -1,24 +1,15 @@
-import { startupPhase } from '../telemetry';
+import { startupPhase, sessionStage } from '../telemetry';
 import { betterAuth } from 'better-auth';
 import type { Env } from '../env';
 import { authOptions } from './options';
 import { memberAccess } from '../membership';
 
 type Auth = ReturnType<typeof betterAuth>;
-const instances = new WeakMap<Env, Auth>();
 export function createAuth(env: Env) {
-  const cached = instances.get(env);
-  if (cached) return cached;
-  const auth = betterAuth(authOptions(env));
-  // Cache only completed initialization. An abandoned first request must never
-  // leave other requests waiting on its permanently pending context promise.
-  void auth.$context.then(
-    () => {
-      if (!instances.has(env)) instances.set(env, auth);
-    },
-    () => {},
-  );
-  return auth;
+  // A resolved $context does not establish that all lazy library state is safe
+  // to reuse after its owning Workers request ends. Keep the whole instance
+  // request-local; cookies, secrets and persisted sessions remain unchanged.
+  return betterAuth(authOptions(env));
 }
 export class AuthUnavailableError extends Error {
   constructor() {
@@ -43,6 +34,7 @@ async function authOperation<T>(
         if (expired) throw new AuthUnavailableError();
         phase = kind;
         startupPhase(kind);
+        if (kind === 'session') sessionStage('dispatch');
         return action(auth);
       })(),
       new Promise<never>((_, reject) => {
@@ -50,7 +42,6 @@ async function authOperation<T>(
           () => {
             expired = true;
             startupPhase(phase, true);
-            if (instances.get(env) === auth) instances.delete(env);
             console.error(JSON.stringify({ event: 'auth.timeout', phase }));
             reject(new AuthUnavailableError());
           },

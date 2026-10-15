@@ -8,6 +8,8 @@ These limits are not a Cloudflare account-wide spending cap. Other buckets, dire
 
 Cleanup runs every 15 minutes. Each invocation processes one account (five posts and up to 100 rows per ancillary table), two avatar objects, and two post objects. It also attempts one legacy grid-thumbnail conversion within the same budgets; failed conversions keep their full-image fallback and are not automatically retried while their attempt record is retained (60 days). It also prunes bounded batches of expired sessions, email-link records, email budgets, and old processing attempts. Backlogs preserve privacy and remain charged to quota; inspect them if storage is unexpectedly full. Account content cleanup completion does not imply every queued R2 object has been physically deleted.
 
+Private image delivery also uses an ephemeral, named Workers cache with one-hour freshness, separate from R2 storage accounting and backups. Authorization and current object selection always precede lookup, so deletion and access changes deny new reads even while bytes remain internally cached. Freshness expiry is not a physical-erasure guarantee from the provider. Never overwrite an existing immutable object key during repairs; use a new key and update its authorized reference. Maintenance denies media before lookup. Recovery must reconcile deletion state before reopening, as usual. Code rollback can simply resume direct R2 delivery; no cache purge is required for privacy. See [private delivery](../src/server/photos/README.md#private-delivery) for failure behavior and telemetry.
+
 ## Usage inspection
 
 With Node 24 and Wrangler authenticated, run:
@@ -154,3 +156,23 @@ The deployed release uses one native Better Auth session/user query and one fres
 Like/unlike now returns visible authoritative counts, saving the client’s additional detail HTTP request. Profile Posts starts concurrently with profile metadata, renders only after access is confirmed, and preserves page history. Visiting an unfollowed profile can incur one additional denied posts request; connection panels still wait for authorization. Cancellation, late responses, and error recovery are covered by component tests.
 
 Media response timing now separates R2 lookup (`r2`) from database waiting and overall handler time. R2 timing stops when the object response arrives, not when its streamed bytes reach the device. Existing 480px grid thumbnails, eager first-row/first-photo loading, lazy later photos, and private/no-store authorization remain in effect. No image-quality or caching changes are justified from the existing handler-only samples; collect R2 and client download evidence before selecting another photo optimization.
+
+A 150-second sanitized tail after deployment captured no `request.performance` records at the normal 5% sample rate. The owner reported a slight possible subjective improvement. This observation does not establish an additional hosted latency reduction or R2 bottleneck. The verified gains for this release are the local D1 query-count regression and the client request-order/count regressions; retain the earlier placement measurements as a separate experiment.
+
+## Captured startup auth timeout — October 13, 2026
+
+During a refresh investigation at approximately `2026-10-14T01:33Z` (October 13 Pacific time), the owner reported a pause followed by recovery. Retained server and browser diagnostics correlate startup `e1698052-84bb-404d-8db6-a3be8d2437bb` and first request `58781069-a0b1-4510-b682-825859b9a44b`:
+
+- At five seconds the server was in the `session` phase, with zero database queries started, zero pending queries, and zero storage reads.
+- At eight seconds the session deadline returned HTTP 503 with `authTimedOut: true`; database and storage counters were still zero. Auth initialization had completed before entering this phase.
+- The browser recorded that same HTTP 503 after 8,030 ms and `recovered: true`, confirming a valid bootstrap response on the automatic second attempt.
+
+This captures a production stall inside `auth.api.getSession` before any measured D1 operation. Database serialization, slow SQL, and image reads do not explain this request's wait. The exact unresolved operation inside the library is not yet established. Previously deployed static async-hooks imports and disabled runtime schema validation were verified in the serving Worker; those mitigations have not eliminated the symptom. Trace the remaining session dispatch, cookie verification, and adapter-entry boundaries before choosing another auth change. Caching feed data or photos would not remove this startup dependency.
+
+The preceding 24-hour usage query ending `2026-10-14T01:30:18Z` reported 2,097 successful Worker invocations, 16 client disconnects, zero reported Worker errors, 42,558 D1 rows read, and 889 written. A successful invocation classification does not exclude an application HTTP 503. Thirty direct checks of HTML, status, and signed-out bootstrap all returned 200; the ten signed-out bootstrap reads took 21–59 ms and did not exercise a signed-in database lookup. Two brief sanitized tails captured 49 HTTP 200 invocations and no timeout; the retained records, rather than those tails, supplied the failure evidence. Initial retained errors at 01:05–01:06 UTC were immediate maintenance responses from the migration window and are separate from this eight-second auth timeout.
+
+No application code, cache policy, dependency, infrastructure, or deployment changed during this investigation. No browser or visual testing was performed. The evidence establishes this captured occurrence, not the cause of every earlier loading report.
+
+### Auth isolation follow-up — October 13, 2026
+
+The subsequent [auth isolation release](setup.md#auth-isolation-and-redundant-reads-release-october-13-2026) removes cross-request auth-instance and measured-environment reuse. It preserves existing credentials and adds session boundary markers for any recurrence. At approximately `2026-10-14T02:00Z`, no new retained startup diagnostic existed after deployment at `01:55:51.431Z`; a 120-second sanitized tail captured only one HTTP 200 invocation. That sample does not establish signed-in recovery or prove the intermittent failure eliminated. Collect signed-in observations and compare hosted CPU usage before treating request-local initialization as a measured permanent resolution. Image caching is still a separate proposal, not a deployed change.

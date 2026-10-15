@@ -11,3 +11,5 @@ Integration tests bundle the entry point into Miniflare and run real D1-backed s
 Feature `index.ts` files define public entry points; cross-feature consumers use those exports. Boundary tests resolve imports through the TypeScript configuration and check static imports, re-exports, dynamic imports, CommonJS imports, and type imports. Computed module loading is rejected. Dependency cycles and client/server crossings fail the check. On the server, the composition root may mount public router adapters, while routers and the root may not issue database queries.
 
 [Startup diagnostics](diagnostics/README.md) retain bounded anonymous failure evidence in D1, independently of authentication. Telemetry supplies server snapshots; the composition root wires the write-only endpoint and retention cleanup.
+
+[Device setup](features/device-setup/README.md) owns optional onboarding progress. Account bootstrap composes its public read with the people profile read; neither install nor push consent gates member access. Push owns independent browser endpoints within authenticated sessions.

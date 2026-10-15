@@ -1,3 +1,5 @@
+import { separateReads, sharedRead } from './reads';
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -10,13 +12,15 @@ export class ApiError extends Error {
 
 const unauthorizedListeners = new Set<() => void>();
 export function onUnauthorized(listener: () => void) {
+  separateReads();
   unauthorizedListeners.add(listener);
   return () => {
     unauthorizedListeners.delete(listener);
+    separateReads();
   };
 }
 
-export async function api<T>(path: string, options?: RequestInit): Promise<T> {
+async function request(path: string, options?: RequestInit): Promise<unknown> {
   const listeners = [...unauthorizedListeners];
   const response = await fetch(path, options);
   const body: unknown = await response.json().catch(() => null);
@@ -32,11 +36,37 @@ export async function api<T>(path: string, options?: RequestInit): Promise<T> {
       // Notify each mounted session once. Late responses from an unsubscribed
       // session cannot invalidate a subsequent sign-in.
       for (const listener of listeners)
-        if (unauthorizedListeners.delete(listener)) listener();
+        if (unauthorizedListeners.delete(listener)) {
+          separateReads();
+          listener();
+        }
     }
     throw new ApiError(error, response.status);
   }
-  return body as T;
+  return body;
+}
+
+export async function api<T>(path: string, options?: RequestInit): Promise<T> {
+  const method = options?.method?.toUpperCase() ?? 'GET';
+  // Only ordinary same-origin reads share work. Custom headers, credentials,
+  // cache modes and other fetch options retain their exact transport semantics.
+  if (
+    method === 'GET' &&
+    Object.keys(options ?? {}).every(
+      (key) => key === 'method' || key === 'signal',
+    )
+  )
+    return (await sharedRead(path, options?.signal, (signal) =>
+      request(path, { ...options, signal }),
+    )) as T;
+  const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(method);
+  if (mutation) separateReads();
+  try {
+    return (await request(path, options)) as T;
+  } finally {
+    // A read started during the mutation can also predate its commit.
+    if (mutation) separateReads();
+  }
 }
 export function jsonRequest(method: string, data: unknown): RequestInit {
   return {
@@ -45,3 +75,5 @@ export function jsonRequest(method: string, data: unknown): RequestInit {
     body: JSON.stringify(data),
   };
 }
+
+export { withDeadline } from './deadline';

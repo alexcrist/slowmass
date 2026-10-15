@@ -34,6 +34,28 @@ self.addEventListener('push', (event) => {
     }),
   );
 });
+// WindowClient does not expose display mode. Ask live pages with a short bound;
+// older bundles can ignore the probe without delaying notification navigation.
+function installedWindow(client) {
+  if (!client.postMessage) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    const finish = (value) => {
+      clearTimeout(timer);
+      channel.port1.close();
+      channel.port2.close();
+      resolve(value);
+    };
+    const timer = setTimeout(() => finish(false), 200);
+    channel.port1.onmessage = (event) =>
+      finish(event.data?.standalone === true);
+    try {
+      client.postMessage({ type: 'slowmass:window-mode' }, [channel.port2]);
+    } catch {
+      finish(false);
+    }
+  });
+}
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const key = event.notification.data?.key;
@@ -49,8 +71,18 @@ self.addEventListener('notificationclick', (event) => {
         type: 'window',
         includeUncontrolled: true,
       });
-      for (const client of windows) {
-        if (new URL(client.url).origin !== self.location.origin) continue;
+      const candidates = await Promise.all(
+        windows
+          .filter(
+            (client) => new URL(client.url).origin === self.location.origin,
+          )
+          .map(async (client) => ({
+            client,
+            installed: await installedWindow(client),
+          })),
+      );
+      candidates.sort((a, b) => Number(b.installed) - Number(a.installed));
+      for (const { client } of candidates) {
         try {
           const navigated = await client.navigate(url);
           if (navigated) {

@@ -14,6 +14,7 @@ it('returns availability, session and only the current member profile in one pri
   expect(guest.headers.get('Server-Timing')).toContain('app;dur=');
   expect(await guest.json()).toEqual({
     signInAvailable: true,
+    deviceSetupPending: false,
     user: null,
     profile: null,
   });
@@ -21,6 +22,7 @@ it('returns availability, session and only the current member profile in one pri
     await (await runtime.request('alice', '/api/bootstrap')).json(),
   ).toEqual({
     signInAvailable: true,
+    deviceSetupPending: true,
     user: { id: 'alice', name: 'alice' },
     profile: null,
   });
@@ -39,18 +41,33 @@ it('returns availability, session and only the current member profile in one pri
     await (await runtime.request('alice', '/api/bootstrap')).json(),
   ).toMatchObject({ profile: { hasAvatar: 1 } });
   expect(await (await runtime.request('bob', '/api/bootstrap')).json()).toEqual(
-    { signInAvailable: true, user: { id: 'bob', name: 'bob' }, profile: null },
+    {
+      signInAvailable: true,
+      deviceSetupPending: true,
+      user: { id: 'bob', name: 'bob' },
+      profile: null,
+    },
   );
   await runtime.db
     .prepare("UPDATE session SET expiresAt=0 WHERE userId='alice'")
     .run();
   expect(
     await (await runtime.request('alice', '/api/bootstrap')).json(),
-  ).toEqual({ signInAvailable: true, user: null, profile: null });
+  ).toEqual({
+    signInAvailable: true,
+    deviceSetupPending: false,
+    user: null,
+    profile: null,
+  });
   await runtime.db
     .prepare("UPDATE membership SET status='disabled' WHERE user_id='bob'")
     .run();
   expect(await (await runtime.request('bob', '/api/bootstrap')).json()).toEqual(
-    { signInAvailable: true, user: null, profile: null },
+    {
+      signInAvailable: true,
+      deviceSetupPending: false,
+      user: null,
+      profile: null,
+    },
   );
 });

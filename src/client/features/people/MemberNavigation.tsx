@@ -1,3 +1,4 @@
+import type { MouseEvent } from 'react';
 import { currentRoute, profileHref } from '../../navigation';
 import { SettingsIcon } from '../../navigation/SettingsIcon';
 import type { Profile } from './ProfileForm';
@@ -43,19 +44,33 @@ export function MemberNavigation({
   avatarVersion,
   unreadCount,
   onReselect,
+  onNavigate,
 }: {
   page: string;
   profile: Profile;
   avatarVersion: number;
   unreadCount: number | null;
   onReselect: () => void;
+  onNavigate?: () => void;
 }) {
+  function navigate(event: MouseEvent<HTMLAnchorElement>) {
+    if (
+      !event.defaultPrevented &&
+      event.button === 0 &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.shiftKey &&
+      !event.altKey
+    )
+      onNavigate?.();
+  }
   return (
     <nav className="app-navigation" aria-label="Main navigation">
       <a
         className="site-name nav-brand"
         href="#feed"
         aria-label="slowmass home"
+        onClick={navigate}
       >
         <span className="nav-logo" aria-hidden="true">
           <span>s</span>
@@ -86,6 +101,7 @@ export function MemberNavigation({
               key={item.page}
               href={href}
               onClick={(event) => {
+                navigate(event);
                 if (
                   !canRefresh ||
                   event.defaultPrevented ||
@@ -140,6 +156,7 @@ export function MemberNavigation({
           className="nav-link"
           href="#settings"
           aria-label="Settings"
+          onClick={navigate}
           aria-current={page === 'settings' ? 'page' : undefined}
         >
           <SettingsIcon />

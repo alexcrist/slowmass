@@ -32,6 +32,11 @@ export function Interactions({
     [likesOpen, setLikesOpen] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
+  const [source, setSource] = useState(initial);
+  if (source !== initial) {
+    setSource(initial);
+    setCounts(initial);
+  }
   async function refresh() {
     const data = await api<{ post: Counts }>(`/api/posts/${postId}`);
     setCounts(data.post);
@@ -124,12 +129,13 @@ function Comments({
     error: loadError,
     loading,
     reload,
+    refresh,
   } = useApiResource<Page>(
     `/api/interactions/${postId}/comments?after=${encodeURIComponent(after)}`,
   );
   async function add(event: FormEvent) {
     event.preventDefault();
-    if (busy || !body.trim()) return;
+    if (busy || loading || !body.trim()) return;
     setBusy(true);
     setError('');
     try {
@@ -139,9 +145,13 @@ function Comments({
       );
       setBody('');
       setId(crypto.randomUUID());
-      setHistory(['']);
-      reload();
-      await onChange();
+      if (after) setHistory(['']);
+      else refresh();
+      try {
+        await onChange();
+      } catch {
+        setError('Comment posted. Reload to update the comment count.');
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not add comment.');
     } finally {
@@ -149,13 +159,16 @@ function Comments({
     }
   }
   async function remove(id: string) {
-    if (busy) return;
+    if (busy || loading) return;
     setBusy(true);
     setError('');
     try {
       await api(`/api/interactions/comments/${id}`, { method: 'DELETE' });
       setConfirming(null);
-      reload();
+      refresh((current) => ({
+        ...current,
+        items: current.items.filter((comment) => comment.id !== id),
+      }));
       try {
         await onChange();
       } catch {
@@ -169,14 +182,14 @@ function Comments({
   }
   return (
     <div>
-      {loading && <p role="status">Loading comments…</p>}
-      {page?.items.length === 0 && <p>No comments on this page.</p>}
+      {loading && !page && <p role="status">Loading comments…</p>}
+      {!loading && page?.items.length === 0 && <p>No comments on this page.</p>}
       <ul className="comment-list">
         {page?.items.map((comment) => (
           <CommentRow
-            key={`${comment.id}:${comment.likeCount}:${comment.liked}`}
+            key={comment.id}
             comment={comment}
-            busy={busy}
+            busy={busy || loading}
             onDelete={() => {
               setError('');
               setConfirming(comment);
@@ -228,26 +241,42 @@ function Comments({
         <label className="visually-hidden" htmlFor={label}>
           Add a comment
         </label>
-        <textarea
-          id={label}
-          required
-          maxLength={1000}
-          rows={1}
-          placeholder="Add a comment…"
-          value={body}
-          disabled={busy}
-          onChange={(e) => {
-            setBody(e.target.value);
-            setId(crypto.randomUUID());
-          }}
-        />
+        <div className="comment-input">
+          <span className="comment-input-size" aria-hidden="true">
+            {body + ' '}
+          </span>
+          <textarea
+            id={label}
+            required
+            maxLength={1000}
+            rows={1}
+            placeholder="Add a comment…"
+            value={body}
+            disabled={busy}
+            onChange={(e) => {
+              setBody(e.target.value);
+              setId(crypto.randomUUID());
+            }}
+          />
+        </div>
         <button
           className="comment-submit"
           type="submit"
-          disabled={busy || !body.trim()}
+          disabled={busy || loading || !body.trim()}
           aria-label={busy ? 'Posting comment' : 'Post comment'}
         >
-          {busy ? 'Posting…' : 'Post'}
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m21 3-6.5 18-4-7.5L3 9.5 21 3Z" />
+            <path d="m10.5 13.5 5-5" />
+          </svg>
         </button>
       </form>
       {error && !confirming && <p role="alert">{error}</p>}
@@ -289,6 +318,11 @@ function CommentRow({
   const [liking, setLiking] = useState(false);
   const [likesOpen, setLikesOpen] = useState(false);
   const [error, setError] = useState('');
+  const [source, setSource] = useState(comment);
+  if (source !== comment) {
+    setSource(comment);
+    setCounts({ likeCount: comment.likeCount, liked: comment.liked });
+  }
   async function toggleLike() {
     if (liking) return;
     setLiking(true);
@@ -346,7 +380,7 @@ function CommentRow({
           {Boolean(comment.canDelete) && (
             <button
               type="button"
-              className="icon-button comment-delete"
+              className="comment-delete"
               aria-label="Delete comment"
               title="Delete comment"
               aria-haspopup="dialog"

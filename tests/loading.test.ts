@@ -182,9 +182,12 @@ it('shows a unified unread badge, preserves it on failures, and pauses polling w
   await act(async () => window.dispatchEvent(new Event('focus')));
   const stale = pending('/api/notifications/unread-count');
   await act(async () => window.dispatchEvent(new Event('online')));
-  expect(stale.options?.signal?.aborted).toBe(true);
-  await reply(requests.at(-1)!, { count: 100 });
-  await reply(stale, { count: 1 });
+  await act(async () => document.dispatchEvent(new Event('visibilitychange')));
+  expect(stale.options?.signal?.aborted).toBe(false);
+  expect(
+    requests.filter((request) => request.path.includes('unread-count')),
+  ).toHaveLength(3);
+  await reply(stale, { count: 100 });
   expect(
     renderer.root.findByProps({ className: 'nav-badge' }).children,
   ).toEqual(['99+']);
@@ -193,6 +196,31 @@ it('shows a unified unread badge, preserves it on failures, and pauses polling w
   expect(renderer.root.findAllByProps({ className: 'nav-badge' })).toHaveLength(
     0,
   );
+});
+
+it('replaces an older badge read after a confirmed mutation and ignores its late result', async () => {
+  location.hash = '#notifications';
+  await mount(
+    createElement(MemberApp, {
+      initialProfile: ownProfile,
+      onSignOut: vi.fn(),
+      signingOut: false,
+    }),
+  );
+  const old = pending('/api/notifications/unread-count');
+  await act(async () =>
+    renderer.root.findByType(Notifications).props.onChange(),
+  );
+  const reads = requests.filter((request) =>
+    request.path.includes('unread-count'),
+  );
+  expect(reads).toHaveLength(2);
+  expect(old.options?.signal?.aborted).toBe(true);
+  await reply(reads[1], { count: 1 });
+  await reply(old, { count: 8 });
+  expect(
+    renderer.root.findByProps({ className: 'nav-badge' }).children,
+  ).toEqual(['1']);
 });
 
 it('shows a new follower as a profile link without follow-request decisions', async () => {
@@ -219,6 +247,56 @@ it('shows a new follower as a profile link without follow-request decisions', as
     renderer.root.findByProps({ 'data-notification-key': 'follower:bob' }),
   ).toBeDefined();
 });
+it.each(['follow', 'dismiss'] as const)(
+  'handles follow-back %s, retries failures, and refreshes eligibility',
+  async (action) => {
+    await mount(createElement(Notifications));
+    const item = {
+      key: 'follower:bob',
+      kind: 'follower',
+      handle: 'bob',
+      version: 7,
+      unread: true,
+      createdAt: 1,
+      canFollowBack: true,
+    };
+    await reply(pending('/api/notifications?'), { items: [item], next: null });
+    const avatar = renderer.root.findByType('img');
+    expect(renderer.root.findByType('img').props.src).toBe('/media/avatar/bob');
+    const label =
+      action === 'follow' ? 'Follow back' : 'Dismiss follow back for @bob';
+    const path =
+      action === 'follow'
+        ? '/api/people/bob/request'
+        : '/api/notifications/dismiss-follow-back';
+    await click(label);
+    expect(
+      renderer.root
+        .findAllByType('button')
+        .every((button) => button.props.disabled),
+    ).toBe(true);
+    const request = pending(path);
+    expect(request.options?.method).toBe('POST');
+    if (action === 'dismiss')
+      expect(JSON.parse(String(request.options?.body))).toEqual({
+        key: item.key,
+        version: item.version,
+      });
+    await reply(request, { error: 'Try again.' }, 503);
+    expect(visibleText()).toContain('Try again.');
+    await click(label);
+    await reply(pending(path), { ok: true });
+    expect(renderer.root.findByType('img')).toBe(avatar);
+    expect(visibleText()).not.toContain('Loading notifications');
+    await reply(pending('/api/notifications?'), {
+      items: [{ ...item, canFollowBack: false }],
+      next: null,
+    });
+    expect(renderer.root.findAllByType('button')).toHaveLength(0);
+    expect(renderer.root.findByType('img')).toBe(avatar);
+    expect(visibleText()).toContain('started following you.');
+  },
+);
 it('batches visible notification receipts, retries failure, and keeps seen requests actionable', async () => {
   vi.useFakeTimers();
   const onChange = vi.fn();
@@ -312,12 +390,131 @@ it('batches visible notification receipts, retries failure, and keeps seen reque
   await click('Accept');
   await reply(pending('/api/people/bob/accept'), { ok: true });
   expect(onChange).toHaveBeenCalledTimes(2);
-  expect(visibleText()).toContain('Loading notifications…');
+  expect(visibleText()).not.toContain('Loading notifications…');
+  expect(visibleText()).not.toContain('requested to follow you.');
+  expect(renderer.root.findAllByType('img')).toHaveLength(2);
 });
 function noLogin() {
   expect(renderer.root.findAllByType('form')).toHaveLength(0);
   expect(visibleText()).not.toContain('Welcome to slowmass');
 }
+
+it('keeps the profile photo mounted through follow request and cancellation without restarting posts', async () => {
+  await mount(createElement(ProfilePage, { handle: 'alice' }));
+  const profile = { ...ownProfile, bio: null, relationship: 'none' };
+  await reply(pending('/api/people/alice'), { profile });
+  const avatar = renderer.root.findByProps({ src: '/media/avatar/alice' });
+  for (const [label, action, relationship] of [
+    ['Request to follow', 'request', 'pending'],
+    ['Cancel request', 'cancel', 'none'],
+  ]) {
+    await click(label);
+    await reply(pending(`/api/people/alice/${action}`), { ok: true });
+    expect(renderer.root.findByProps({ src: '/media/avatar/alice' })).toBe(
+      avatar,
+    );
+    expect(visibleText()).not.toContain('Loading profile');
+    expect(
+      renderer.root.findByProps({ 'aria-label': label }).props.disabled,
+    ).toBe(true);
+    await reply(pending('/api/people/alice'), {
+      profile: { ...profile, relationship },
+    });
+    expect(renderer.root.findByProps({ src: '/media/avatar/alice' })).toBe(
+      avatar,
+    );
+    expect(
+      renderer.root.findAllByProps({ className: 'post-grid' }),
+    ).toHaveLength(0);
+  }
+  expect(
+    requests.filter((request) => request.path.startsWith('/api/posts?')),
+  ).toHaveLength(1);
+  expect(location.reload).not.toHaveBeenCalled();
+});
+
+it('clears a retained profile after denied revalidation and ignores late refreshes after navigation', async () => {
+  await mount(createElement(ProfilePage, { handle: 'alice' }));
+  const profile = { ...ownProfile, bio: null, relationship: 'none' };
+  await reply(pending('/api/people/alice'), { profile });
+  await click('Request to follow');
+  await reply(pending('/api/people/alice/request'), { ok: true });
+  await reply(
+    pending('/api/people/alice'),
+    { error: 'Profile unavailable' },
+    403,
+  );
+  expect(renderer.root.findAllByType('img')).toHaveLength(0);
+  expect(visibleText()).toContain('Profile unavailable');
+  await click('Retry');
+  await reply(pending('/api/people/alice'), { profile });
+  await click('Request to follow');
+  await reply(pending('/api/people/alice/request'), { ok: true });
+  const late = pending('/api/people/alice');
+  await act(async () =>
+    renderer.update(createElement(ProfilePage, { handle: 'bob' })),
+  );
+  expect(late.options?.signal?.aborted).toBe(true);
+  expect(renderer.root.findAllByType('img')).toHaveLength(0);
+  await reply(pending('/api/people/bob'), {
+    profile: { ...profile, handle: 'bob' },
+  });
+  await reply(late, { profile: { ...profile, relationship: 'accepted' } });
+  expect(renderer.root.findByType('img').props.src).toBe('/media/avatar/bob');
+  expect(renderer.root.findAllByProps({ className: 'post-grid' })).toHaveLength(
+    0,
+  );
+});
+
+it('deletes only the chosen feed card while preserving other photos, open comments, and drafts through refreshed counts', async () => {
+  await mount(createElement(PostList));
+  const target = { ...post('target'), isOwner: true };
+  const survivor = post('survivor');
+  await reply(pending('/api/posts?'), {
+    items: [target, survivor],
+    next: null,
+  });
+  const photo = renderer.root.findByProps({ src: survivor.mediaUrl });
+  const card = renderer.root.findAllByType('article')[1];
+  await act(async () =>
+    card.findByProps({ 'aria-label': 'Show comments' }).props.onClick(),
+  );
+  await reply(pending('/api/interactions/survivor/comments?'), {
+    items: [],
+    next: null,
+  });
+  const field = card.findByType('textarea');
+  await act(async () =>
+    field.props.onChange({ target: { value: 'Keep my draft' } }),
+  );
+  await click('Post options');
+  await click('Delete post');
+  await act(async () =>
+    renderer.root
+      .findByType('dialog')
+      .findByType('form')
+      .props.onSubmit({ preventDefault: vi.fn() }),
+  );
+  await reply(pending('/api/posts/target'), { ok: true });
+  expect(renderer.root.findAllByType('article')).toEqual([card]);
+  expect(renderer.root.findByProps({ src: survivor.mediaUrl })).toBe(photo);
+  expect(field.props.value).toBe('Keep my draft');
+  await reply(pending('/api/posts?'), {
+    items: [{ ...survivor, likeCount: 3, liked: 1, commentCount: 2 }],
+    next: null,
+  });
+  expect(renderer.root.findByProps({ src: survivor.mediaUrl })).toBe(photo);
+  expect(renderer.root.findByType('textarea')).toBe(field);
+  expect(field.props.value).toBe('Keep my draft');
+  expect(
+    renderer.root.findByProps({ 'aria-label': 'Unlike photo' }),
+  ).toBeDefined();
+  expect(
+    requests.filter((request) =>
+      request.path.startsWith('/api/interactions/survivor/comments?'),
+    ),
+  ).toHaveLength(1);
+});
 const ownProfile = {
   handle: 'alice',
   displayName: 'Alice',
@@ -1101,10 +1298,20 @@ it.each(['connections', 'activity'])(
           displayName: 'Alice',
           createdAt: 1,
         },
+        {
+          key: 'joined:bob',
+          kind: 'joined',
+          handle: 'bob',
+          displayName: 'Bob',
+          createdAt: 1,
+        },
       ],
       next: null,
     });
     const action = kind === 'connections' ? 'remove' : 'accept';
+    const remainingAvatar = renderer.root.findByProps({
+      src: '/media/avatar/bob',
+    });
     if (kind === 'connections') {
       await click('Remove @alice as a follower');
       expect(
@@ -1113,13 +1320,31 @@ it.each(['connections', 'activity'])(
     }
     await click(kind === 'connections' ? 'Remove follower' : 'Accept');
     await reply(pending(`/api/people/alice/${action}`), { ok: true });
-    expect(visibleText()).toContain('Loading');
+    expect(visibleText()).not.toContain('Loading');
+    expect(renderer.root.findByProps({ src: '/media/avatar/bob' })).toBe(
+      remainingAvatar,
+    );
     expect(visibleText()).not.toContain('@alice');
     expect(
       renderer.root
         .findAllByType('button')
         .some((item) => item.children.join('') === 'Accept'),
     ).toBe(false);
+    await reply(pending(path), {
+      items: [
+        {
+          key: 'joined:bob',
+          kind: 'joined',
+          handle: 'bob',
+          displayName: 'Bob',
+          createdAt: 1,
+        },
+      ],
+      next: null,
+    });
+    expect(renderer.root.findByProps({ src: '/media/avatar/bob' })).toBe(
+      remainingAvatar,
+    );
   },
 );
 
@@ -2226,12 +2451,24 @@ it('returns from the profile invite shortcut and exposes explicit retry for fail
   expect(visibleText()).toContain('Loading invitations…');
 });
 
-it('posts a caption and photo without requiring the removed description field', async () => {
+it('resizes an original over 8 MB before posting and reuses the encoded photo on retry', async () => {
   const onPublished = vi.fn();
-  const original = new File(['photo'], 'test.jpg', { type: 'image/jpeg' });
+  const original = new File([new Uint8Array(12 * 1024 * 1024)], 'test.jpg', {
+    type: 'image/jpeg',
+  });
+  const encoded = new Blob(['cropped'], { type: 'image/webp' });
+  const drawImage = vi.fn();
+  const toBlob = vi.fn((callback: BlobCallback) => callback(encoded));
+  const canvas = {
+    width: 0,
+    height: 0,
+    getContext: () => ({ drawImage }),
+    toBlob,
+  };
+  Object.assign(document, { createElement: () => canvas });
   vi.stubGlobal(
     'createImageBitmap',
-    vi.fn().mockResolvedValue({ width: 100, height: 80, close: vi.fn() }),
+    vi.fn().mockResolvedValue({ width: 6000, height: 4000, close: vi.fn() }),
   );
   await mount(createElement(Compose, { onPublished }));
   expect(renderer.root.findAllByProps({ id: 'alt-text' })).toHaveLength(0);
@@ -2245,10 +2482,9 @@ it('posts a caption and photo without requiring the removed description field', 
       },
     });
   });
-  const cropped = new File(['cropped'], 'crop.webp', { type: 'image/webp' });
-  await act(async () =>
-    renderer.root.findByType(PostCropEditor).props.onApply(cropped, fullPhoto),
-  );
+  await click('Use photo');
+  expect([canvas.width, canvas.height]).toEqual([1600, 1067]);
+  expect(toBlob).toHaveBeenCalledWith(expect.any(Function), 'image/webp', 0.92);
   await click('Adjust crop');
   expect(renderer.root.findByType(PostCropEditor).props.file).toBe(original);
   expect(renderer.root.findByType(PostCropEditor).props.initial).toEqual(
@@ -2270,8 +2506,11 @@ it('posts a caption and photo without requiring the removed description field', 
   expect(body).toMatchObject({ caption: 'Test caption', altText: '' });
   await reply(draft, { state: 'pending' });
   const upload = pending(`/api/posts/${body.id}/photo`);
+  const cropped = upload.options?.body;
+  expect(cropped).toBeInstanceOf(File);
+  expect(await (cropped as File).text()).toBe('cropped');
+  expect(upload.options?.headers).toEqual({ 'Content-Type': 'image/webp' });
   expect(upload.options?.method).toBe('PUT');
-  expect(upload.options?.body).toBe(cropped);
   await reply(upload, { error: 'Please retry' }, 503);
   await act(async () => {
     const submit = renderer.root.findByType('form').props.onSubmit;
@@ -2342,6 +2581,7 @@ it.each([false, true])(
       items: [other, comment],
       next: null,
     });
+    const remainingAvatar = renderer.root.findAllByType('img')[0];
     const buttons = renderer.root.findAllByProps({
       'aria-label': 'Delete comment',
     });
@@ -2385,10 +2625,15 @@ it.each([false, true])(
     await confirmAction('Delete comment');
     await reply(pending('/api/interactions/comments/target'), { ok: true });
     expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
+    expect(renderer.root.findAllByType('img')).toEqual([remainingAvatar]);
     await reply(pending('/api/interactions/one/comments?'), {
-      items: [other],
+      items: [{ ...other, likeCount: 2, liked: 1 }],
       next: null,
     });
+    expect(renderer.root.findByType('img')).toBe(remainingAvatar);
+    expect(
+      renderer.root.findByProps({ 'aria-label': 'See 2 comment likes' }),
+    ).toBeDefined();
     await reply(pending('/api/posts/one'), {
       post: { likeCount: 0, liked: 0, commentCount: 1 },
     });
@@ -2663,4 +2908,126 @@ it('uses authoritative like responses without a second post request and retains 
   ).toBe(true);
   expect(visibleText()).toContain('Try again');
   expect(requests.every((r) => r.path.endsWith('/like'))).toBe(true);
+});
+
+it('offers optional device setup only after the photo is saved and keeps Continue usable while saving fails', async () => {
+  Object.assign(navigator, { userAgent: 'iPhone', standalone: false });
+  await mount(
+    createElement(MemberApp, {
+      initialProfile: { ...ownProfile, hasAvatar: 0 },
+      deviceSetupPending: true,
+      onSignOut: vi.fn(),
+      signingOut: false,
+    }),
+  );
+  expect(visibleText()).toContain('Add a profile photo');
+  expect(visibleText()).not.toContain('Set up this device');
+  await act(async () => renderer.root.findByType(AvatarForm).props.onChange());
+  expect(visibleText()).toContain('Set up this device');
+  expect(visibleText()).toContain('Install slowmass');
+  expect(visibleText()).toContain('Home Screen first');
+  expect(requests.some((item) => item.path.startsWith('/api/push'))).toBe(
+    false,
+  );
+  expect(
+    renderer.root.findAllByProps({ 'aria-label': 'Main navigation' }),
+  ).toHaveLength(1);
+  await click('Continue');
+  expect(visibleText()).not.toContain('Set up this device');
+  expect(pending('/api/posts?').path).toContain('/api/posts');
+  const saving = pending('/api/device-setup');
+  expect(saving.options?.method).toBe('DELETE');
+  await reply(saving, { error: 'Unavailable' }, 503);
+  expect(visibleText()).toContain('Your setup choice could not be saved');
+  await click('Retry saving setup');
+  await reply(pending('/api/device-setup'), { pending: false });
+  expect(visibleText()).not.toContain('Your setup choice could not be saved');
+  expect(visibleText()).not.toContain('Set up this device');
+});
+it('resumes optional setup in an installed iPhone app from the existing bootstrap session without repeating profile setup', async () => {
+  Object.assign(navigator, { userAgent: 'iPhone', standalone: true });
+  vi.stubGlobal('PushManager', class {});
+  const permission = vi.fn();
+  vi.stubGlobal('Notification', {
+    permission: 'default',
+    requestPermission: permission,
+  });
+  Object.assign(navigator, {
+    serviceWorker: { getRegistration: vi.fn(async () => undefined) },
+  });
+  await mount(createElement(Welcome));
+  await reply(pending('/api/bootstrap'), {
+    ...signedIn,
+    deviceSetupPending: true,
+  });
+  await reply(pending('/api/push/device'), {
+    available: true,
+    publicKey: 'BAAA',
+    subscription: null,
+  });
+  expect(visibleText()).toContain('Set up this device');
+  expect(visibleText()).not.toContain('Install slowmass');
+  expect(visibleText()).not.toContain('You’re using the slowmass app');
+  expect(visibleText()).not.toContain('Signing out stops');
+  expect(visibleText()).toContain('Enable notifications');
+  expect(visibleText()).not.toContain('How to add to Home Screen');
+  expect(visibleText()).not.toContain('Create your profile');
+  expect(visibleText()).not.toContain('Send sign-in link');
+  expect(permission).not.toHaveBeenCalled();
+  await click('Continue');
+  await reply(pending('/api/device-setup'), { pending: false });
+  expect(visibleText()).not.toContain('Set up this device');
+});
+it('skips resolved desktop setup without offering installation or requesting permission', async () => {
+  Object.assign(navigator, { userAgent: 'Desktop' });
+  vi.stubGlobal('PushManager', undefined);
+  await mount(
+    createElement(MemberApp, {
+      initialProfile: ownProfile,
+      deviceSetupPending: true,
+      onSignOut: vi.fn(),
+      signingOut: false,
+    }),
+  );
+  expect(visibleText()).not.toContain('Set up this device');
+  expect(visibleText()).not.toContain('Install slowmass');
+  expect(pending('/api/device-setup').options?.method).toBe('DELETE');
+});
+it('dismisses optional onboarding when navigating and does not trap a member behind setup', async () => {
+  Object.assign(navigator, { userAgent: 'Android' });
+  await mount(
+    createElement(MemberApp, {
+      initialProfile: ownProfile,
+      deviceSetupPending: true,
+      onSignOut: vi.fn(),
+      signingOut: false,
+    }),
+  );
+  expect(visibleText()).toContain('Set up this device');
+  const link = renderer.root.findByProps({ 'aria-label': 'Find' });
+  await act(async () =>
+    link.props.onClick({ button: 0, preventDefault: vi.fn() }),
+  );
+  await go('#people');
+  expect(visibleText()).not.toContain('Set up this device');
+  expect(pending('/api/device-setup').options?.method).toBe('DELETE');
+  await reply(pending('/api/device-setup'), { pending: false });
+});
+it('observes setup completion from another app on return without requiring another Continue', async () => {
+  Object.assign(navigator, { userAgent: 'iPhone', standalone: false });
+  await mount(
+    createElement(MemberApp, {
+      initialProfile: ownProfile,
+      deviceSetupPending: true,
+      onSignOut: vi.fn(),
+      signingOut: false,
+    }),
+  );
+  expect(visibleText()).toContain('Set up this device');
+  await act(async () => window.dispatchEvent(new Event('focus')));
+  await reply(pending('/api/device-setup'), { pending: false });
+  expect(visibleText()).not.toContain('Set up this device');
+  expect(
+    requests.filter((item) => item.path === '/api/device-setup'),
+  ).toHaveLength(1);
 });

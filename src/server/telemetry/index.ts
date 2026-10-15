@@ -7,6 +7,7 @@ import type { Env } from '../env';
 type Metrics = {
   phase?: 'initialize' | 'session' | 'handler' | 'membership' | 'profile';
   authTimedOut?: boolean;
+  sessionStage?: 'dispatch' | 'endpoint' | 'lookup';
   queries: number;
   rowsRead: number;
   rowsWritten: number;
@@ -16,6 +17,8 @@ type Metrics = {
   unmeasuredQueries: number;
   storageReads: number;
   storageWaitMs: number;
+  mediaCache?: 'hit' | 'miss' | 'unavailable';
+  mediaCacheMs?: number;
 };
 export const requestMetrics = new AsyncLocalStorage<Metrics>();
 export function startupPhase(
@@ -28,6 +31,12 @@ export function startupPhase(
     metrics.authTimedOut = authTimedOut;
   }
 }
+// Coarse, content-free markers distinguish a pre-handler wait from cookie
+// validation or adapter entry. Never record headers, cookies or lookup tokens.
+export function sessionStage(stage: NonNullable<Metrics['sessionStage']>) {
+  const metrics = requestMetrics.getStore();
+  if (metrics) metrics.sessionStage = stage;
+}
 export const emptyMetrics = (): Metrics => ({
   queries: 0,
   rowsRead: 0,
@@ -39,6 +48,17 @@ export const emptyMetrics = (): Metrics => ({
   storageReads: 0,
   storageWaitMs: 0,
 });
+
+export function recordMediaCache(
+  outcome: NonNullable<Metrics['mediaCache']>,
+  durationMs: number,
+) {
+  const metrics = requestMetrics.getStore();
+  if (metrics) {
+    metrics.mediaCache = outcome;
+    metrics.mediaCacheMs = Math.round(durationMs * 10) / 10;
+  }
+}
 
 // Time object lookup only; preserve streaming and never record keys or bytes.
 export async function measuredObjectRead(bucket: R2Bucket, key: string) {
@@ -154,14 +174,8 @@ export function measuredDatabase<T extends D1Database | D1DatabaseSession>(
   });
 }
 
-const environments = new WeakMap<Env, Env>();
 export function measuredEnvironment(env: Env): Env {
-  let measured = environments.get(env);
-  if (!measured) {
-    measured = { ...env, DB: measuredDatabase(env.DB) };
-    environments.set(env, measured);
-  }
-  return measured;
+  return { ...env, DB: measuredDatabase(env.DB) };
 }
 
 export const performanceMetrics: MiddlewareHandler<{ Bindings: Env }> = async (
@@ -220,7 +234,7 @@ export const performanceMetrics: MiddlewareHandler<{ Bindings: Env }> = async (
   if (durationMs >= 5000 || c.res.status >= 400) persist('completed');
   c.header(
     'Server-Timing',
-    `app;dur=${durationMs}, db;dur=${metrics.databaseMs}, dbwait;dur=${Math.round(metrics.databaseWaitMs * 10) / 10}, r2;dur=${Math.round(metrics.storageWaitMs * 10) / 10}`,
+    `app;dur=${durationMs}, db;dur=${metrics.databaseMs}, dbwait;dur=${Math.round(metrics.databaseWaitMs * 10) / 10}, r2;dur=${Math.round(metrics.storageWaitMs * 10) / 10}${metrics.mediaCache ? `, media-cache;dur=${metrics.mediaCacheMs};desc="${metrics.mediaCache}"` : ''}`,
   );
   // Aggregate fields only. Do not log URLs (magic-link tokens), identities,
   // request bodies, headers, or query parameters. Only abnormal startup requests retain bounded diagnostics.

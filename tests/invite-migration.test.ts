@@ -106,6 +106,19 @@ it('migrates joined activity atomically without backfill or losing read versions
         )
         .first('version'),
     ).toBe(receipt);
+    // The current page reader also requires the additive follow-back column.
+    const beforeDismissal = await snapshot();
+    await db.batch(
+      unstable_splitSqlQuery(
+        await readFile('migrations/0026_follow_back_dismissal.sql', 'utf8'),
+      ).map((sql) => db.prepare(sql)),
+    );
+    const afterDismissal = await snapshot();
+    expect(afterDismissal[1]).toEqual(
+      beforeDismissal[1].map((row) => ({ ...row, follow_back_dismissed: 0 })),
+    );
+    for (const index of [0, 2, 3])
+      expect(afterDismissal[index]).toEqual(beforeDismissal[index]);
     expect(
       (
         await runtime.request(

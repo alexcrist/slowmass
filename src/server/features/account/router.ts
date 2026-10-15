@@ -6,6 +6,7 @@ import { getActiveUser } from '../../auth';
 import { authConfigured } from '../../auth/options';
 import type { Env } from '../../env';
 import { ownProfile } from '../people';
+import { deviceSetupPending } from '../device-setup';
 
 export const bootstrap = new Hono<{ Bindings: Env }>();
 bootstrap.get('/', async (c) => {
@@ -14,8 +15,18 @@ bootstrap.get('/', async (c) => {
     ? await getActiveUser(c.env, c.req.raw.headers)
     : null;
   startupPhase('profile');
-  const profile = user ? await ownProfile(c.env.DB, user.id) : null;
-  return c.json({ signInAvailable, user, profile });
+  const [profile, pending] = user
+    ? await Promise.all([
+        ownProfile(c.env.DB, user.id),
+        deviceSetupPending(c.env.DB, user.id),
+      ])
+    : [null, false];
+  return c.json({
+    signInAvailable,
+    user,
+    profile,
+    deviceSetupPending: pending,
+  });
 });
 
 export const account = new Hono<{ Bindings: Env }>();

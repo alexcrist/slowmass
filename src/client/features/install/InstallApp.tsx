@@ -31,15 +31,25 @@ const InstallContext = createContext<{
   mobile: boolean;
   appleMobile: boolean;
   installed: boolean;
+  running: boolean;
   prompt: InstallPrompt | null;
   busy: boolean;
   message: string;
   install: () => Promise<void>;
 } | null>(null);
 export function InstallProvider({ children }: { children: ReactNode }) {
+  const existing = useContext(InstallContext);
+  return existing ? (
+    children
+  ) : (
+    <InstallStateProvider>{children}</InstallStateProvider>
+  );
+}
+function InstallStateProvider({ children }: { children: ReactNode }) {
   const [mobile] = useState(mobileDevice);
   const [appleMobile] = useState(appleMobileDevice);
   const [installed, setInstalled] = useState(standalone);
+  const [running, setRunning] = useState(standalone);
   const [prompt, setPrompt] = useState<InstallPrompt | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -54,18 +64,25 @@ export function InstallProvider({ children }: { children: ReactNode }) {
       setInstalled(true);
       setPrompt(null);
     };
-    const changed = () => setInstalled(standalone());
+    const changed = () => {
+      const active = standalone();
+      setRunning(active);
+      if (active) setInstalled(true);
+    };
     window.addEventListener('beforeinstallprompt', ready);
     window.addEventListener('appinstalled', complete);
     mode.addEventListener('change', changed);
+    window.addEventListener('focus', changed);
     return () => {
       window.removeEventListener('beforeinstallprompt', ready);
       window.removeEventListener('appinstalled', complete);
       mode.removeEventListener('change', changed);
+      window.removeEventListener('focus', changed);
     };
   }, [mobile]);
   async function install() {
     if (!mobile || !prompt || busy) return;
+    setPrompt(null);
     setBusy(true);
     setMessage('');
     try {
@@ -77,7 +94,7 @@ export function InstallProvider({ children }: { children: ReactNode }) {
       );
     } catch {
       setMessage(
-        'Use your browser menu to install slowmass. Instructions are below.',
+        'Use your browser menu to install slowmass. Follow the installation instructions here.',
       );
     } finally {
       setPrompt(null);
@@ -86,7 +103,16 @@ export function InstallProvider({ children }: { children: ReactNode }) {
   }
   return (
     <InstallContext.Provider
-      value={{ mobile, appleMobile, installed, prompt, busy, message, install }}
+      value={{
+        mobile,
+        appleMobile,
+        installed,
+        running,
+        prompt,
+        busy,
+        message,
+        install,
+      }}
     >
       {children}
     </InstallContext.Provider>
@@ -95,56 +121,92 @@ export function InstallProvider({ children }: { children: ReactNode }) {
 export function useInstallState() {
   return useContext(InstallContext);
 }
-export function InstallApp() {
-  const context = useContext(InstallContext);
+export function InstallControls() {
+  const context = useInstallState();
   if (!context?.mobile) return null;
-  const { installed, prompt, busy, message, install } = context;
+  const { appleMobile, installed, running, prompt, busy, message, install } =
+    context;
+  if (running)
+    return <p role="status">Installed. You’re using the slowmass app.</p>;
   if (installed)
     return (
-      <p className="settings-row">slowmass is running as an installed app.</p>
+      <p role="status">
+        Installed.{' '}
+        {appleMobile
+          ? 'Open the slowmass icon on your Home Screen.'
+          : 'Available from your Home Screen.'}
+      </p>
     );
-
+  return (
+    <div className="install-help">
+      <p>
+        Add slowmass to your Home Screen. An internet connection is still
+        required.
+      </p>
+      {prompt && (
+        <button
+          type="button"
+          className="primary-button"
+          disabled={busy}
+          onClick={() => void install()}
+        >
+          {busy ? 'Opening install prompt…' : 'Install app'}
+        </button>
+      )}
+      {prompt ? (
+        <details>
+          <summary>Installation instructions</summary>
+          <InstallInstructions appleMobile={appleMobile} />
+        </details>
+      ) : (
+        <InstallInstructions appleMobile={appleMobile} />
+      )}
+      <p className="status-copy">
+        {appleMobile
+          ? 'Already added it? Open the slowmass icon on your Home Screen.'
+          : 'You can enable notifications here without opening the installed app.'}
+      </p>
+      {message && <p role="status">{message}</p>}
+    </div>
+  );
+}
+function InstallInstructions({ appleMobile }: { appleMobile: boolean }) {
+  return (
+    <>
+      {appleMobile ? (
+        <p>
+          Open your browser’s Share menu (sometimes inside the page menu), then
+          choose Add to Home Screen. On iPad, you may need View More or More.
+          Keep Open as Web App on if shown, then tap Add.
+        </p>
+      ) : (
+        <p>
+          In Chrome, open the three-dot menu → Install and create shortcut →
+          Install. Some versions use Add to Home screen. In other browsers, look
+          for Install or Add to Home screen.
+        </p>
+      )}
+      <p>
+        If these options are missing inside an email or social app, open
+        slowmass.com in your regular browser.
+      </p>
+      {appleMobile && (
+        <p>
+          After adding it, open the slowmass icon. Your saved profile will be
+          there; sign in only if asked.
+        </p>
+      )}
+    </>
+  );
+}
+export function InstallApp() {
+  const context = useInstallState();
+  if (!context?.mobile) return null;
   return (
     <details className="settings-disclosure">
       <summary className="settings-row">Install slowmass</summary>
-      <div className="settings-details install-help">
-        <p>
-          Open slowmass.com in your browser, then follow the steps for your
-          device. slowmass still needs an internet connection.
-        </p>
-        {prompt && (
-          <button
-            type="button"
-            className="primary-button"
-            disabled={busy}
-            onClick={() => void install()}
-          >
-            {busy ? 'Opening install prompt…' : 'Install app'}
-          </button>
-        )}
-        <ul>
-          <li>
-            <strong>iPhone — Safari:</strong> Tap Share (the square with an up
-            arrow), or open the page menu beside the address bar and choose
-            Share. Scroll to Add to Home Screen, keep Open as Web App on if
-            shown, then tap Add.
-          </li>
-          <li>
-            <strong>iPad — Safari:</strong> Tap Share → View More (or More) →
-            Add to Home Screen. Keep Open as Web App on if shown, then tap Add.
-          </li>
-          <li>
-            <strong>Android — Chrome:</strong> Tap the three-dot menu → Install
-            and create shortcut → Install. Some versions call this Add to Home
-            screen → Install. Confirm the installation when prompted.
-          </li>
-        </ul>
-        <p>
-          If you opened slowmass inside an email or social app, open it in your
-          regular browser first. After installing, open the slowmass icon. You
-          may need to sign in again in the app.
-        </p>
-        {message && <p role="status">{message}</p>}
+      <div className="settings-details">
+        <InstallControls />
       </div>
     </details>
   );

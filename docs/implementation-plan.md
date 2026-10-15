@@ -374,3 +374,88 @@ For each stage, record commands/results in the work report, not as permanent des
 - [x] Add separate R2 lookup timing while preserving private streaming and existing image variants; avoid speculative quality/caching changes.
 - [x] Pass all 371 tests, formatting, lint, types, boundaries, build and dry-run packaging. Deploy Worker `d6a9dde1-cdff-4966-ba05-2e27e36be1dd` at 100%; verify exact Worker/asset bytes, Seattle placement, and 12 direct HTTP/asset checks.
 - [ ] Collect representative signed-in measurements and select any further photo optimization from storage/download evidence.
+
+## Pill comment composer
+
+- [x] Update the shared feed/detail composer with a pill outline, a Douglas Fir circular send button and white icon, and automatic one-to-six-line sizing with internal scrolling for longer drafts.
+- [x] Remove the form's outer margins and use matching spacing below the composer and between the feed divider and the next post header. Preserve accessible labeling, keyboard focus, 44px send target, pending states, and retry behavior.
+- [x] Pass formatting, lint, types, boundaries, all 371 tests, and the production frontend build. No browser or visual testing.
+- [x] Deploy the composer as Worker `4f4bf43f-ae1b-4993-9d21-2b4fc6bb356d` at 100%; verify matching HTML/JS/CSS and nine sign-in/private API/media/origin probes through direct HTTP.
+- [x] Reduce the comment trash icon to 16px and align timestamp, like total, and deletion with consistent line height and even visible gaps, retaining the 44px delete target.
+- [x] Pass the full 371-test gate and deploy the metadata alignment adjustment as Worker `39e60c73-a812-403a-8323-e16a571535dc`; all 12 direct HTTP asset and API checks passed. No browser or visual testing.
+
+- [x] Refine metadata after owner feedback: 14px trash icon lifted 2px for optical alignment and 16px gaps. All 371 tests and repository gates passed; deploy Worker `c4fa15a5-de90-408a-8527-8b194478721b` and verify exact HTML/JS/CSS, sign-in availability, and signed-out comment rejection by HTTP. No browser or visual testing.
+
+## Compact composer refinement
+
+- [x] Increase the left text inset to 22px, use matching 15px comment/caption type, and reduce the initial composer height to 44px while preserving six-line growth and internal scrolling.
+- [x] Make the opaque send circle flush with the outer edges, hide the outline behind it even when disabled, and optically center the plane icon. Replace the text-field outer focus ring with a single darker inset outline.
+- [x] Pass formatting, lint, types, boundaries, all 371 tests, and the production build. Deploy Worker `e3d439aa-07c3-423a-8ec5-cb7ac489ebb6`; verify exact HTML/JS/CSS, available sign-in, and private signed-out comment rejection through HTTP. No browser or visual testing.
+
+## Comment stack spacing
+
+- [x] Remove metadata row/timestamp/control minimum-height rules and the delete control’s generic icon-button sizing. Use natural 20px text lines and button padding to preserve 44px targets.
+- [x] Give comments only 16px bottom padding, remove default list margins, and separate comment styles from generic list-row padding/borders.
+- [x] Pass formatting, lint, types, boundaries, all 371 tests and the production build. Deploy Worker `22cf3368-b681-47e2-92b6-7114e69b2f3c`; verify matching HTML/JS/CSS and sign-in/private-comment HTTP probes. No browser or visual testing.
+
+- [x] Standardize the post-icon-to-first-comment, between-comment, and last-comment-to-composer gaps at 12px. Pass all 371 tests and repository gates; deploy Worker `6149b78f-3e87-47cf-a7a5-f62c85ae26ad` and verify exact HTML/JS/CSS plus sign-in/private-comment HTTP probes. No browser or visual testing.
+
+## Activity relationship actions — October 13, 2026
+
+- [x] Add private avatars and right-side, vertically centered actions to follow requests/new followers; use the primary green Accept button.
+- [x] Offer Follow back only for eligible new-follower events, reusing normal follow requests. Persist independent, exact-version dismissal across devices with migration 0026.
+- [x] Pass formatting, lint, types, boundaries, all 376 tests, and the production frontend build. Verify follow-back eligibility, owner/version-scoped dismissal, retries, authentication/origin checks, and preservation of Activity receipts/pushes through the additive migration. No browser or visual testing.
+- [x] Apply migration 0026 after a verified encrypted 28-image backup; preserve Activity aggregates and deploy Worker `63400a03-dbbf-4ca0-ab27-d79040de83d9` at 100%, including the requested green Activity unread badge. Pass all 376 tests and repository gates plus 13 direct HTTP/asset checks; no pending migrations or foreign-key violations. No browser or visual testing.
+
+## Optional device setup during onboarding
+
+- [x] Reuse installation/notification controls after required profile-photo setup, with Continue and member navigation available throughout.
+- [x] Keep Android choices independent, guide iPhone/iPad through Home Screen installation, omit desktop installation, and recognize existing permissions/subscriptions.
+- [x] Persist pending setup for new members, resume through installed-app sign-in, and remember dismissal without enrolling existing members.
+- [x] Support independent endpoints sharing a copied session cookie; preserve queues and revoke all copies on logout.
+- [x] Recover permission changes and registration failures without repeated permission/subscription work; prefer identifiable installed windows on notification clicks.
+- [x] Pass the Node 24 repository gate: formatting, lint, types, boundaries, all 401 tests, and the production frontend build. Review the diff, migration preservation/rollback, copied-session ownership, permission recovery, optional navigation, and platform permutations. No browser or visual testing.
+- [x] Apply migration 0027 and matching deployment under maintenance with a verified encrypted backup, preserved aggregates, clear foreign keys, no pending migrations, and 28 direct HTTP checks. Worker `fc9b9954-e5fa-47d1-9bab-bfc8fc83b6d9` receives 100% of traffic; maintenance is disabled.
+- [ ] Confirm real-device installation handoff and OS delivery separately; automated component/API tests do not prove platform behavior. Browser/visual testing remains prohibited.
+
+## Mobile profile tab spacing — October 13, 2026
+
+- [x] Restore the 16px mobile tab inset through the profile loading/authorization wrapper, retaining the edge-to-edge photo grid on own and accepted-follow profiles.
+- [x] Pass formatting, lint, types, boundaries, all 401 tests, and the production build. Deploy Worker `2c9d9137-8e19-43b4-9578-f836e18f3bd5` at 100%; pass ten direct HTTP checks, including exact deployed assets and private API/media/origin boundaries. No browser or visual testing.
+
+## Consistent Activity images — October 13, 2026
+
+- [x] Use one fixed 64px image size across requests, followers, joined invitees, likes and comments, retaining circular avatars and square post thumbnails. Pass formatting, lint, types, boundaries, all 401 tests and the production build. Deploy Worker `ee288a0e-0cb9-42a5-acdd-eb38658a4a2a` at 100% and pass 28 direct HTTP checks, including exact deployed assets. No migration, maintenance window, browser or visual testing.
+
+## Touch cropping and mutation refresh audit — October 13, 2026
+
+- [x] Add two-finger pinch zoom and repositioning to the profile-photo crop editor, with bounded fractional coordinates, one-finger continuation, pointer cancellation, and unchanged keyboard/slider controls.
+- [x] Hide the installation section during optional setup when running in the installed app; remove the sign-out notification sentence. Keep installation launch guidance in ordinary browser tabs.
+- [x] Keep profile identity mounted after follow requests/cancellations. Retain unaffected Activity, connection, comment, and feed rows during mutation revalidation; immediately remove confirmed deletions/resolved requests and disable stale actions. Preserve open comments and drafts when refreshed counts arrive.
+- [x] Audit action-triggered reloads, image URLs, and component keys. Likes, caption edits, and notification read acknowledgements already avoid whole-list refreshes. Retain explicit navigation/pagination/retry reads, profile-content clearing after unfollow/block, avatar replacement reloads, and bounded text-only invitation refreshes. No persistent private cache or authorization bypass was added.
+- [x] Pass the Node 24 repository gate: formatting, lint, types, boundaries, all 413 tests, and the production build. Node component tests verify retained image element identity, denied/late refresh handling, gesture transitions, and installed-app setup. No browser or visual testing; network byte savings and real-device gestures are unmeasured.
+- [x] Deploy Worker `cfc9f073-d7e2-4c6d-b96f-b6f9b0f81963` at 100% and pass all 36 direct HTTP checks, including exact deployed assets, invitation pages, sign-in/bootstrap availability, private-resource rejection, and trusted-origin enforcement. No pending migrations or maintenance window; no browser or visual testing.
+
+## Auth isolation and redundant reads — October 13, 2026
+
+- [x] Capture a real startup session timeout before any D1 query, with a correlated successful automatic retry; retain the evidence and its limits in operations.md.
+- [x] Remove cross-request auth-instance and measured-environment reuse while preserving cookies, signing secrets, session records, expiry, origin checks, and fresh membership checks. Add safe session dispatch/endpoint/lookup markers.
+- [x] Share only concurrent ordinary GET requests, with separate cancellation, bounded waits, no completed-response cache, and separation at mutation/session boundaries. Coalesce passive unread-count refresh events while confirmed mutations still force a new read.
+- [x] Pass Node 24 formatting, lint, types, boundaries, all 423 tests, frontend build, and Worker dry-run packaging. Synthetic interrupted HTTP refreshes preserve a pre-existing cookie and subsequent logout still revokes it. Deploy Worker `03674e2e-1f0f-439c-a0c3-f7cb43ca449b` at 100%, match its checked bundle and frontend assets exactly, and pass 34 direct HTTP checks. No migrations, browser testing, or visual testing.
+- [ ] Observe signed-in production refreshes and retained diagnostics after release, including hosted CPU usage from repeated auth initialization. The exact internal await in the captured old request remains unknown.
+
+Private image bytes remain uncached by the browser (`private, no-store`). A future measured change can cache immutable object bytes behind per-request Worker authorization; do not cache permission decisions or expose a public cache URL. No image-cache change is part of this release.
+
+## Private image-byte caching — October 13, 2026
+
+- [x] Add a named Worker-internal cache keyed by the authorized immutable object variant, shared by posts and avatars; retain per-request authentication/authorization and private/no-store client responses.
+- [x] Bound cache lookup waits and fall back to R2, stream misses with best-effort background fills, retain no denied/missing results, and record content-free cache/R2 measurements.
+- [x] Verify warm-cache privacy, replacement, deletion, logout/expiry, failure recovery and actual R2-read avoidance in isolated Workers/D1/R2/Cache tests. Pass Node 24 formatting, lint, types, boundaries, all 430 tests, frontend build, and production Worker packaging.
+- [x] Deploy Worker `9b4a3964-af86-44bc-8496-a427d916a2c7` at 100%; verify the serving Worker matches the checked bundle and pass all 32 direct HTTP checks for exact assets, private API/media boundaries, and internal cache-key rejection. No migrations, browser testing, or visual testing.
+- [ ] Measure hosted cache hit rate and signed-in image latency separately from local correctness tests; cache hits save R2 reads but retain authorization queries and client downloads.
+
+## Larger local photo originals — October 15, 2026
+
+- [x] Separate the local source-file limit (32 MiB) from the encoded upload limit (8 MiB) for posts and avatars, allowing the existing 1600px crop encoder to process larger originals. Preserve the 40-megapixel decoded-source ceiling, quality settings, server validation, and upload retry bytes.
+- [x] Pass the Node 24 repository gate: formatting, lint, types, boundaries, all 434 unit/integration tests, and the production build. Verify a 12 MiB original reaches cropping and uploads only the encoded bytes, retries reuse them, all supported formats accept the 32 MiB boundary, and oversized/undecodable sources fail. Canvas and decoder calls are mocked in Node; no browser or visual testing or new real-device quality measurement.
+- [x] Deploy Worker `680137f1-413f-4117-b08f-46172c8adabb` at 100% and pass all 32 direct HTTP checks, including exact deployed assets, sign-in/bootstrap availability, private API/media rejection, and origin enforcement. The backend bundle matches the preceding release; no migrations, maintenance window, browser or visual testing.

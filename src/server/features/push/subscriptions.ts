@@ -73,16 +73,19 @@ export async function parseSubscription(
   }
   return subscription;
 }
+// Undefined selects the legacy session-wide API; null means no local subscription.
 export async function subscriptionStatus(
   db: D1Database,
   user: string,
   session: string,
+  endpoint?: string | null,
 ) {
   return db
     .prepare(
-      'SELECT id,endpoint FROM push_subscription WHERE user_id=? AND session_id=?',
+      `SELECT id,endpoint FROM push_subscription WHERE user_id=? AND session_id=?
+    AND ${endpoint === undefined ? '(SELECT COUNT(*) FROM push_subscription WHERE session_id=?)=1' : 'endpoint=?'}`,
     )
-    .bind(user, session)
+    .bind(user, session, endpoint === undefined ? session : endpoint)
     .first<{ id: string; endpoint: string }>();
 }
 export async function saveSubscription(
@@ -91,49 +94,48 @@ export async function saveSubscription(
   session: string,
   subscription: Subscription,
 ) {
-  try {
-    const result = await db
-      .prepare(
-        `INSERT INTO push_subscription(id,user_id,session_id,endpoint,p256dh,auth,created_at)
-      SELECT ?,?,?,?,?,?,? FROM session a JOIN membership m ON m.user_id=a.userId
-      WHERE a.id=? AND a.userId=? AND a.expiresAt>? AND m.status='active'
-        AND ((SELECT COUNT(*) FROM push_subscription WHERE user_id=?)<10 OR EXISTS(SELECT 1 FROM push_subscription WHERE session_id=?))
-      ON CONFLICT(session_id) DO UPDATE SET endpoint=excluded.endpoint,p256dh=excluded.p256dh,auth=excluded.auth,created_at=excluded.created_at
-      WHERE push_subscription.user_id=excluded.user_id
-    `,
-      )
-      .bind(
-        crypto.randomUUID(),
-        user,
-        session,
-        subscription.endpoint,
-        subscription.keys.p256dh,
-        subscription.keys.auth,
-        Date.now(),
-        session,
-        user,
-        Date.now(),
-        user,
-        session,
-      )
-      .run();
-    return result.meta.changes > 0;
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message.includes('UNIQUE constraint failed')
+  // Endpoint identity is unique; ownership still requires this member/session.
+  const result = await db
+    .prepare(
+      `
+    INSERT INTO push_subscription(id,user_id,session_id,endpoint,p256dh,auth,created_at)
+    SELECT ?,?,?,?,?,?,? FROM session a JOIN membership m ON m.user_id=a.userId
+    WHERE a.id=? AND a.userId=? AND a.expiresAt>? AND m.status='active'
+      AND ((SELECT COUNT(*) FROM push_subscription WHERE user_id=?)<10
+        OR EXISTS(SELECT 1 FROM push_subscription WHERE user_id=? AND session_id=? AND endpoint=?))
+    ON CONFLICT(endpoint) DO UPDATE SET p256dh=excluded.p256dh,auth=excluded.auth,created_at=excluded.created_at
+    WHERE push_subscription.user_id=excluded.user_id AND push_subscription.session_id=excluded.session_id
+  `,
     )
-      return false;
-    throw error;
-  }
+    .bind(
+      crypto.randomUUID(),
+      user,
+      session,
+      subscription.endpoint,
+      subscription.keys.p256dh,
+      subscription.keys.auth,
+      Date.now(),
+      session,
+      user,
+      Date.now(),
+      user,
+      user,
+      session,
+      subscription.endpoint,
+    )
+    .run();
+  return result.meta.changes > 0;
 }
 export async function removeSubscription(
   db: D1Database,
   user: string,
   session: string,
+  endpoint: string,
 ) {
   await db
-    .prepare('DELETE FROM push_subscription WHERE user_id=? AND session_id=?')
-    .bind(user, session)
+    .prepare(
+      'DELETE FROM push_subscription WHERE user_id=? AND session_id=? AND endpoint=?',
+    )
+    .bind(user, session, endpoint)
     .run();
 }

@@ -13,6 +13,9 @@ beforeEach(() => {
   openWindow = vi.fn(async () => {});
   runInNewContext(readFileSync('public/sw.js', 'utf8'), {
     URL,
+    MessageChannel,
+    setTimeout,
+    clearTimeout,
     self: {
       location: { origin: 'https://slowmass.com' },
       addEventListener: (name: string, handler: (event: unknown) => void) =>
@@ -109,4 +112,58 @@ it('still displays safe generic text if a provider delivers an empty or malforme
     'slowmass',
     expect.objectContaining({ data: { key: '', version: 0 } }),
   );
+});
+
+it('prefers an installed window over a browser tab and falls back if it closes', async () => {
+  const browserFocus = vi.fn();
+  const browserNavigate = vi.fn(async () => ({ focus: browserFocus }));
+  const appFocus = vi.fn();
+  const appNavigate = vi.fn(async () => ({ focus: appFocus }));
+  const browser = {
+    url: 'https://slowmass.com/#feed',
+    navigate: browserNavigate,
+    postMessage: (_data: unknown, ports: MessagePort[]) =>
+      ports[0].postMessage({ standalone: false }),
+  };
+  const installed = {
+    url: 'https://slowmass.com/#profile',
+    navigate: appNavigate,
+    postMessage: (_data: unknown, ports: MessagePort[]) =>
+      ports[0].postMessage({ standalone: true }),
+  };
+  matchAll.mockResolvedValue([browser, installed]);
+  const event = {
+    notification: { data: { key: 'comment:test' }, close: vi.fn() },
+  };
+  await emit('notificationclick', event);
+  expect(appNavigate).toHaveBeenCalledWith(
+    'https://slowmass.com/#notifications/comment:test',
+  );
+  expect(appFocus).toHaveBeenCalledOnce();
+  expect(browserNavigate).not.toHaveBeenCalled();
+  appNavigate.mockRejectedValueOnce(new Error('Closed'));
+  await emit('notificationclick', event);
+  expect(browserFocus).toHaveBeenCalledOnce();
+  expect(openWindow).not.toHaveBeenCalled();
+});
+it('bounds a window probe ignored by an older client', async () => {
+  vi.useFakeTimers();
+  try {
+    const focus = vi.fn();
+    matchAll.mockResolvedValue([
+      {
+        url: 'https://slowmass.com/',
+        postMessage: vi.fn(),
+        navigate: vi.fn(async () => ({ focus })),
+      },
+    ]);
+    const clicked = emit('notificationclick', {
+      notification: { data: {}, close: vi.fn() },
+    });
+    // Timers inside the VM use the real boundary, captured when it was created.
+    await clicked;
+    expect(focus).toHaveBeenCalledOnce();
+  } finally {
+    vi.useRealTimers();
+  }
 });

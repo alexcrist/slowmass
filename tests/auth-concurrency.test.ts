@@ -1,6 +1,7 @@
 import { build } from 'esbuild';
 import { unstable_readConfig } from 'wrangler';
 import { expect, it } from 'vitest';
+import { makeSignature } from 'better-auth/crypto';
 import { testRuntime } from './support/runtime';
 
 it('bundles the Workers auth dependency without request-owned dynamic async-hooks imports', async () => {
@@ -21,6 +22,52 @@ it('bundles the Workers auth dependency without request-owned dynamic async-hook
   expect(bundle).not.toMatch(
     /import\s*\(\s*(?:\/\*[\s\S]*?\*\/\s*)*["']node:async_hooks["']/,
   );
+});
+
+it('keeps an existing cookie usable through aborted HTTP refreshes and enforces logout afterward', async () => {
+  const runtime = await testRuntime();
+  try {
+    const origin = await runtime.worker.ready;
+    const token = 'alice-token';
+    const secret = 'test-only-secret-with-at-least-thirty-two-characters';
+    // Created before any of the requests; rebuilding library instances must
+    // neither rotate this cookie nor replace its persisted session.
+    const cookie = `better-auth.session_token=${encodeURIComponent(`${token}.${await makeSignature(token, secret)}`)}`;
+    const read = (signal?: AbortSignal) =>
+      fetch(new URL('/api/bootstrap', origin), {
+        headers: { Cookie: cookie },
+        signal,
+      });
+    for (let round = 0; round < 8; round++) {
+      const controllers = Array.from(
+        { length: 4 },
+        () => new AbortController(),
+      );
+      const interrupted = Promise.allSettled(
+        controllers.map((controller) =>
+          read(controller.signal).then((response) => response.arrayBuffer()),
+        ),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      controllers.forEach((controller) => controller.abort());
+      const response = await read(AbortSignal.timeout(3000));
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ user: { id: 'alice' } });
+      await interrupted;
+    }
+    expect(
+      await runtime.db
+        .prepare("SELECT count(*) AS n FROM session WHERE userId='alice'")
+        .first('n'),
+    ).toBe(1);
+    expect(
+      (await runtime.request('alice', '/api/auth/sign-out', 'POST', {})).status,
+    ).toBe(200);
+    const signedOut = await read(AbortSignal.timeout(3000));
+    expect(await signedOut.json()).toMatchObject({ user: null });
+  } finally {
+    await runtime.worker.dispose();
+  }
 });
 
 it('serves independent signed-in startup requests during cold-start cancellations and afterward', async () => {
@@ -47,6 +94,7 @@ it('serves independent signed-in startup requests during cold-start cancellation
           expect(response.status).toBe(200);
           expect(await response.json()).toEqual({
             signInAvailable: true,
+            deviceSetupPending: true,
             user: { id, name: id },
             profile: null,
           });

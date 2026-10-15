@@ -157,7 +157,9 @@ export function JoinSharedInvitation() {
                 {busy ? 'Sending…' : 'Send verification email'}
               </button>
             </form>
-            <a href="/">Already a member? Sign in</a>
+            <p>
+              <a href="/">Already a member? Sign in</a>
+            </p>
           </>
         )}
         {error && <p role="alert">{error}</p>}

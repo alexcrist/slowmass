@@ -2,10 +2,16 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Welcome } from './features/welcome';
 import './styles.css';
+import { InstallProvider } from './features/install';
+import { observePushWindow } from './features/push';
+
+observePushWindow();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <Welcome />
+    <InstallProvider>
+      <Welcome />
+    </InstallProvider>
   </StrictMode>,
 );
 

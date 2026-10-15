@@ -48,11 +48,12 @@ export function PostList({
     error,
     loading,
     reload,
+    refresh,
   } = useApiResource<Page>(`/api/posts?${params}`);
   if (pending) return null;
   return (
     <>
-      {loading && <p role="status">Loading posts…</p>}
+      {loading && !page && <p role="status">Loading posts…</p>}
       {error && (
         <div>
           <p role="alert" className="error-message">
@@ -61,7 +62,7 @@ export function PostList({
           <button onClick={reload}>Retry</button>
         </div>
       )}
-      {page?.items.length === 0 && (
+      {!loading && page?.items.length === 0 && (
         <p>
           {handle
             ? 'No photos on this page.'
@@ -97,7 +98,12 @@ export function PostList({
           <PostCard
             key={post.id}
             post={post}
-            onDelete={reload}
+            onDelete={() =>
+              refresh((current) => ({
+                ...current,
+                items: current.items.filter((item) => item.id !== post.id),
+              }))
+            }
             priority={index === 0}
           />
         ))
@@ -106,6 +112,7 @@ export function PostList({
         <nav className="actions" aria-label="Post pages">
           {history.length > 1 && (
             <button
+              disabled={loading}
               onClick={() => {
                 setHistory(history.slice(0, -1));
               }}
@@ -115,13 +122,14 @@ export function PostList({
           )}
           {page.next ? (
             <button
+              disabled={loading}
               onClick={() => {
                 setHistory([...history, page.next!]);
               }}
             >
               Older
             </button>
-          ) : (
+          ) : !loading ? (
             <svg
               className="end-of-posts"
               role="img"
@@ -135,7 +143,7 @@ export function PostList({
             >
               <path d="M0 8h48" />
             </svg>
-          )}
+          ) : null}
         </nav>
       )}
     </>
@@ -153,6 +161,11 @@ function PostCard({
   focused?: boolean;
 }) {
   const [caption, setCaption] = useState(post.caption);
+  const [sourceCaption, setSourceCaption] = useState(post.caption);
+  if (sourceCaption !== post.caption) {
+    setSourceCaption(post.caption);
+    setCaption(post.caption);
+  }
   const photo = (
     <img
       className="post-photo"
@@ -200,7 +213,7 @@ function PostCard({
       <div className="post-body">
         {caption && <p className="bio">{caption}</p>}
         <Interactions
-          key={`${post.id}:${post.likeCount}:${post.commentCount}:${post.liked}`}
+          key={post.id}
           postId={post.id}
           initial={post}
           commentsInitiallyOpen={focused}
@@ -304,7 +317,8 @@ export function Compose({ onPublished }: { onPublished: () => void }) {
           }}
         />
         <p className="field-help">
-          One still JPEG, PNG, or WebP. Up to 8 MB and 40 megapixels.
+          One still JPEG, PNG, or WebP. Up to 32 MB and 40 megapixels. Photos
+          are resized automatically before upload.
         </p>
         {file && preview && (
           <>

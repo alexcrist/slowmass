@@ -53,6 +53,18 @@ it('joins auth reads and checks current membership/completion without caching re
     });
     // One native session/user join plus one membership/completion query.
     expect(joined.queries).toBe(2);
+    expect(joined.sessionStage).toBe('lookup');
+    const invalid = emptyMetrics();
+    expect(
+      await requestMetrics.run(invalid, () =>
+        getActiveSession(
+          env,
+          new Headers({ Cookie: 'better-auth.session_token=invalid' }),
+        ),
+      ),
+    ).toBeNull();
+    expect(invalid.sessionStage).toBe('endpoint');
+    expect(invalid.queries).toBe(0);
     await runtime.db.prepare("DELETE FROM avatar WHERE user_id='alice'").run();
     expect(await getActiveSession(env, headers)).toMatchObject({
       hasProfilePhoto: false,

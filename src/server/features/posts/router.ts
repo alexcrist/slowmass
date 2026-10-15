@@ -1,11 +1,10 @@
 import { Hono } from 'hono';
-import { measuredObjectRead } from '../../telemetry';
 import { bodyLimit } from 'hono/body-limit';
 import type { Env } from '../../env';
 import { getActiveSession } from '../../auth';
 import { authConfigured } from '../../auth/options';
 import { ownProfile, findProfile } from '../people';
-import { PhotoError } from '../../photos';
+import { PhotoError, privatePhoto } from '../../photos';
 import {
   createDraft,
   deletePost,
@@ -140,17 +139,10 @@ postMedia.get('/:id', async (c) => {
   const post = await findPost(c.env.DB, user.id, c.req.param('id'), false);
   if (!post || post.state !== 'published' || !post.objectKey)
     return c.notFound();
-  const object = await measuredObjectRead(
-    c.env.PHOTOS,
+  const response = await privatePhoto(
+    c.env,
     size === 'grid' ? (post.thumbnailKey ?? post.objectKey) : post.objectKey,
+    c.executionCtx,
   );
-  if (!object) return c.notFound();
-  return new Response(object.body, {
-    headers: {
-      'Content-Type': 'image/webp',
-      'Content-Length': String(object.size),
-      'Cache-Control': 'private, no-store',
-      'X-Content-Type-Options': 'nosniff',
-    },
-  });
+  return response ?? c.notFound();
 });

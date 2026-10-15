@@ -56,10 +56,27 @@ it('does not share an unfinished initialization with subsequent requests', async
     hasProfilePhoto: true,
   });
   expect(createAuth(env)).toBe(ready);
-  expect(mocks.create).toHaveBeenCalledTimes(2);
+  expect(mocks.create).toHaveBeenCalledTimes(3);
 });
 
-it('times out stalled session reads, evicts that instance and preserves sign-in on retry', async () => {
+it('does not reuse an initialized instance whose later session work has become stuck', async () => {
+  const env = {} as Env;
+  const first = library();
+  const second = library();
+  mocks.create.mockReturnValueOnce(first).mockReturnValueOnce(second);
+  expect(await getActiveSession(env, new Headers())).toMatchObject({
+    user: { id: 'alice' },
+  });
+  first.api.getSession.mockImplementation(() => new Promise(() => {}));
+  expect(await getActiveSession(env, new Headers())).toMatchObject({
+    user: { id: 'alice' },
+  });
+  expect(first.api.getSession).toHaveBeenCalledTimes(1);
+  expect(second.api.getSession).toHaveBeenCalledTimes(1);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('times out stalled session reads and preserves sign-in on an independent retry', async () => {
   const env = {} as Env;
   const stuck = library();
   stuck.api.getSession.mockImplementation(() => new Promise(() => {}));

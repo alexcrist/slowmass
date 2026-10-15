@@ -6,6 +6,7 @@ import type { Env } from '../../env';
 import { dispatchPush } from './delivery';
 import {
   parseSubscription,
+  validEndpoint,
   pushConfigured,
   removeSubscription,
   saveSubscription,
@@ -30,6 +31,8 @@ push.use('*', async (c, next) => {
   c.set('sessionId', session.sessionId);
   await next();
 });
+// Old clients can still read their sole subscription. Mutations require the
+// endpoint-aware client: copied login cookies cannot identify an installation.
 push.get('/', async (c) =>
   c.json({
     available: pushConfigured(c.env),
@@ -41,7 +44,22 @@ push.get('/', async (c) =>
     ),
   }),
 );
-push.put('/', bodyLimit({ maxSize: 4096 }), async (c) => {
+push.get('/device', async (c) => {
+  const endpoint = c.req.header('X-Push-Endpoint') ?? null;
+  if (endpoint !== null && !validEndpoint(endpoint))
+    return c.json({ error: 'Invalid push subscription.' }, 400);
+  return c.json({
+    available: pushConfigured(c.env),
+    publicKey: pushConfigured(c.env) ? c.env.PUSH_PUBLIC_KEY : null,
+    subscription: await subscriptionStatus(
+      c.env.DB,
+      c.get('userId'),
+      c.get('sessionId'),
+      endpoint,
+    ),
+  });
+});
+push.put('/device', bodyLimit({ maxSize: 4096 }), async (c) => {
   if (!pushConfigured(c.env))
     return c.json({ error: 'Push notifications are not available yet.' }, 503);
   const subscription = await parseSubscription(
@@ -63,14 +81,30 @@ push.put('/', bodyLimit({ maxSize: 4096 }), async (c) => {
     return c.json(
       {
         error:
-          'Could not enable notifications. Try signing in again or removing an unused device.',
+          'Could not enable notifications. Disable notifications in an unused browser, or sign out and back in before trying again.',
       },
       409,
     );
   return c.json({ ok: true });
 });
-push.delete('/', async (c) => {
-  await removeSubscription(c.env.DB, c.get('userId'), c.get('sessionId'));
+push.on(['PUT', 'DELETE'], '/', (c) =>
+  c.json(
+    {
+      error: 'Reload slowmass to update notification settings.',
+    },
+    409,
+  ),
+);
+push.delete('/device', async (c) => {
+  const endpoint = c.req.header('X-Push-Endpoint');
+  if (!endpoint || !validEndpoint(endpoint))
+    return c.json({ error: 'Invalid push subscription.' }, 400);
+  await removeSubscription(
+    c.env.DB,
+    c.get('userId'),
+    c.get('sessionId'),
+    endpoint,
+  );
   return c.json({ ok: true });
 });
 // Prompt dispatch is best effort; the committed outbox and cron survive a lost

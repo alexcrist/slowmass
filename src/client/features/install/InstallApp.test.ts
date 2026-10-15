@@ -70,9 +70,9 @@ it.each([
     await act(async () => {
       events.dispatchEvent(new Event('appinstalled'));
     });
-    expect(renderer!.root.findAllByType('details')).toHaveLength(0);
+    expect(renderer!.root.findAllByType('details')).toHaveLength(1);
     expect(renderer!.root.findByType('p').children.join('')).toContain(
-      'installed app',
+      'Installed.',
     );
   },
 );
@@ -106,8 +106,58 @@ it.each([
 
 it('preserves installed status on mobile without showing installation help', async () => {
   await setup('iPhone', 'iPhone', 5, true);
-  expect(renderer!.root.findAllByType('details')).toHaveLength(0);
+  expect(renderer!.root.findAllByType('details')).toHaveLength(1);
   expect(renderer!.root.findByType('p').children.join('')).toContain(
-    'installed app',
+    'Installed.',
   );
+});
+
+it.each(['dismissed', 'failed'])(
+  'keeps manual installation available after a %s prompt without repeating it',
+  async (outcome) => {
+    const events = await setup('Android', 'Linux armv8l', 5);
+    const prompt =
+      outcome === 'failed'
+        ? vi.fn().mockRejectedValue(new Error('Unavailable'))
+        : vi.fn().mockResolvedValue({ outcome: 'dismissed' });
+    await act(async () =>
+      events.dispatchEvent(
+        Object.assign(new Event('beforeinstallprompt', { cancelable: true }), {
+          prompt,
+        }),
+      ),
+    );
+    await act(async () => renderer!.root.findByType('button').props.onClick());
+    expect(prompt).toHaveBeenCalledOnce();
+    expect(renderer!.root.findAllByType('button')).toHaveLength(0);
+    const text = JSON.stringify(renderer!.toJSON());
+    expect(text).toContain('three-dot menu');
+    expect(text).toContain('without opening the installed app');
+    expect(text).toContain(
+      outcome === 'failed' ? 'Use your browser menu' : 'You can install later',
+    );
+  },
+);
+it('retains a native prompt captured before member setup and shares it with nested consumers', async () => {
+  const events = await setup('Android', 'Linux armv8l', 5);
+  await act(async () =>
+    renderer!.update(
+      createElement(InstallProvider, {
+        children: createElement('p', null, 'Sign in'),
+      }),
+    ),
+  );
+  const event = promptEvent();
+  await act(async () => events.dispatchEvent(event));
+  await act(async () =>
+    renderer!.update(
+      createElement(InstallProvider, {
+        children: createElement(InstallProvider, {
+          children: createElement(InstallApp),
+        }),
+      }),
+    ),
+  );
+  await act(async () => renderer!.root.findByType('button').props.onClick());
+  expect(event.prompt).toHaveBeenCalledOnce();
 });

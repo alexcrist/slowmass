@@ -22,6 +22,7 @@
   --line: #e5e5e5;
   --hover: #f5f5f5;
   --paper: #fff;
+  --post-spacing: 36px;
   color-scheme: light;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -134,7 +135,7 @@ p {
   height: 18px;
   padding: 0 4px;
   border-radius: 9px;
-  background: var(--ink);
+  background: var(--brand);
   color: var(--paper);
   font-size: 10px;
   font-weight: 600;
@@ -441,7 +442,6 @@ input::file-selector-button {
   padding: 0;
 }
 .people-list li,
-.comment-list li,
 .notification-list li {
   padding-block: 16px;
   border-bottom: 1px solid var(--line);
@@ -449,7 +449,54 @@ input::file-selector-button {
 }
 /* Keep the post row's full padded area inside its keyboard-accessible link. */
 .notification-request {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding-block: 16px;
+}
+.notification-person {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 12px;
+  text-decoration: none;
+}
+.notification-person:hover {
+  background: var(--hover);
+}
+.notification-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 8px;
+}
+.notification-actions > button {
+  width: auto;
+  min-height: 44px;
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.notification-actions > .notification-dismiss {
+  min-width: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 24px;
+}
+.notification-dismiss:enabled:hover {
+  background: var(--hover);
+}
+@media (max-width: 420px) {
+  .notification-request,
+  .notification-person {
+    gap: 8px;
+  }
+  .notification-actions {
+    gap: 4px;
+  }
 }
 .notification-list > li {
   padding: 0;
@@ -467,11 +514,17 @@ input::file-selector-button {
 .notification-post:hover {
   background: var(--hover);
 }
-.notification-thumbnail {
+.notification-thumbnail,
+.notification-avatar {
   display: block;
+  flex-shrink: 0;
   width: 64px;
   height: 64px;
   object-fit: cover;
+}
+.notification-avatar,
+.notification-joined .notification-thumbnail {
+  border-radius: 50%;
 }
 .notification-content > p {
   margin: 0 0 8px;
@@ -533,7 +586,7 @@ input::file-selector-button {
   container-type: inline-size;
 }
 .post {
-  margin: 24px 0 36px;
+  margin: 24px 0 var(--post-spacing);
   background: var(--paper);
   border-bottom: 1px solid var(--line);
   overflow-wrap: anywhere;
@@ -566,6 +619,12 @@ input::file-selector-button {
 }
 .post-body {
   padding: 4px 0 20px;
+}
+.post-body > .bio {
+  font-size: 15px;
+}
+.post-body:has(.comment-composer) {
+  padding-bottom: var(--post-spacing);
 }
 .post-photo,
 .photo-preview {
@@ -609,7 +668,7 @@ input::file-selector-button {
     margin: 28px 0;
   }
   .photo-screen > .back-control,
-  .photo-screen > .profile-tabs,
+  .photo-screen .profile-tabs,
   .photo-screen > p,
   .photo-screen > nav,
   .photo-screen > button {
@@ -840,32 +899,80 @@ summary.settings-row::after {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 8px 0;
+  margin: 8px 0 12px;
 }
 .comment-composer {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  margin-block: 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 22px;
+  background: var(--paper);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 15px;
 }
-.comment-composer textarea {
+.comment-composer:has(textarea:focus-visible) {
+  box-shadow: inset 0 0 0 1px var(--muted);
+}
+.comment-input {
+  display: grid;
   flex: 1;
   min-width: 0;
+  margin-left: 22px;
+}
+/* The hidden copy grows with wrapping and newlines, including a trailing one. */
+.comment-input-size,
+.comment-composer textarea {
+  grid-area: 1 / 1;
+  min-width: 0;
+  min-height: 44px;
+  max-height: 154px;
   margin: 0;
+  padding: 11px 0;
+  border: 0;
+  font: inherit;
+  line-height: 22px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.comment-input-size {
+  visibility: hidden;
+  overflow: hidden;
+}
+.comment-composer textarea {
+  height: 100%;
+  resize: none;
+  border-radius: 0;
+  background: transparent;
+  outline: none;
 }
 .comment-submit {
+  display: grid;
+  place-items: center;
   flex: none;
-  min-width: 64px;
-  min-height: 48px;
-  padding: 10px 12px;
+  width: 44px;
+  height: 44px;
+  padding: 10px;
   border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--brand);
-  font-weight: 600;
+  border-radius: 50%;
+  background: var(--brand);
+  color: #fff;
+}
+.comment-submit svg {
+  width: 22px;
+  height: 22px;
+  /* Balance the paper plane's diagonal silhouette within the circle. */
+  transform: translate(-1px, 1px);
+}
+.comment-submit:disabled {
+  /* Keep the button opaque so the composer's outline cannot show through. */
+  opacity: 1;
+  background: #859c93;
 }
 .comment-submit:enabled:hover {
-  background: var(--hover);
+  background: #193e30;
 }
 .icon-button,
 .count-button {
@@ -1104,13 +1211,16 @@ summary.settings-row::after {
   border-radius: 5px;
   font-weight: 600;
 }
-.comment-list .comment-row {
+.comment-list {
+  margin: 0;
+}
+.comment-row {
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr) 44px;
   align-items: start;
   gap: 10px;
-  padding-block: 12px;
-  border: 0;
+  padding: 0 0 12px;
+  overflow-wrap: anywhere;
 }
 .comment-avatar img {
   display: block;
@@ -1128,30 +1238,43 @@ summary.settings-row::after {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0 12px;
+  gap: 0 16px;
   color: var(--muted);
   font-size: 13px;
-  min-height: 32px;
+  line-height: 20px;
 }
 .comment-meta time {
   margin: 0;
 }
 .comment-likes,
 .comment-delete {
-  min-height: 44px;
-  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  padding: 12px 0;
   border: 0;
   background: transparent;
   color: inherit;
   font-size: inherit;
 }
 .comment-likes {
+  line-height: inherit;
   font-weight: 600;
 }
-.comment-heart svg,
-.comment-delete svg {
+.comment-delete {
+  /* Match the text controls' 44px target without imposing height on the row. */
+  width: 44px;
+  padding-block: 15px;
+  justify-content: flex-start;
+}
+.comment-heart svg {
   width: 18px;
   height: 18px;
+}
+.comment-delete svg {
+  width: 14px;
+  height: 14px;
+  /* Align optically with Source Sans 3 glyphs rather than its line box. */
+  transform: translateY(-2px);
 }
 .profile-shortcuts {
   display: flex;
@@ -1313,9 +1436,6 @@ summary.settings-row::after {
   }
 }
 
-.notification-joined .notification-thumbnail {
-  border-radius: 50%;
-}
 .invite-link-section {
   margin-bottom: 40px;
 }
@@ -1333,4 +1453,25 @@ summary.settings-row::after {
 }
 .invite-link-result input {
   font-size: 14px;
+}
+
+/* Optional device setup shares the existing onboarding column and settings controls. */
+.device-setup-option {
+  border-top: 1px solid var(--line);
+  padding: 20px 0;
+}
+.device-setup-option h2 {
+  margin: 0 0 12px;
+  font-size: 20px;
+}
+.device-setup-option p {
+  margin: 0 0 12px;
+}
+.device-setup-option summary {
+  min-height: 44px;
+  padding: 12px 0;
+  cursor: pointer;
+}
+.device-setup-continue {
+  margin-top: 12px;
 }

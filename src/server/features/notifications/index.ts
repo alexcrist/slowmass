@@ -32,6 +32,7 @@ export type Notification = {
   createdAt: number;
   version: number;
   unread: boolean;
+  canFollowBack: boolean;
 };
 export function parsePage(
   value: string | undefined,
@@ -93,6 +94,10 @@ export async function notificationPage(
     CASE WHEN e.kind='comment' THEN (SELECT body FROM comment WHERE id=substr(e.event_key,9)) END AS body,
     CASE WHEN e.kind='likes' THEN (SELECT COUNT(*) FROM activity_source n WHERE n.recipient_id=e.recipient_id AND n.event_key=e.event_key AND ${visibleActor('n')}) ELSE 1 END AS count,
     e.created_at AS createdAt,
+    (e.kind='follower'
+      AND NOT EXISTS(SELECT 1 FROM follow f WHERE f.follower_id=e.recipient_id AND f.target_id=e.actor_id)
+      AND EXISTS(SELECT 1 FROM activity_read_state r WHERE r.recipient_id=e.recipient_id
+        AND r.event_key=e.event_key AND r.actor_id=e.actor_id AND r.follow_back_dismissed=0)) AS canFollowBack,
     (SELECT MAX(r.revision) FROM activity_source n JOIN activity_read_state r
       USING(recipient_id,event_key,actor_id)
       WHERE n.recipient_id=e.recipient_id AND n.event_key=e.event_key AND ${visibleActor('n')}) AS version,
@@ -102,10 +107,17 @@ export async function notificationPage(
     ORDER BY e.created_at DESC,e.event_key DESC`,
     )
     .bind(actor, cursor?.time ?? Number.MAX_SAFE_INTEGER, cursor?.key ?? '')
-    .all<Omit<Notification, 'unread'> & { unread: number }>();
-  const items = rows.results
-      .slice(0, 20)
-      .map((item) => ({ ...item, unread: Boolean(item.unread) })),
+    .all<
+      Omit<Notification, 'unread' | 'canFollowBack'> & {
+        unread: number;
+        canFollowBack: number;
+      }
+    >();
+  const items = rows.results.slice(0, 20).map((item) => ({
+      ...item,
+      unread: Boolean(item.unread),
+      canFollowBack: Boolean(item.canFollowBack),
+    })),
     last = items.at(-1);
   return {
     items,
@@ -178,5 +190,25 @@ export async function markRead(
   `,
     )
     .bind(JSON.stringify(items), actor, actor)
+    .run();
+}
+
+// Exact-version, owner-scoped dismissal is retry-safe and never changes read state.
+export async function dismissFollowBack(
+  db: D1Database,
+  actor: string,
+  receipt: ReadReceipt,
+) {
+  await db
+    .prepare(
+      `UPDATE activity_read_state SET follow_back_dismissed=1
+    WHERE revision=? AND recipient_id=? AND event_key=?
+      AND EXISTS(SELECT 1 FROM activity_source e
+        WHERE e.recipient_id=activity_read_state.recipient_id
+          AND e.event_key=activity_read_state.event_key
+          AND e.actor_id=activity_read_state.actor_id
+          AND e.kind='follower' AND ${visibleSource})`,
+    )
+    .bind(receipt.version, actor, receipt.key)
     .run();
 }

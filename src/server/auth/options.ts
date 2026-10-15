@@ -11,6 +11,7 @@ import {
   acceptSharedVerification,
 } from '../membership';
 import { invitationAuth } from './invitation';
+import { sessionStage } from '../telemetry';
 
 export function authConfigured(env: Env): boolean {
   return Boolean(
@@ -49,6 +50,27 @@ export function authOptions(env: Env): BetterAuthOptions {
     emailAndPassword: { enabled: false },
     rateLimit: { enabled: true, storage: 'database', window: 60, max: 30 },
     plugins: [
+      {
+        id: 'session-diagnostics',
+        hooks: {
+          before: [
+            {
+              matcher: (ctx) => ctx.path === '/get-session',
+              handler: createAuthMiddleware(async (ctx) => {
+                sessionStage('endpoint');
+                const findSession = ctx.context.internalAdapter.findSession;
+                ctx.context.internalAdapter = {
+                  ...ctx.context.internalAdapter,
+                  findSession: (...args) => {
+                    sessionStage('lookup');
+                    return findSession(...args);
+                  },
+                };
+              }),
+            },
+          ],
+        },
+      },
       {
         ...invitationAuth(env),
         hooks: {

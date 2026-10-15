@@ -7,8 +7,12 @@ import {
   dismissPushNotifications,
 } from '../src/client/features/push';
 import { InstallProvider } from '../src/client/features/install';
+import { DeviceSetup } from '../src/client/features/device-setup';
 const mock = vi.hoisted(() => ({ api: vi.fn() }));
-vi.mock('../src/client/api', () => ({ api: mock.api }));
+vi.mock('../src/client/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/client/api')>()),
+  api: mock.api,
+}));
 let renderer: ReactTestRenderer;
 let endpoint: string | null;
 let local: typeof subscription | null;
@@ -81,6 +85,14 @@ beforeEach(() => {
     },
   });
   const events = new EventTarget();
+  const documentEvents = new EventTarget();
+  vi.stubGlobal('document', {
+    visibilityState: 'visible',
+    addEventListener: documentEvents.addEventListener.bind(documentEvents),
+    removeEventListener:
+      documentEvents.removeEventListener.bind(documentEvents),
+    dispatchEvent: documentEvents.dispatchEvent.bind(documentEvents),
+  });
   vi.stubGlobal('window', {
     addEventListener: events.addEventListener.bind(events),
     removeEventListener: events.removeEventListener.bind(events),
@@ -117,7 +129,7 @@ async function click(label: string) {
 }
 it('asks for permission only on explicit opt-in, saves it, and disables server delivery before browser cleanup', async () => {
   await mount();
-  expect(text()).toContain('off for this device');
+  expect(text()).toContain('off for this browser or app');
   expect(requestPermission).not.toHaveBeenCalled();
   expect(register).not.toHaveBeenCalled();
   expect(registration.pushManager.subscribe).not.toHaveBeenCalled();
@@ -134,13 +146,16 @@ it('asks for permission only on explicit opt-in, saves it, and disables server d
     userVisibleOnly: true,
     applicationServerKey: expect.any(Uint8Array),
   });
-  expect(mock.api).toHaveBeenCalledWith('/api/push', {
-    method: 'PUT',
-    body: JSON.stringify(subscription.toJSON()),
-  });
-  expect(text()).toContain('on for this device');
+  expect(mock.api).toHaveBeenCalledWith(
+    '/api/push/device',
+    expect.objectContaining({
+      method: 'PUT',
+      body: JSON.stringify(subscription.toJSON()),
+    }),
+  );
+  expect(text()).toContain('on for this browser or app');
   await click('Disable notifications');
-  expect(text()).toContain('off for this device');
+  expect(text()).toContain('off for this browser or app');
   expect(subscription.unsubscribe).toHaveBeenCalledOnce();
   const deleteIndex = mock.api.mock.calls.findIndex(
     (call) => call[1]?.method === 'DELETE',
@@ -178,7 +193,7 @@ it('completes first opt-in after a slow Android permission dialog and focus retu
     window.dispatchEvent(new Event('focus'));
     grant('granted');
   });
-  expect(text()).toContain('on for this device');
+  expect(text()).toContain('on for this browser or app');
   expect(requestPermission).toHaveBeenCalledOnce();
   expect(
     mock.api.mock.calls.filter((call) => call[1]?.method === 'PUT'),
@@ -191,10 +206,9 @@ it('shows failures without claiming success and allows retry after a failed serv
   await click('Enable notifications');
   expect(text()).toContain(failure);
   expect(Notification.permission).toBe('granted');
-  expect(text()).not.toContain('on for this device');
+  expect(text()).not.toContain('on for this browser or app');
   await click('Retry');
-  await click('Enable notifications');
-  expect(text()).toContain('on for this device');
+  expect(text()).toContain('on for this browser or app');
 });
 it('revokes server delivery even when browser cleanup fails', async () => {
   endpoint = subscription.endpoint;
@@ -204,7 +218,7 @@ it('revokes server delivery even when browser cleanup fails', async () => {
   subscription.unsubscribe.mockRejectedValueOnce(new Error('Browser failed'));
   await click('Disable notifications');
   expect(endpoint).toBeNull();
-  expect(text()).toContain('off for this device');
+  expect(text()).toContain('off for this browser or app');
 });
 it('explains Home Screen installation on iPhone and iPad without asking for permission', async () => {
   Object.assign(navigator, {
@@ -237,6 +251,9 @@ it('dismisses only acknowledged push versions and unsubscribes on sign-out', asy
 });
 
 it('ignores a stale status response after disabling and cancels opt-in when Settings unmounts', async () => {
+  local = subscription;
+  endpoint = subscription.endpoint;
+  Object.assign(Notification, { permission: 'granted' });
   await mount();
   let resolveStatus!: (value: unknown) => void;
   const read = new Promise((resolve) => {
@@ -246,7 +263,7 @@ it('ignores a stale status response after disabling and cancels opt-in when Sett
   mock.api.mockImplementation((path: string, options?: RequestInit) =>
     options?.method ? implementation(path, options) : read,
   );
-  await click('Enable notifications');
+  await act(async () => window.dispatchEvent(new Event('focus')));
   await click('Disable notifications');
   await act(async () =>
     resolveStatus({
@@ -255,7 +272,7 @@ it('ignores a stale status response after disabling and cancels opt-in when Sett
       subscription: { id: 'one', endpoint: subscription.endpoint },
     }),
   );
-  expect(text()).toContain('off for this device');
+  expect(text()).toContain('off for this browser or app');
   expect(
     renderer.root
       .findAllByType('button')
@@ -269,8 +286,161 @@ it('ignores a stale status response after disabling and cancels opt-in when Sett
       }),
   );
   register.mockClear();
+  Object.assign(Notification, { permission: 'default' });
   await click('Enable notifications');
   await act(async () => renderer.unmount());
   await act(async () => resolvePermission('granted'));
   expect(register).not.toHaveBeenCalled();
+});
+
+it('recognizes a working subscription after installation without prompting or registering again', async () => {
+  local = subscription;
+  endpoint = subscription.endpoint;
+  Object.assign(Notification, { permission: 'granted' });
+  Object.assign(navigator, { userAgent: 'Android', standalone: true });
+  await mount();
+  expect(text()).toContain('on for this browser or app');
+  expect(requestPermission).not.toHaveBeenCalled();
+  expect(register).not.toHaveBeenCalled();
+  expect(mock.api).toHaveBeenCalledWith(
+    '/api/push/device',
+    expect.objectContaining({
+      headers: { 'X-Push-Endpoint': subscription.endpoint },
+    }),
+  );
+  expect(mock.api.mock.calls.every((call) => !call[1]?.method)).toBe(true);
+});
+it('refreshes both server ownership and browser permission after returning from settings', async () => {
+  Object.assign(Notification, { permission: 'denied' });
+  await mount();
+  expect(text()).toContain('Notifications are blocked');
+  local = subscription;
+  endpoint = subscription.endpoint;
+  Object.assign(Notification, { permission: 'granted' });
+  await act(async () => document.dispatchEvent(new Event('visibilitychange')));
+  expect(text()).toContain('on for this browser or app');
+  endpoint = null;
+  await act(async () => window.dispatchEvent(new Event('focus')));
+  expect(text()).toContain('off for this browser or app');
+  expect(requestPermission).not.toHaveBeenCalled();
+});
+it('retries a failed registration using the same explicit opt-in without repeating permission or subscribing', async () => {
+  await mount();
+  mock.api.mockRejectedValueOnce(new Error('Network interrupted'));
+  await click('Enable notifications');
+  expect(text()).toContain('Network interrupted');
+  await click('Retry');
+  expect(text()).toContain('on for this browser or app');
+  expect(requestPermission).toHaveBeenCalledOnce();
+  expect(registration.pushManager.subscribe).toHaveBeenCalledOnce();
+  expect(subscription.unsubscribe).not.toHaveBeenCalled();
+});
+it('does not adopt another account’s local subscription even with granted browser permission', async () => {
+  local = subscription;
+  endpoint = null;
+  Object.assign(Notification, { permission: 'granted' });
+  await mount();
+  expect(text()).toContain('off for this browser or app');
+  await click('Enable notifications');
+  expect(requestPermission).not.toHaveBeenCalled();
+  expect(subscription.unsubscribe).toHaveBeenCalledOnce();
+  expect(registration.pushManager.subscribe).toHaveBeenCalledOnce();
+});
+it('does not confuse an installation event with running in the iOS Home Screen app', async () => {
+  Object.assign(navigator, { userAgent: 'iPhone', standalone: false });
+  await mount();
+  await act(async () => window.dispatchEvent(new Event('appinstalled')));
+  expect(text()).toContain('Home Screen first');
+  expect(mock.api).not.toHaveBeenCalled();
+  Object.assign(navigator, { standalone: true });
+  await act(async () => window.dispatchEvent(new Event('focus')));
+  expect(text()).toContain('Enable notifications');
+  expect(requestPermission).not.toHaveBeenCalled();
+});
+
+it.each(['install-first', 'notifications-first'])(
+  'completes Android optional setup in either order without repeating permission (%s)',
+  async (order) => {
+    Object.assign(navigator, { userAgent: 'Android' });
+    const done = vi.fn();
+    await act(async () => {
+      renderer = create(
+        createElement(InstallProvider, {
+          children: createElement(DeviceSetup, { onContinue: done }),
+        }),
+      );
+    });
+    const prompt = vi.fn(async () => ({ outcome: 'accepted' }));
+    await act(async () =>
+      window.dispatchEvent(
+        Object.assign(new Event('beforeinstallprompt', { cancelable: true }), {
+          prompt,
+        }),
+      ),
+    );
+    expect(requestPermission).not.toHaveBeenCalled();
+    if (order === 'notifications-first') {
+      await click('Enable notifications');
+      expect(done).not.toHaveBeenCalled();
+    }
+    await click('Install app');
+    await act(async () => window.dispatchEvent(new Event('appinstalled')));
+    if (order === 'install-first') {
+      expect(requestPermission).not.toHaveBeenCalled();
+      expect(done).not.toHaveBeenCalled();
+      await click('Enable notifications');
+    }
+    expect(done).toHaveBeenCalledOnce();
+    expect(prompt).toHaveBeenCalledOnce();
+    expect(requestPermission).toHaveBeenCalledOnce();
+    expect(registration.pushManager.subscribe).toHaveBeenCalledOnce();
+  },
+);
+it.each(['iPhone', 'Android'])(
+  'hides installation during setup in the installed %s app without hiding notifications',
+  async (userAgent) => {
+    Object.assign(navigator, { userAgent, standalone: true });
+    await act(async () => {
+      renderer = create(
+        createElement(InstallProvider, {
+          children: createElement(DeviceSetup, { onContinue: vi.fn() }),
+        }),
+      );
+    });
+    expect(text()).not.toContain('Install slowmass');
+    expect(text()).not.toContain('Signing out stops');
+    expect(text()).toContain('Enable notifications');
+    expect(text()).toContain('Continue');
+    expect(requestPermission).not.toHaveBeenCalled();
+  },
+);
+it('can continue during a pending permission prompt and does not subscribe after the setup screen unmounts', async () => {
+  Object.assign(navigator, { userAgent: 'Android' });
+  const done = vi.fn();
+  await act(async () => {
+    renderer = create(
+      createElement(InstallProvider, {
+        children: createElement(DeviceSetup, { onContinue: done }),
+      }),
+    );
+  });
+  let grant!: (value: string) => void;
+  requestPermission.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        grant = resolve;
+      }),
+  );
+  await click('Enable notifications');
+  await click('Continue');
+  expect(done).toHaveBeenCalledOnce();
+  await act(async () => renderer.unmount());
+  await act(async () => grant('granted'));
+  expect(register).not.toHaveBeenCalled();
+  expect(registration.pushManager.subscribe).not.toHaveBeenCalled();
+});
+it('does not unsubscribe a changed browser endpoint during cleanup of an earlier registration', async () => {
+  local = subscription;
+  await clearLocalPush(subscription.endpoint + '/old');
+  expect(subscription.unsubscribe).not.toHaveBeenCalled();
 });

@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type PointerEvent,
+} from 'react';
 import { api } from '../../api';
 import { Dialog } from '../../ui/Dialog';
 import { ProfilePhoto } from './ProfilePhoto';
@@ -8,8 +14,21 @@ import {
   encodeCrop,
   initialCrop,
   moveCrop,
+  pinchCrop,
   type Crop,
+  type CropPoint,
 } from './crop';
+
+function pointerPosition(
+  event: PointerEvent<HTMLCanvasElement>,
+): CropPoint | null {
+  const bounds = event.currentTarget.getBoundingClientRect();
+  if (!bounds.width || !bounds.height) return null;
+  return {
+    x: (event.clientX - bounds.left) / bounds.width,
+    y: (event.clientY - bounds.top) / bounds.height,
+  };
+}
 
 export function AvatarForm({
   handle,
@@ -32,7 +51,7 @@ export function AvatarForm({
   const [error, setError] = useState('');
   const canvas = useRef<HTMLCanvasElement>(null);
   const input = useRef<HTMLInputElement>(null);
-  const drag = useRef<{ id: number; x: number; y: number } | null>(null);
+  const pointers = useRef(new Map<number, CropPoint>());
   const prepared = useRef<{ id: string; blob: Blob } | null>(null);
   const controller = useRef<AbortController | null>(null);
   const image = source?.file === file ? source?.image : null;
@@ -78,23 +97,74 @@ export function AvatarForm({
     return () => cancelAnimationFrame(frame);
   }, [image, crop]);
 
-  function adjust(next: Crop) {
+  function adjust(next: Crop | ((current: Crop) => Crop)) {
     setCrop(next);
     prepared.current = null;
     setError('');
     setMessage('');
+  }
+  function startGesture(event: PointerEvent<HTMLCanvasElement>) {
+    if (
+      busy ||
+      controller.current ||
+      event.button !== 0 ||
+      pointers.current.size >= 2
+    )
+      return;
+    const point = pointerPosition(event);
+    if (!point) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    pointers.current.set(event.pointerId, point);
+  }
+  function moveGesture(event: PointerEvent<HTMLCanvasElement>) {
+    if (
+      busy ||
+      controller.current ||
+      !image ||
+      !pointers.current.has(event.pointerId)
+    )
+      return;
+    const point = pointerPosition(event);
+    if (!point) return;
+    const from = [...pointers.current.values()];
+    pointers.current.set(event.pointerId, point);
+    const to = [...pointers.current.values()];
+    const [start, secondStart] = from;
+    const [end, secondEnd] = to;
+    if (!start || !end) return;
+    adjust((current) =>
+      secondStart && secondEnd
+        ? pinchCrop(
+            image.width,
+            image.height,
+            current,
+            [start, secondStart],
+            [end, secondEnd],
+          )
+        : moveCrop(
+            image.width,
+            image.height,
+            current,
+            end.x - start.x,
+            end.y - start.y,
+          ),
+    );
+  }
+  function endGesture(event: PointerEvent<HTMLCanvasElement>) {
+    pointers.current.delete(event.pointerId);
   }
   function cancel() {
     if (controller.current) return;
     setFile(null);
     setSource(null);
     prepared.current = null;
-    drag.current = null;
+    pointers.current.clear();
     setError('');
   }
   async function upload(event: FormEvent) {
     event.preventDefault();
     if (!image || controller.current) return;
+    pointers.current.clear();
     setBusy(true);
     setMessage('');
     setError('');
@@ -163,13 +233,14 @@ export function AvatarForm({
             setFile(selected);
             setCrop(initialCrop);
             prepared.current = null;
-            drag.current = null;
+            pointers.current.clear();
             setError('');
             setMessage('');
           }}
         />
         <p id="avatar-file-help" className="avatar-help">
-          JPEG, PNG, or WebP. Up to 8 MB and 40 megapixels.
+          JPEG, PNG, or WebP. Up to 32 MB and 40 megapixels. Photos are resized
+          automatically before upload.
           <br />
           Visible to signed-in members.
         </p>
@@ -190,45 +261,11 @@ export function AvatarForm({
                   role="img"
                   aria-label="Profile photo crop preview"
                   aria-describedby="avatar-crop-help"
-                  onPointerDown={(event) => {
-                    if (busy || event.button !== 0) return;
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                    drag.current = {
-                      id: event.pointerId,
-                      x: event.clientX,
-                      y: event.clientY,
-                    };
-                  }}
-                  onPointerMove={(event) => {
-                    const previous = drag.current;
-                    if (busy || !previous || previous.id !== event.pointerId)
-                      return;
-                    const bounds = event.currentTarget.getBoundingClientRect();
-                    if (!bounds.width || !bounds.height) return;
-                    adjust(
-                      moveCrop(
-                        image.width,
-                        image.height,
-                        crop,
-                        (event.clientX - previous.x) / bounds.width,
-                        (event.clientY - previous.y) / bounds.height,
-                      ),
-                    );
-                    drag.current = {
-                      id: event.pointerId,
-                      x: event.clientX,
-                      y: event.clientY,
-                    };
-                  }}
-                  onPointerUp={() => {
-                    drag.current = null;
-                  }}
-                  onPointerCancel={() => {
-                    drag.current = null;
-                  }}
-                  onLostPointerCapture={() => {
-                    drag.current = null;
-                  }}
+                  onPointerDown={startGesture}
+                  onPointerMove={moveGesture}
+                  onPointerUp={endGesture}
+                  onPointerCancel={endGesture}
+                  onLostPointerCapture={endGesture}
                   onKeyDown={(event) => {
                     if (busy) return;
                     const step = event.shiftKey ? 0.1 : 0.025;
@@ -252,8 +289,8 @@ export function AvatarForm({
                   }}
                 />
                 <p id="avatar-crop-help" className="status-copy">
-                  Drag the photo or use arrow keys to position it. Adjust the
-                  zoom to crop.
+                  Drag to position the photo. Pinch or use the slider to zoom.
+                  Arrow keys also move the photo.
                 </p>
                 <label className="field-label" htmlFor="avatar-zoom">
                   Zoom

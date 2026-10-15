@@ -370,3 +370,102 @@ it('migrates existing activity atomically without replay, losing receipts, pendi
     await old.worker.dispose();
   }
 });
+
+it('offers follow back only without an outgoing pending or accepted follow', async () => {
+  await runtime.request('bob', '/api/people/alice/request', 'POST');
+  expect((await page()).items[0].canFollowBack).toBe(false);
+  await runtime.request('alice', '/api/people/bob/accept', 'POST');
+  expect((await page()).items[0].canFollowBack).toBe(true);
+  await runtime.request('alice', '/api/people/bob/request', 'POST');
+  expect((await page()).items[0].canFollowBack).toBe(false);
+  await runtime.request('bob', '/api/people/alice/accept', 'POST');
+  expect((await page()).items[0].canFollowBack).toBe(false);
+});
+
+it('persists owner-only dismissal without hiding or reading activity and ignores stale versions', async () => {
+  await accept();
+  const original = (await page()).items[0];
+  const dismiss = (actor: string, item = original) =>
+    runtime.request(actor, '/api/notifications/dismiss-follow-back', 'POST', {
+      key: item.key,
+      version: item.version,
+    });
+  expect((await dismiss('carol')).status).toBe(200);
+  expect((await page()).items[0].canFollowBack).toBe(true);
+  expect((await dismiss('alice')).status).toBe(200);
+  expect((await dismiss('alice')).status).toBe(200);
+  expect((await page()).items).toEqual([{ ...original, canFollowBack: false }]);
+  await acknowledge('alice', [original]);
+  expect((await page()).items[0]).toMatchObject({
+    canFollowBack: false,
+    unread: false,
+  });
+  await runtime.request('bob', '/api/people/alice/unfollow', 'POST');
+  await accept();
+  await dismiss('alice');
+  expect((await page()).items[0]).toMatchObject({
+    canFollowBack: true,
+    unread: true,
+  });
+});
+
+it('rejects invalid dismissal input and does not change hidden activity', async () => {
+  await accept();
+  const item = (await page()).items[0];
+  for (const body of [
+    null,
+    {},
+    { key: 'request:bob', version: item.version },
+    { key: item.key, version: 0 },
+    { key: item.key, version: '1' },
+  ]) {
+    expect(
+      (
+        await runtime.request(
+          'alice',
+          '/api/notifications/dismiss-follow-back',
+          'POST',
+          body,
+        )
+      ).status,
+    ).toBe(400);
+  }
+  expect(
+    (
+      await runtime.request(
+        null,
+        '/api/notifications/dismiss-follow-back',
+        'POST',
+        item,
+      )
+    ).status,
+  ).toBe(401);
+  expect(
+    (
+      await runtime.request(
+        'alice',
+        '/api/notifications/dismiss-follow-back',
+        'POST',
+        item,
+        { Origin: 'https://elsewhere.test' },
+      )
+    ).status,
+  ).toBe(403);
+  await runtime.db
+    .prepare("UPDATE membership SET status='deleted' WHERE user_id='bob'")
+    .run();
+  expect(
+    (
+      await runtime.request(
+        'alice',
+        '/api/notifications/dismiss-follow-back',
+        'POST',
+        item,
+      )
+    ).status,
+  ).toBe(200);
+  await runtime.db
+    .prepare("UPDATE membership SET status='active' WHERE user_id='bob'")
+    .run();
+  expect((await page()).items[0].canFollowBack).toBe(true);
+});

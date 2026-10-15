@@ -6,6 +6,6 @@ Current membership checks hide photos, comments, notifications, and profiles imm
 
 Backups may contain earlier content until expiration. Restores are quarantined, with sessions removed and memberships disabled until the latest deletion and access decisions are reconciled. See the operations runbook; never restore a stale snapshot directly into public service.
 
-`/api/bootstrap` combines sign-in availability, the current verified active session, and that member's own profile. Anonymous or expired sessions return a null user/profile; service/database failures remain errors rather than false signed-out states. No response is cached. Existing `/api/me` and profile endpoints remain available for account operations and already-loaded clients.
+`/api/bootstrap` combines sign-in availability, the current verified active session, that member's own profile, and optional device-setup progress. The two member reads run concurrently after authentication. Anonymous or expired sessions return a null user/profile; service/database failures remain errors rather than false signed-out states. No response is cached. Existing `/api/me` and profile endpoints remain available for account operations and already-loaded clients.
 
 Deletion also removes email-bound shared-invite verification claims for the deleting account. Inactivity immediately prevents redemption of their links; bounded cleanup then revokes those links and clears encrypted credentials. Immutable link/redemption provenance and consumed-place counts remain.

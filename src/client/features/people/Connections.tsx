@@ -22,12 +22,13 @@ export function Connections({ kind, handle }: ConnectionsProps) {
     error: loadError,
     loading,
     reload,
+    refresh,
   } = useApiResource<{
     items: { handle: string; displayName: string }[];
     next: string | null;
   }>(`${path}?kind=${kind}&after=${encodeURIComponent(after)}`);
   async function act(handle: string, action: string) {
-    if (busy) return;
+    if (busy || loading) return;
     setBusy(true);
     setError('');
     try {
@@ -35,7 +36,10 @@ export function Connections({ kind, handle }: ConnectionsProps) {
         method: 'POST',
       });
       setConfirming(null);
-      reload();
+      refresh((current) => ({
+        ...current,
+        items: current.items.filter((person) => person.handle !== handle),
+      }));
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Action failed.');
     } finally {
@@ -50,8 +54,8 @@ export function Connections({ kind, handle }: ConnectionsProps) {
         : 'unblock';
   return (
     <>
-      {loading && <p role="status">Loading…</p>}
-      {data?.items.length === 0 && <p>No accounts on this page.</p>}
+      {loading && !data && <p role="status">Loading…</p>}
+      {!loading && data?.items.length === 0 && <p>No accounts on this page.</p>}
       <ul className="people-list connection-list">
         {data?.items.map((person) => (
           <li className="connection-row" key={person.handle}>

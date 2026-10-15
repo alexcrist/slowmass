@@ -7,6 +7,7 @@ import {
   emptyMetrics,
   requestMetrics,
   performanceMetrics,
+  recordMediaCache,
 } from '../src/server/telemetry';
 import type { Env } from '../src/server/env';
 let runtime: Awaited<ReturnType<typeof testRuntime>>;
@@ -75,6 +76,7 @@ it('records safe route templates, timings and media size without retaining reque
     const app = new Hono<{ Bindings: Env }>();
     app.use('*', performanceMetrics);
     app.get('/media/posts/:id', async (c) => {
+      recordMediaCache('hit', 2.34);
       await c.env.DB.prepare('SELECT id FROM user WHERE id=?')
         .bind('alice')
         .first();
@@ -88,6 +90,9 @@ it('records safe route templates, timings and media size without retaining reque
     expect(response.headers.get('Server-Timing')).toMatch(
       /app;dur=[\d.]+, db;dur=[\d.]+/,
     );
+    expect(response.headers.get('Server-Timing')).toContain(
+      'media-cache;dur=2.3;desc="hit"',
+    );
     const serialized = log.mock.calls[0][0];
     const data = JSON.parse(serialized);
     expect(data).toMatchObject({
@@ -97,6 +102,8 @@ it('records safe route templates, timings and media size without retaining reque
       mediaBytes: 4,
       queries: 1,
       unmeasuredQueries: 0,
+      mediaCache: 'hit',
+      mediaCacheMs: 2.3,
     });
     for (const privateValue of [
       'private-id',

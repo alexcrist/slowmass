@@ -29,13 +29,15 @@ export function ProfilePage({
   const {
     data,
     error: loadError,
+    loading,
     reload,
+    refresh,
   } = useApiResource<{ profile: VisibleProfile }>(
     `/api/people/${encodeURIComponent(handle)}`,
   );
   const profile = data?.profile;
   async function act(action: string) {
-    if (busy) return;
+    if (busy || loading) return;
     setBusy(true);
     setError('');
     try {
@@ -47,7 +49,8 @@ export function ProfilePage({
         location.hash = 'people';
         return;
       }
-      reload();
+      if (action === 'request' || action === 'cancel') refresh();
+      else reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not update follow.');
     } finally {
@@ -115,7 +118,7 @@ export function ProfilePage({
               ) : (
                 <OverflowMenu
                   label="Profile options"
-                  disabled={busy}
+                  disabled={busy || loading}
                   items={[
                     ...(profile.relationship === 'accepted'
                       ? [
@@ -152,7 +155,8 @@ export function ProfilePage({
                       ? 'Request to follow'
                       : 'Cancel request'
                   }
-                  disabled={busy}
+                  disabled={busy || loading}
+                  aria-busy={busy || loading}
                   onClick={() => void act(action)}
                 >
                   <span>
