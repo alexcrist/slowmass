@@ -475,3 +475,9 @@ Private image bytes remain uncached by the browser (`private, no-store`). A futu
 - [x] Pass the focused synthetic policy tests and local Wrangler/D1 migration failure, partial-success, old-client compatibility and retry checks.
 - [x] Pass Node 24 formatting, lint, types, boundaries, all 452 tests and the production frontend build; verify production history passes the new preflight without pending migrations.
 - [x] Observe [GitHub run 38823895385](https://github.com/alexcrist/slowmass/actions/runs/38823895385) pass checks, record a D1 Time Travel bookmark, run the production migration command with no pending migrations, verify history, and deploy Worker `93ef6ef2-0066-46b2-82a2-33cdb900f9bc`. Post-deploy HTTP verification passed. Pending migration/failure behavior was tested in isolated D1, not by adding synthetic production schema.
+
+## Compact post actions — October 15, 2026
+
+- [x] Use compact, left-aligned like/comment groups with non-shrinking 24px icons, matching 4px icon-to-count spacing, 14px semibold counts and 12px between groups. Remove the like count's oversized minimum width and the comment control's centering/padding offset; preserve separate like/liker actions and touch target heights.
+- [x] Pass formatting, lint, types, boundaries, all 452 tests and the production build; review control spacing and non-overlapping hit areas from source. No browser or visual testing.
+- [ ] Verify the production release through the automated deployment's HTTP checks.

@@ -900,6 +900,11 @@ summary.settings-row::after {
   align-items: center;
   gap: 12px;
   margin: 8px 0 12px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.post-interactions svg {
+  flex: none;
 }
 .comment-composer {
   display: flex;
@@ -1000,6 +1005,7 @@ summary.settings-row::after {
 .reaction-pair {
   display: inline-flex;
   align-items: center;
+  flex: none;
   /* Align the 24px heart with the content while keeping its 44px button. */
   margin-inline-start: -20px;
 }
@@ -1009,10 +1015,16 @@ summary.settings-row::after {
 }
 .reaction-pair > .count-button {
   justify-content: flex-start;
-  padding-left: 4px;
+  /* Let the trailing hit area fill the row gap without adding visual space. */
+  min-width: 24px;
+  padding: 0 12px 0 4px;
+  margin-inline-end: -12px;
 }
 .comment-toggle {
+  flex: none;
+  justify-content: flex-start;
   gap: 4px;
+  padding-inline: 0;
   font-weight: 600;
 }
 .post-actions {
