@@ -474,4 +474,4 @@ Private image bytes remain uncached by the browser (`private, no-store`). A futu
 - [x] Upgrade the existing deployment token to D1 Write and verify the saved permission through Cloudflare administration; no app browser/visual testing.
 - [x] Pass the focused synthetic policy tests and local Wrangler/D1 migration failure, partial-success, old-client compatibility and retry checks.
 - [x] Pass Node 24 formatting, lint, types, boundaries, all 452 tests and the production frontend build; verify production history passes the new preflight without pending migrations.
-- [ ] Observe the updated production workflow record a recovery bookmark, run the migration command, and deploy successfully.
+- [x] Observe [GitHub run 38823895385](https://github.com/alexcrist/slowmass/actions/runs/38823895385) pass checks, record a D1 Time Travel bookmark, run the production migration command with no pending migrations, verify history, and deploy Worker `93ef6ef2-0066-46b2-82a2-33cdb900f9bc`. Post-deploy HTTP verification passed. Pending migration/failure behavior was tested in isolated D1, not by adding synthetic production schema.
