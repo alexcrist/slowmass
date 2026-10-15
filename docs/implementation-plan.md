@@ -480,4 +480,4 @@ Private image bytes remain uncached by the browser (`private, no-store`). A futu
 
 - [x] Use compact, left-aligned like/comment groups with non-shrinking 24px icons, matching 4px icon-to-count spacing, 14px semibold counts and 12px between groups. Remove the like count's oversized minimum width and the comment control's centering/padding offset; preserve separate like/liker actions and touch target heights.
 - [x] Pass formatting, lint, types, boundaries, all 452 tests and the production build; review control spacing and non-overlapping hit areas from source. No browser or visual testing.
-- [ ] Verify the production release through the automated deployment's HTTP checks.
+- [x] Deploy through [GitHub run 38825322017](https://github.com/alexcrist/slowmass/actions/runs/38825322017), with final Worker `e5f690a7-a4da-40df-9c60-952ad371683e` and successful asset/private-boundary HTTP verification. The initial verification logged two failed attempts before GitHub canceled the step for an unconfirmed reason; direct local HTTP checks and the rerun passed. No migrations or browser/visual tests were needed.
