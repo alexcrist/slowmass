@@ -494,3 +494,11 @@ Private image bytes remain uncached by the browser (`private, no-store`). A futu
 - [x] Measure viewport and mobile-navigation bounds, flip upward when needed, constrain horizontal placement, and allow internal scrolling on short screens.
 - [x] Pass all 20 focused component/geometry cases and the full Node 24 gate: formatting, lint, types, boundaries, all 471 tests and the production build. Review event cleanup, focus handling, equivalent rerenders, short-screen geometry, and preserved touch targets. No browser or visual testing.
 - [x] Deploy through [GitHub run 38828868365](https://github.com/alexcrist/slowmass/actions/runs/38828868365), with Worker `d78b1895-bba6-441c-af8f-f7feda4c50be` and successful production asset, sign-in availability, and private-boundary HTTP checks. No pending migrations or browser/visual testing.
+
+## Comment spacing and disabled send state — October 15, 2026
+
+- [x] Increase post icon/count spacing to 6px and group spacing to 16px; preserve left alignment and separate touch targets.
+- [x] Give comment timestamps the same 44px metadata height as optional controls. Use the shared 16px vertical gap before, between, and after comments, accounting for internal touch-target padding. Keep pagination/composer separation when paging controls are present.
+- [x] Use opaque neutral gray for the disabled send button.
+- [x] Pass the Node 24 gate: formatting, lint, types, boundaries, all 471 tests and the production build. Review spacing for optional/wrapped metadata, count states, pagination, and preserved touch targets. No browser or visual testing.
+- [ ] Deploy through the main-branch workflow and verify production assets and private boundaries by HTTP.

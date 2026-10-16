@@ -181,7 +181,7 @@ function Comments({
     }
   }
   return (
-    <div>
+    <div className="comments">
       {loading && !page && <p role="status">Loading comments…</p>}
       {!loading && page?.items.length === 0 && <p>No comments on this page.</p>}
       <ul className="comment-list">
