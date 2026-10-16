@@ -501,4 +501,4 @@ Private image bytes remain uncached by the browser (`private, no-store`). A futu
 - [x] Give comment timestamps the same 44px metadata height as optional controls. Use the shared 16px vertical gap before, between, and after comments, accounting for internal touch-target padding. Keep pagination/composer separation when paging controls are present.
 - [x] Use opaque neutral gray for the disabled send button.
 - [x] Pass the Node 24 gate: formatting, lint, types, boundaries, all 471 tests and the production build. Review spacing for optional/wrapped metadata, count states, pagination, and preserved touch targets. No browser or visual testing.
-- [ ] Deploy through the main-branch workflow and verify production assets and private boundaries by HTTP.
+- [x] Deploy through [GitHub run 38830222059](https://github.com/alexcrist/slowmass/actions/runs/38830222059), with final Worker `ecaeba08-b1aa-4cf9-9d0b-751c6912b427` and successful production asset, sign-in availability, and private-boundary HTTP checks. Initial verification exhausted its retries; direct verification and the deployment rerun passed. No pending migrations or browser/visual testing.
