@@ -586,6 +586,7 @@ input::file-selector-button {
   container-type: inline-size;
 }
 .post {
+  --post-content-gap: 16px;
   margin: 24px 0 var(--post-spacing);
   background: var(--paper);
   border-bottom: 1px solid var(--line);
@@ -598,7 +599,8 @@ input::file-selector-button {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 0;
+  /* The 36px avatar is centered inside a 44px link. */
+  padding: 8px 0 calc(var(--post-content-gap) - 4px);
 }
 .post > header > .person-link,
 .post > header > time {
@@ -618,10 +620,18 @@ input::file-selector-button {
   flex-shrink: 0;
 }
 .post-body {
-  padding: 4px 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--post-content-gap);
+  padding: var(--post-content-gap) 0 20px;
 }
 .post-body > .bio {
+  margin: 0;
   font-size: 15px;
+}
+.post-body > section {
+  /* The 24px icons are centered inside 44px controls. */
+  margin-top: -10px;
 }
 .post-body:has(.comment-composer) {
   padding-bottom: var(--post-spacing);
@@ -688,7 +698,7 @@ input::file-selector-button {
     border-radius: 0;
   }
   .post > header {
-    padding: 8px 16px;
+    padding-inline: 16px;
   }
   .post-body {
     padding-inline: 16px;
@@ -899,7 +909,7 @@ summary.settings-row::after {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 8px 0 12px;
+  margin: 0 0 12px;
   font-size: 14px;
   line-height: 20px;
 }

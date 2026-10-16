@@ -38,6 +38,8 @@ Verification uses static checks and API/integration tests only. Browser testing,
 
 Post likes and comments form a compact left-aligned row, with 24px icons, 14px semibold counts, a 4px icon-to-count gap and 12px between groups. Groups flow with their contents instead of occupying fixed columns. Keep icons left aligned inside their controls, including when counts are absent; keep the separate like-count target at least 24px wide and all controls at least 44px tall.
 
+Post cards share a 16px vertical gap between the header avatar and photo, photo and caption line box, and caption and action icons. Account for the invisible space inside touch targets rather than adding it to the gap. Without a caption, use the same gap between photo and action icons.
+
 ## Branding comparison
 
 `/branding/` preserves the earlier standalone, public, noindex palette comparison. It contains the original five PNW evergreen palette samples, rather than the current white application layout. Caveat and Douglas Fir were selected there; green is now limited to application primary actions and the approved app icon. These are artistic color directions, not botanical color specifications. Preview selections live only in the URL fragment and do not change the application theme or account data. Preview scripts load only on that page and make no API requests.
