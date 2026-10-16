@@ -3,7 +3,6 @@ export type Bootstrap = {
   signInAvailable: boolean;
   user: { id: string; name: string } | null;
   profile: Profile | null;
-  deviceSetupPending?: boolean;
 };
 function validBootstrap(value: unknown): value is Bootstrap {
   if (!value || typeof value !== 'object') return false;
@@ -12,11 +11,6 @@ function validBootstrap(value: unknown): value is Bootstrap {
     typeof value.signInAvailable !== 'boolean' ||
     !('user' in value) ||
     !('profile' in value)
-  )
-    return false;
-  if (
-    'deviceSetupPending' in value &&
-    typeof value.deviceSetupPending !== 'boolean'
   )
     return false;
   const { user, profile } = value;

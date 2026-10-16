@@ -203,7 +203,6 @@ function AccountWelcome() {
             <MemberApp
               key={member.user.id}
               initialProfile={member.profile}
-              deviceSetupPending={member.deviceSetupPending}
               onSignOut={() => void signOut()}
               signingOut={busy}
             />

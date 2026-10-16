@@ -63,4 +63,4 @@ Pushes to `main` deploy through GitHub Actions after checks and local migrations
 
 The domain is slowmass.com. The source repository is https://github.com/alexcrist/slowmass. No license has been selected.
 
-Optional installation and notification setup after new-member profile completion is deployed, with resumable account progress and independent push endpoints for copied-session installations. Migration 0027 is applied in production; see the [release verification](docs/setup.md#optional-device-setup-release-october-13-2026).
+Onboarding ends after profile/photo completion. Optional installation and notifications live in Settings. Independent push endpoints for copied-session installations remain supported; migration 0027 and its earlier rollout are recorded in the [release verification](docs/setup.md#optional-device-setup-release-october-13-2026).

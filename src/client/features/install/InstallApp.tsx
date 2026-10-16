@@ -121,7 +121,7 @@ function InstallStateProvider({ children }: { children: ReactNode }) {
 export function useInstallState() {
   return useContext(InstallContext);
 }
-export function InstallControls() {
+function InstallControls() {
   const context = useInstallState();
   if (!context?.mobile) return null;
   const { appleMobile, installed, running, prompt, busy, message, install } =

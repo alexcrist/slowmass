@@ -1,6 +1,6 @@
 import { usePush } from './usePush';
 
-export function PushControls({ push }: { push: ReturnType<typeof usePush> }) {
+function PushControls({ push }: { push: ReturnType<typeof usePush> }) {
   const {
     needsHomeScreen,
     supported,

@@ -1250,8 +1250,8 @@ summary.settings-row::after {
   grid-template-columns: 32px minmax(0, 1fr) 44px;
   align-items: start;
   gap: 10px;
-  /* Metadata's 44px targets already include 12px below the 20px text. */
-  padding: 0 0 calc(var(--post-content-gap) - 12px);
+  /* Metadata's 44px targets include 16px below the raised 20px text. */
+  padding: 0 0 calc(var(--post-content-gap) - 16px);
   overflow-wrap: anywhere;
 }
 .comment-avatar img {
@@ -1280,12 +1280,14 @@ summary.settings-row::after {
   align-items: center;
   min-height: 44px;
   margin: 0;
+  /* Raise metadata 4px within its target to bring it closer to the comment. */
+  padding-bottom: 8px;
 }
 .comment-likes,
 .comment-delete {
   display: inline-flex;
   align-items: center;
-  padding: 12px 0;
+  padding: 8px 0 16px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -1298,7 +1300,7 @@ summary.settings-row::after {
 .comment-delete {
   /* Match the timestamp and like count's shared 44px metadata height. */
   width: 44px;
-  padding-block: 15px;
+  padding-block: 11px 19px;
   justify-content: flex-start;
 }
 .comment-heart svg {
@@ -1488,25 +1490,4 @@ summary.settings-row::after {
 }
 .invite-link-result input {
   font-size: 14px;
-}
-
-/* Optional device setup shares the existing onboarding column and settings controls. */
-.device-setup-option {
-  border-top: 1px solid var(--line);
-  padding: 20px 0;
-}
-.device-setup-option h2 {
-  margin: 0 0 12px;
-  font-size: 20px;
-}
-.device-setup-option p {
-  margin: 0 0 12px;
-}
-.device-setup-option summary {
-  min-height: 44px;
-  padding: 12px 0;
-  cursor: pointer;
-}
-.device-setup-continue {
-  margin-top: 12px;
 }

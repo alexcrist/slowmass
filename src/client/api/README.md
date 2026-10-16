@@ -10,4 +10,4 @@ HTTP failures preserve their status in `ApiError`. A mounted session subscribes 
 
 List/detail GET reads have a fifteen-second deadline including response-body decoding. Expiry aborts the request and exposes the consumer's Retry action; late responses cannot replace the current result. Unmount/navigation clears the timer and aborts the old read. This does not replay mutations or clear a valid session.
 
-`withDeadline` bounds browser/API operations for push and optional device setup, including transports that ignore cancellation. It removes its timer and optional abort listener on completion; callers own fetch abortion. Permission dialogs are deliberately outside this deadline.
+`withDeadline` bounds browser/API operations for push, including transports that ignore cancellation. It removes its timer and optional abort listener on completion; callers own fetch abortion. Permission dialogs are deliberately outside this deadline.

@@ -502,3 +502,17 @@ Private image bytes remain uncached by the browser (`private, no-store`). A futu
 - [x] Use opaque neutral gray for the disabled send button.
 - [x] Pass the Node 24 gate: formatting, lint, types, boundaries, all 471 tests and the production build. Review spacing for optional/wrapped metadata, count states, pagination, and preserved touch targets. No browser or visual testing.
 - [x] Deploy through [GitHub run 38830222059](https://github.com/alexcrist/slowmass/actions/runs/38830222059), with final Worker `ecaeba08-b1aa-4cf9-9d0b-751c6912b427` and successful production asset, sign-in availability, and private-boundary HTTP checks. Initial verification exhausted its retries; direct verification and the deployment rerun passed. No pending migrations or browser/visual testing.
+
+## Tighter comment metadata — October 15, 2026
+
+- [x] Bring timestamps, like totals, and delete icons 4px closer to comment text within their existing 44px heights. Reduce row bottom padding by the same amount to preserve the shared 16px gap between comments and before the composer.
+- [x] Pass the Node 24 gate with the onboarding change: formatting, lint, types, boundaries, all 469 tests and the production build. Review matching metadata offsets and preserved touch targets. No browser or visual testing.
+- [ ] Deploy through the main-branch workflow and verify production assets and private boundaries by HTTP.
+
+## Finish onboarding after the profile photo — October 15, 2026
+
+- [x] Remove the optional device-setup client, styling, navigation dismissal hook, and unused public controls. Open the requested member page immediately after the required photo, and ignore legacy pending progress on sign-in.
+- [x] Keep installation and notification opt-in in Settings, explicit permission gestures, installed-app session reuse, and existing server compatibility for previously loaded clients. No database migration or subscription change.
+- [x] Replace retired-screen tests with photo-completion and legacy-pending sign-in coverage across iPhone browser/installed app, Android, and desktop; retain installation/push ordering and interrupted-permission coverage through Settings. All 116 focused loading/push tests pass.
+- [x] Pass the full Node 24 gate: formatting, lint, types, boundaries, all 469 tests and the production build. Review React state/effects, focus handoff, navigation, removed subscriptions/exports, and continued required profile/photo gating. No browser or visual testing.
+- [ ] Deploy with the comment metadata change and verify production assets and private boundaries by HTTP.

@@ -1,5 +1,4 @@
-export { PushSettings, PushControls } from './PushSettings';
-export { usePush } from './usePush';
+export { PushSettings } from './PushSettings';
 export {
   dismissPushNotifications,
   clearLocalPush,

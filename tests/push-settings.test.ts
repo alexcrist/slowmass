@@ -6,8 +6,7 @@ import {
   clearLocalPush,
   dismissPushNotifications,
 } from '../src/client/features/push';
-import { InstallProvider } from '../src/client/features/install';
-import { DeviceSetup } from '../src/client/features/device-setup';
+import { InstallApp, InstallProvider } from '../src/client/features/install';
 const mock = vi.hoisted(() => ({ api: vi.fn() }));
 vi.mock('../src/client/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/client/api')>()),
@@ -359,14 +358,18 @@ it('does not confuse an installation event with running in the iOS Home Screen a
 });
 
 it.each(['install-first', 'notifications-first'])(
-  'completes Android optional setup in either order without repeating permission (%s)',
+  'supports Android installation and notifications in Settings in either order without repeating permission (%s)',
   async (order) => {
     Object.assign(navigator, { userAgent: 'Android' });
-    const done = vi.fn();
     await act(async () => {
       renderer = create(
         createElement(InstallProvider, {
-          children: createElement(DeviceSetup, { onContinue: done }),
+          children: createElement(
+            'div',
+            null,
+            createElement(InstallApp),
+            createElement(PushSettings),
+          ),
         }),
       );
     });
@@ -381,49 +384,21 @@ it.each(['install-first', 'notifications-first'])(
     expect(requestPermission).not.toHaveBeenCalled();
     if (order === 'notifications-first') {
       await click('Enable notifications');
-      expect(done).not.toHaveBeenCalled();
     }
     await click('Install app');
     await act(async () => window.dispatchEvent(new Event('appinstalled')));
     if (order === 'install-first') {
       expect(requestPermission).not.toHaveBeenCalled();
-      expect(done).not.toHaveBeenCalled();
       await click('Enable notifications');
     }
-    expect(done).toHaveBeenCalledOnce();
     expect(prompt).toHaveBeenCalledOnce();
     expect(requestPermission).toHaveBeenCalledOnce();
     expect(registration.pushManager.subscribe).toHaveBeenCalledOnce();
   },
 );
-it.each(['iPhone', 'Android'])(
-  'hides installation during setup in the installed %s app without hiding notifications',
-  async (userAgent) => {
-    Object.assign(navigator, { userAgent, standalone: true });
-    await act(async () => {
-      renderer = create(
-        createElement(InstallProvider, {
-          children: createElement(DeviceSetup, { onContinue: vi.fn() }),
-        }),
-      );
-    });
-    expect(text()).not.toContain('Install slowmass');
-    expect(text()).not.toContain('Signing out stops');
-    expect(text()).toContain('Enable notifications');
-    expect(text()).toContain('Continue');
-    expect(requestPermission).not.toHaveBeenCalled();
-  },
-);
-it('can continue during a pending permission prompt and does not subscribe after the setup screen unmounts', async () => {
+it('does not subscribe after leaving Settings during a pending permission prompt', async () => {
   Object.assign(navigator, { userAgent: 'Android' });
-  const done = vi.fn();
-  await act(async () => {
-    renderer = create(
-      createElement(InstallProvider, {
-        children: createElement(DeviceSetup, { onContinue: done }),
-      }),
-    );
-  });
+  await mount();
   let grant!: (value: string) => void;
   requestPermission.mockImplementation(
     () =>
@@ -432,8 +407,6 @@ it('can continue during a pending permission prompt and does not subscribe after
       }),
   );
   await click('Enable notifications');
-  await click('Continue');
-  expect(done).toHaveBeenCalledOnce();
   await act(async () => renderer.unmount());
   await act(async () => grant('granted'));
   expect(register).not.toHaveBeenCalled();

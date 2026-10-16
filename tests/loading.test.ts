@@ -2910,124 +2910,81 @@ it('uses authoritative like responses without a second post request and retains 
   expect(requests.every((r) => r.path.endsWith('/like'))).toBe(true);
 });
 
-it('offers optional device setup only after the photo is saved and keeps Continue usable while saving fails', async () => {
+it('opens the requested member page immediately after the required photo is saved', async () => {
   Object.assign(navigator, { userAgent: 'iPhone', standalone: false });
   await mount(
     createElement(MemberApp, {
       initialProfile: { ...ownProfile, hasAvatar: 0 },
-      deviceSetupPending: true,
       onSignOut: vi.fn(),
       signingOut: false,
     }),
   );
   expect(visibleText()).toContain('Add a profile photo');
-  expect(visibleText()).not.toContain('Set up this device');
-  await act(async () => renderer.root.findByType(AvatarForm).props.onChange());
-  expect(visibleText()).toContain('Set up this device');
-  expect(visibleText()).toContain('Install slowmass');
-  expect(visibleText()).toContain('Home Screen first');
-  expect(requests.some((item) => item.path.startsWith('/api/push'))).toBe(
+  expect(
+    renderer.root.findAllByProps({ 'aria-label': 'Main navigation' }),
+  ).toHaveLength(0);
+  expect(requests.some((item) => item.path.startsWith('/api/posts'))).toBe(
     false,
   );
+  await act(async () => renderer.root.findByType(AvatarForm).props.onChange());
   expect(
     renderer.root.findAllByProps({ 'aria-label': 'Main navigation' }),
   ).toHaveLength(1);
-  await click('Continue');
-  expect(visibleText()).not.toContain('Set up this device');
+  expect(renderer.root.findAllByProps({ 'data-page': 'feed' })).toHaveLength(1);
   expect(pending('/api/posts?').path).toContain('/api/posts');
-  const saving = pending('/api/device-setup');
-  expect(saving.options?.method).toBe('DELETE');
-  await reply(saving, { error: 'Unavailable' }, 503);
-  expect(visibleText()).toContain('Your setup choice could not be saved');
-  await click('Retry saving setup');
-  await reply(pending('/api/device-setup'), { pending: false });
-  expect(visibleText()).not.toContain('Your setup choice could not be saved');
-  expect(visibleText()).not.toContain('Set up this device');
-});
-it('resumes optional setup in an installed iPhone app from the existing bootstrap session without repeating profile setup', async () => {
-  Object.assign(navigator, { userAgent: 'iPhone', standalone: true });
-  vi.stubGlobal('PushManager', class {});
-  const permission = vi.fn();
-  vi.stubGlobal('Notification', {
-    permission: 'default',
-    requestPermission: permission,
-  });
-  Object.assign(navigator, {
-    serviceWorker: { getRegistration: vi.fn(async () => undefined) },
-  });
-  await mount(createElement(Welcome));
-  await reply(pending('/api/bootstrap'), {
-    ...signedIn,
-    deviceSetupPending: true,
-  });
-  await reply(pending('/api/push/device'), {
-    available: true,
-    publicKey: 'BAAA',
-    subscription: null,
-  });
-  expect(visibleText()).toContain('Set up this device');
-  expect(visibleText()).not.toContain('Install slowmass');
-  expect(visibleText()).not.toContain('You’re using the slowmass app');
-  expect(visibleText()).not.toContain('Signing out stops');
-  expect(visibleText()).toContain('Enable notifications');
-  expect(visibleText()).not.toContain('How to add to Home Screen');
-  expect(visibleText()).not.toContain('Create your profile');
-  expect(visibleText()).not.toContain('Send sign-in link');
-  expect(permission).not.toHaveBeenCalled();
-  await click('Continue');
-  await reply(pending('/api/device-setup'), { pending: false });
-  expect(visibleText()).not.toContain('Set up this device');
-});
-it('skips resolved desktop setup without offering installation or requesting permission', async () => {
-  Object.assign(navigator, { userAgent: 'Desktop' });
-  vi.stubGlobal('PushManager', undefined);
-  await mount(
-    createElement(MemberApp, {
-      initialProfile: ownProfile,
-      deviceSetupPending: true,
-      onSignOut: vi.fn(),
-      signingOut: false,
-    }),
-  );
   expect(visibleText()).not.toContain('Set up this device');
   expect(visibleText()).not.toContain('Install slowmass');
-  expect(pending('/api/device-setup').options?.method).toBe('DELETE');
-});
-it('dismisses optional onboarding when navigating and does not trap a member behind setup', async () => {
-  Object.assign(navigator, { userAgent: 'Android' });
-  await mount(
-    createElement(MemberApp, {
-      initialProfile: ownProfile,
-      deviceSetupPending: true,
-      onSignOut: vi.fn(),
-      signingOut: false,
-    }),
-  );
-  expect(visibleText()).toContain('Set up this device');
-  const link = renderer.root.findByProps({ 'aria-label': 'Find' });
-  await act(async () =>
-    link.props.onClick({ button: 0, preventDefault: vi.fn() }),
-  );
-  await go('#people');
-  expect(visibleText()).not.toContain('Set up this device');
-  expect(pending('/api/device-setup').options?.method).toBe('DELETE');
-  await reply(pending('/api/device-setup'), { pending: false });
-});
-it('observes setup completion from another app on return without requiring another Continue', async () => {
-  Object.assign(navigator, { userAgent: 'iPhone', standalone: false });
-  await mount(
-    createElement(MemberApp, {
-      initialProfile: ownProfile,
-      deviceSetupPending: true,
-      onSignOut: vi.fn(),
-      signingOut: false,
-    }),
-  );
-  expect(visibleText()).toContain('Set up this device');
-  await act(async () => window.dispatchEvent(new Event('focus')));
-  await reply(pending('/api/device-setup'), { pending: false });
-  expect(visibleText()).not.toContain('Set up this device');
   expect(
-    requests.filter((item) => item.path === '/api/device-setup'),
-  ).toHaveLength(1);
+    requests.some(
+      (item) =>
+        item.path.startsWith('/api/push') || item.path === '/api/device-setup',
+    ),
+  ).toBe(false);
 });
+
+it.each([
+  { userAgent: 'iPhone', standalone: false },
+  { userAgent: 'iPhone', standalone: true },
+  { userAgent: 'Android', standalone: false },
+  { userAgent: 'Desktop', standalone: false },
+])(
+  'ignores legacy pending setup at sign-in and on return for %j',
+  async (device) => {
+    Object.assign(navigator, device);
+    vi.stubGlobal('PushManager', class {});
+    const permission = vi.fn();
+    vi.stubGlobal('Notification', {
+      permission: 'default',
+      requestPermission: permission,
+    });
+    Object.assign(navigator, {
+      serviceWorker: { getRegistration: vi.fn(async () => undefined) },
+    });
+    await mount(createElement(Welcome));
+    await reply(pending('/api/bootstrap'), {
+      ...signedIn,
+      deviceSetupPending: true,
+    });
+    expect(renderer.root.findAllByProps({ 'data-page': 'feed' })).toHaveLength(
+      1,
+    );
+    expect(pending('/api/posts?').path).toContain('/api/posts');
+    expect(visibleText()).not.toContain('Create your profile');
+    expect(visibleText()).not.toContain('Set up this device');
+    expect(visibleText()).not.toContain('Enable notifications');
+    await act(async () => window.dispatchEvent(new Event('focus')));
+    expect(
+      requests.some(
+        (item) =>
+          item.path.startsWith('/api/push') ||
+          item.path === '/api/device-setup',
+      ),
+    ).toBe(false);
+    expect(permission).not.toHaveBeenCalled();
+    await go('#settings');
+    expect(visibleText()).toContain('Notifications');
+    if (device.userAgent !== 'Desktop')
+      expect(visibleText()).toContain('Install slowmass');
+    expect(permission).not.toHaveBeenCalled();
+  },
+);

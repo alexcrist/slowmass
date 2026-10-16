@@ -14,7 +14,6 @@ import { Discover } from './Discover';
 import { Connections, type Kind } from './Connections';
 import { MemberNavigation } from './MemberNavigation';
 import { PushSettings } from '../push';
-import { DeviceSetup, useDeviceSetup } from '../device-setup';
 
 const titles: Record<string, string> = {
   feed: 'Feed',
@@ -32,7 +31,6 @@ const titles: Record<string, string> = {
 };
 export function MemberApp(props: {
   initialProfile: Profile | null;
-  deviceSetupPending?: boolean;
   onSignOut: () => void;
   signingOut: boolean;
 }) {
@@ -44,12 +42,10 @@ export function MemberApp(props: {
 }
 function MemberPages({
   initialProfile,
-  deviceSetupPending = false,
   onSignOut,
   signingOut,
 }: {
   initialProfile: Profile | null;
-  deviceSetupPending?: boolean;
   onSignOut: () => void;
   signingOut: boolean;
 }) {
@@ -61,14 +57,12 @@ function MemberPages({
   const [avatarVersion, setAvatarVersion] = useState(0);
   const [pageVersion, setPageVersion] = useState(0);
   const ready = Boolean(profile?.hasAvatar);
-  const setup = useDeviceSetup(deviceSetupPending, ready);
-  const settingUp = ready && setup.pending;
   const heading = useRef<HTMLHeadingElement>(null);
-  const wasSettingUp = useRef(false);
+  const wasReady = useRef(ready);
   useEffect(() => {
-    if (settingUp || wasSettingUp.current) heading.current?.focus();
-    wasSettingUp.current = settingUp;
-  }, [settingUp]);
+    if (ready && !wasReady.current) heading.current?.focus();
+    wasReady.current = ready;
+  }, [ready]);
   const notifications = useNotificationCount(ready);
   const profileRoute = profile ? profileHref(profile.handle) : '#profile';
   const back =
@@ -116,7 +110,6 @@ function MemberPages({
           />
         </>
       );
-    if (settingUp) return <DeviceSetup onContinue={setup.complete} />;
     switch (page) {
       case 'feed':
         return <PostList />;
@@ -212,7 +205,6 @@ function MemberPages({
           profile={profile}
           avatarVersion={avatarVersion}
           unreadCount={notifications.count}
-          onNavigate={settingUp ? setup.complete : undefined}
           onReselect={() => {
             notifications.refresh();
             setPageVersion((version) => version + 1);
@@ -222,44 +214,24 @@ function MemberPages({
       )}
       <PageHistoryProvider key={pageVersion}>
         <section
-          key={
-            settingUp
-              ? 'device-setup'
-              : ready
-                ? `${pageKey}:${pageVersion}`
-                : 'onboarding'
-          }
-          data-page={settingUp ? 'device-setup' : ready ? page : 'onboarding'}
-          className={`member-content ${!ready || settingUp ? 'onboarding' : ['feed', 'profile', 'post'].includes(page) ? 'photo-screen' : ''}`}
+          key={ready ? `${pageKey}:${pageVersion}` : 'onboarding'}
+          data-page={ready ? page : 'onboarding'}
+          className={`member-content ${!ready ? 'onboarding' : ['feed', 'profile', 'post'].includes(page) ? 'photo-screen' : ''}`}
           aria-labelledby="screen-title"
         >
-          {ready && !settingUp && back && <BackControl {...back} />}
+          {ready && back && <BackControl {...back} />}
           <h1
             id="screen-title"
             ref={heading}
             tabIndex={-1}
-            className={ready && !settingUp ? 'visually-hidden' : undefined}
+            className={ready ? 'visually-hidden' : undefined}
           >
             {profile === null
               ? 'Create your profile'
               : !ready
                 ? 'Add a profile photo'
-                : settingUp
-                  ? 'Set up this device'
-                  : titles[page] || 'slowmass'}
+                : titles[page] || 'slowmass'}
           </h1>
-          {setup.error && (
-            <div>
-              <p role="status">{setup.error}</p>
-              <button
-                type="button"
-                disabled={setup.saving}
-                onClick={() => void setup.retry()}
-              >
-                {setup.saving ? 'Saving…' : 'Retry saving setup'}
-              </button>
-            </div>
-          )}
           {screen()}
           {!ready && (
             <button
