@@ -507,7 +507,7 @@ Private image bytes remain uncached by the browser (`private, no-store`). A futu
 
 - [x] Bring timestamps, like totals, and delete icons 4px closer to comment text within their existing 44px heights. Reduce row bottom padding by the same amount to preserve the shared 16px gap between comments and before the composer.
 - [x] Pass the Node 24 gate with the onboarding change: formatting, lint, types, boundaries, all 469 tests and the production build. Review matching metadata offsets and preserved touch targets. No browser or visual testing.
-- [ ] Deploy through the main-branch workflow and verify production assets and private boundaries by HTTP.
+- [x] Deploy with the onboarding removal through [GitHub run 38831517549](https://github.com/alexcrist/slowmass/actions/runs/38831517549), with Worker `7dbbe6c3-de94-49bf-9173-fd1d3dfb1585`. Production asset, sign-in availability, and private-boundary HTTP checks passed; no pending migrations or browser/visual testing.
 
 ## Finish onboarding after the profile photo — October 15, 2026
 
@@ -515,4 +515,4 @@ Private image bytes remain uncached by the browser (`private, no-store`). A futu
 - [x] Keep installation and notification opt-in in Settings, explicit permission gestures, installed-app session reuse, and existing server compatibility for previously loaded clients. No database migration or subscription change.
 - [x] Replace retired-screen tests with photo-completion and legacy-pending sign-in coverage across iPhone browser/installed app, Android, and desktop; retain installation/push ordering and interrupted-permission coverage through Settings. All 116 focused loading/push tests pass.
 - [x] Pass the full Node 24 gate: formatting, lint, types, boundaries, all 469 tests and the production build. Review React state/effects, focus handoff, navigation, removed subscriptions/exports, and continued required profile/photo gating. No browser or visual testing.
-- [ ] Deploy with the comment metadata change and verify production assets and private boundaries by HTTP.
+- [x] Deploy with the comment metadata change in the verified release recorded above. Production HTTP checks passed; no database migration or browser/visual testing.
