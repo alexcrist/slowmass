@@ -40,6 +40,8 @@ Post likes and comments form a compact left-aligned row, with 24px icons, 14px s
 
 Post cards share a 16px vertical gap between the header avatar and photo, photo and caption line box, and caption and action icons. Account for the invisible space inside touch targets rather than adding it to the gap. Without a caption, use the same gap between photo and action icons.
 
+Overflow menus dismiss when focus moves outside, the page scrolls, the viewport changes, or their actions become unavailable/change. Preserve keyboard navigation and return focus without scrolling the page back. Keep menus inside the viewport and above mobile navigation, opening upward when space below is insufficient; constrained menus scroll internally without dismissing.
+
 ## Branding comparison
 
 `/branding/` preserves the earlier standalone, public, noindex palette comparison. It contains the original five PNW evergreen palette samples, rather than the current white application layout. Caveat and Douglas Fir were selected there; green is now limited to application primary actions and the approved app icon. These are artistic color directions, not botanical color specifications. Preview selections live only in the URL fragment and do not change the application theme or account data. Preview scripts load only on that page and make no API requests.

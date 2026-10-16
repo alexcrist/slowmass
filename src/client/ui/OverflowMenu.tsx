@@ -1,6 +1,23 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
+import { overflowMenuPosition } from './overflow-menu-position';
 
 type Item = { label: string; onSelect: () => void; danger?: boolean };
+
+function focusChoice(
+  panel: HTMLDivElement | null,
+  choice: HTMLButtonElement | null | undefined,
+) {
+  choice?.focus({ preventScroll: true });
+  if (!panel || !choice) return;
+  if (choice.offsetTop < panel.scrollTop) panel.scrollTop = choice.offsetTop;
+  else if (
+    choice.offsetTop + choice.offsetHeight >
+    panel.scrollTop + panel.clientHeight
+  ) {
+    panel.scrollTop =
+      choice.offsetTop + choice.offsetHeight - panel.clientHeight;
+  }
+}
 export function OverflowMenu({
   label,
   items,
@@ -13,21 +30,86 @@ export function OverflowMenu({
   const id = useId();
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
   const choices = useRef<(HTMLButtonElement | null)[]>([]);
   const openingIndex = useRef(0);
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
+  // Callers recreate callbacks on render; only changes to available choices
+  // invalidate an open menu, not callback identity or unrelated refreshes.
+  const configuration = JSON.stringify([
+    label,
+    items.map(({ label, danger }) => [label, Boolean(danger)]),
+  ]);
+  const [openedFor, setOpenedFor] = useState<string | null>(null);
+  const available = !disabled && items.length > 0;
+  const open = available && openedFor === configuration;
+  if (openedFor !== null && !open) setOpenedFor(null);
+  useLayoutEffect(() => {
     if (!open) return;
-    choices.current[openingIndex.current]?.focus();
-    function dismiss(event: PointerEvent) {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    const panel = menu.current;
+    const container = root.current;
+    const button = trigger.current;
+    if (!panel || !container || !button) return;
+    const viewport = window.visualViewport;
+    const left = (viewport?.offsetLeft ?? 0) + 8;
+    const top = (viewport?.offsetTop ?? 0) + 8;
+    const right =
+      left + (viewport?.width ?? document.documentElement.clientWidth) - 16;
+    let bottom = top + (viewport?.height ?? window.innerHeight) - 16;
+    // The mobile bar includes the device safe-area inset in its measured height.
+    if (window.matchMedia('(max-width: 899px)').matches) {
+      const navigation = document
+        .querySelector('.app-navigation')
+        ?.getBoundingClientRect();
+      if (navigation) bottom = Math.min(bottom, navigation.top - 8);
     }
-    document.addEventListener('pointerdown', dismiss);
-    return () => document.removeEventListener('pointerdown', dismiss);
+    bottom = Math.max(top, bottom);
+    panel.style.maxWidth = `${Math.max(0, right - left)}px`;
+    panel.style.minWidth = `${Math.max(0, Math.min(168, right - left))}px`;
+    const placement = overflowMenuPosition(
+      button.getBoundingClientRect(),
+      panel.getBoundingClientRect(),
+      { left, right, top, bottom },
+    );
+    const origin = container.getBoundingClientRect();
+    panel.style.left = `${placement.left - origin.left}px`;
+    panel.style.top = `${placement.top - origin.top}px`;
+    panel.style.maxHeight = `${placement.maxHeight}px`;
+    focusChoice(panel, choices.current[openingIndex.current]);
+
+    function dismissOutside(event: Event) {
+      if (!container?.contains(event.target as Node)) setOpenedFor(null);
+    }
+    function dismissViewport() {
+      if (panel?.contains(document.activeElement) && !button?.disabled) {
+        button?.focus({ preventScroll: true });
+      }
+      setOpenedFor(null);
+    }
+    function dismissScroll(event: Event) {
+      // Arrow-key focus and touch scrolling inside a constrained menu are valid.
+      if (event.target === window || !panel?.contains(event.target as Node))
+        dismissViewport();
+    }
+    document.addEventListener('pointerdown', dismissOutside);
+    document.addEventListener('focusin', dismissOutside);
+    window.addEventListener('scroll', dismissScroll, true);
+    window.addEventListener('resize', dismissViewport);
+    window.addEventListener('hashchange', dismissViewport);
+    viewport?.addEventListener('resize', dismissViewport);
+    viewport?.addEventListener('scroll', dismissViewport);
+    return () => {
+      document.removeEventListener('pointerdown', dismissOutside);
+      document.removeEventListener('focusin', dismissOutside);
+      window.removeEventListener('scroll', dismissScroll, true);
+      window.removeEventListener('resize', dismissViewport);
+      window.removeEventListener('hashchange', dismissViewport);
+      viewport?.removeEventListener('resize', dismissViewport);
+      viewport?.removeEventListener('scroll', dismissViewport);
+    };
   }, [open]);
   function close() {
-    setOpen(false);
-    trigger.current?.focus();
+    setOpenedFor(null);
+    trigger.current?.focus({ preventScroll: true });
   }
   return (
     <div className="overflow-menu-container" ref={root}>
@@ -39,18 +121,19 @@ export function OverflowMenu({
         aria-haspopup="menu"
         aria-controls={open ? id : undefined}
         aria-expanded={open}
-        disabled={disabled || items.length === 0}
+        disabled={!available}
         onClick={() => {
           openingIndex.current = 0;
-          setOpen(!open);
+          setOpenedFor(open ? null : configuration);
         }}
         onKeyDown={(event) => {
           if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
             event.preventDefault();
             openingIndex.current =
               event.key === 'ArrowUp' ? items.length - 1 : 0;
-            if (open) choices.current[openingIndex.current]?.focus();
-            else setOpen(true);
+            if (open)
+              focusChoice(menu.current, choices.current[openingIndex.current]);
+            else setOpenedFor(configuration);
           }
         }}
       >
@@ -62,6 +145,7 @@ export function OverflowMenu({
       </button>
       {open && (
         <div
+          ref={menu}
           id={id}
           className="overflow-menu"
           role="menu"
@@ -87,7 +171,7 @@ export function OverflowMenu({
                       : null;
             if (next !== null) {
               event.preventDefault();
-              choices.current[next]?.focus();
+              focusChoice(menu.current, choices.current[next]);
             }
           }}
         >

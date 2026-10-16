@@ -487,3 +487,10 @@ Private image bytes remain uncached by the browser (`private, no-store`). A futu
 - [x] Share a 16px gap between avatar/photo, photo/caption, and caption/action icons, compensating for touch-target padding and removing default caption margins. Apply the same photo/action gap when the caption is absent, on mobile and desktop.
 - [x] Pass formatting, lint, types, boundaries, all 452 tests and the production build; review shared feed/focused-post styles, captionless spacing, and preserved touch targets. No browser or visual testing.
 - [x] Deploy through [GitHub run 38827700110](https://github.com/alexcrist/slowmass/actions/runs/38827700110), with final Worker `6b0f5f4f-7400-4ad2-b7b6-bf093c08fdc1` and successful production asset/private-boundary HTTP checks. Initial verification exited with code 143 after one retry message; direct verification and the deployment rerun passed. No pending migrations or browser/visual testing.
+
+## Overflow menu behavior — October 15, 2026
+
+- [x] Dismiss shared post/profile/invitation menus on outside focus, page/container scrolling, viewport changes, navigation, and disabled/changed actions. Preserve current callbacks, keyboard navigation, internal scrolling, and focus restoration without page jumps.
+- [x] Measure viewport and mobile-navigation bounds, flip upward when needed, constrain horizontal placement, and allow internal scrolling on short screens.
+- [x] Pass all 20 focused component/geometry cases and the full Node 24 gate: formatting, lint, types, boundaries, all 471 tests and the production build. Review event cleanup, focus handling, equivalent rerenders, short-screen geometry, and preserved touch targets. No browser or visual testing.
+- [ ] Deploy through the main-branch workflow and verify production assets and private boundaries by HTTP.
