@@ -1528,8 +1528,38 @@ summary.settings-row::after {
 }
 
 /* Events */
+/* The tab row's divider spans the tabs and the right-aligned New event action. */
+.events-tabs {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+.events-tabs > .profile-tabs {
+  margin-bottom: 0;
+  border-bottom: 0;
+}
 .events-new {
-  margin-bottom: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  margin: 0 -8px 0 auto;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.events-new:hover {
+  background: var(--hover);
+}
+.events-new svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 a.profile-tab {
   display: inline-flex;

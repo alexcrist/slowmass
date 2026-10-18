@@ -24,27 +24,40 @@ export function EventsPage({
   );
   return (
     <>
-      {canCreate && (
-        <a className="button-link events-new" href="#new-event">
-          New event
-        </a>
-      )}
-      <nav className="profile-tabs" aria-label="Events">
-        <a
-          className="profile-tab"
-          href="#events"
-          aria-current={when === 'upcoming' ? 'page' : undefined}
-        >
-          Upcoming
-        </a>
-        <a
-          className="profile-tab"
-          href="#events/past"
-          aria-current={when === 'past' ? 'page' : undefined}
-        >
-          Past
-        </a>
-      </nav>
+      {/* New event shares the tab row but sits apart: an action, not a view. */}
+      <div className="events-tabs">
+        <nav className="profile-tabs" aria-label="Events">
+          <a
+            className="profile-tab"
+            href="#events"
+            aria-current={when === 'upcoming' ? 'page' : undefined}
+          >
+            Upcoming
+          </a>
+          <a
+            className="profile-tab"
+            href="#events/past"
+            aria-current={when === 'past' ? 'page' : undefined}
+          >
+            Past
+          </a>
+        </nav>
+        {canCreate && (
+          <a className="events-new" href="#new-event">
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            New event
+          </a>
+        )}
+      </div>
       {loading && !data && <p role="status">Loading events…</p>}
       {error && (
         <div>
