@@ -203,6 +203,10 @@ function AccountWelcome() {
             <MemberApp
               key={member.user.id}
               initialProfile={member.profile}
+              deviceSetup={{
+                pending: member.deviceSetupPending === true,
+                pushSubscribed: member.pushSubscribed === true,
+              }}
               onSignOut={() => void signOut()}
               signingOut={busy}
             />

@@ -165,3 +165,90 @@ it('migrates existing subscriptions and leased deliveries atomically without enr
     await old.worker.dispose();
   }
 });
+it('reports whether the member has a live push subscription on any device', async () => {
+  const subscribed = async () =>
+    (
+      (await (await runtime.request('carol', '/api/bootstrap')).json()) as {
+        pushSubscribed: boolean;
+      }
+    ).pushSubscribed;
+  expect(await subscribed()).toBe(false);
+  await runtime.db
+    .prepare(
+      'INSERT INTO session(id,userId,token,expiresAt,createdAt,updatedAt) VALUES(?,?,?,?,?,?)',
+    )
+    .bind(
+      'carol-phone',
+      'carol',
+      'carol-phone-token',
+      Date.now() + 86400000,
+      1,
+      1,
+    )
+    .run();
+  await runtime.db
+    .prepare(
+      "INSERT INTO push_subscription VALUES('carol-phone','carol','carol-phone','https://web.push.apple.com/synthetic','key','auth',1)",
+    )
+    .run();
+  expect(await subscribed()).toBe(true);
+  await runtime.db
+    .prepare("UPDATE session SET expiresAt=0 WHERE id='carol-phone'")
+    .run();
+  expect(await subscribed()).toBe(false);
+  expect(
+    await (await runtime.request(null, '/api/bootstrap')).json(),
+  ).toMatchObject({ user: null, pushSubscribed: false });
+});
+it('offers setup once to active members from before migration 0027 without overriding earlier answers', async () => {
+  const old = await testRuntime(false, false, undefined, undefined, 27);
+  try {
+    const before0027 = 1791940027026;
+    // Erin and Frank joined before 0027; the base fixtures joined afterward.
+    for (const id of ['erin', 'frank'])
+      await old.db.batch([
+        old.db
+          .prepare(
+            'INSERT INTO user (id,name,email,emailVerified,createdAt,updatedAt) VALUES (?,?,?,1,1,1)',
+          )
+          .bind(id, id, `${id}@example.com`),
+        old.db
+          .prepare(
+            "INSERT INTO invitation (id,inviter_id,recipient_email,created_at,expires_at) VALUES (?,'alice',?,1,?)",
+          )
+          .bind(id, `${id}@example.com`, before0027 + 1),
+        old.db
+          .prepare(
+            "INSERT INTO membership (user_id,invited_by,invitation_id,joined_at) VALUES (?,'alice',?,?)",
+          )
+          .bind(id, id, before0027),
+      ]);
+    await old.db.batch([
+      old.db.prepare('DELETE FROM device_setup'),
+      old.db.prepare("INSERT INTO device_setup VALUES('bob')"),
+      old.db.prepare(
+        "UPDATE membership SET status='disabled' WHERE user_id='frank'",
+      ),
+    ]);
+    const pending = async () =>
+      (
+        await old.db
+          .prepare('SELECT user_id FROM device_setup ORDER BY user_id')
+          .all<{ user_id: string }>()
+      ).results.map((row) => row.user_id);
+    expect(await pending()).toEqual(['bob']);
+    await old.db.batch(
+      unstable_splitSqlQuery(
+        await readFile('migrations/0028_device_setup_offer.sql', 'utf8'),
+      ).map((query) => old.db.prepare(query)),
+    );
+    // Base fixtures joined after 0027; without a row they already answered
+    // the onboarding offer, so it is not asked again. Bob's row is kept.
+    expect(await pending()).toEqual(['bob', 'erin']);
+    expect(
+      (await old.db.prepare('PRAGMA foreign_key_check').all()).results,
+    ).toEqual([]);
+  } finally {
+    await old.worker.dispose();
+  }
+});

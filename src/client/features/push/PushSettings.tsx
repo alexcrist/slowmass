@@ -16,9 +16,9 @@ function PushControls({ push }: { push: ReturnType<typeof usePush> }) {
   return (
     <>
       <p>
-        Get alerts when invitees join, for follow requests, new followers,
-        comments, and likes. Alerts don’t include names, comment text, or
-        photos.
+        Get alerts when invitees join, for follow requests, new followers, and
+        comments. Likes appear only in Activity. Alerts don’t include names,
+        comment text, or photos.
       </p>
       {needsHomeScreen ? (
         <p>

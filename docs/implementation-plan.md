@@ -516,3 +516,22 @@ Private image bytes remain uncached by the browser (`private, no-store`). A futu
 - [x] Replace retired-screen tests with photo-completion and legacy-pending sign-in coverage across iPhone browser/installed app, Android, and desktop; retain installation/push ordering and interrupted-permission coverage through Settings. All 116 focused loading/push tests pass.
 - [x] Pass the full Node 24 gate: formatting, lint, types, boundaries, all 469 tests and the production build. Review React state/effects, focus handoff, navigation, removed subscriptions/exports, and continued required profile/photo gating. No browser or visual testing.
 - [x] Deploy with the comment metadata change in the verified release recorded above. Production HTTP checks passed; no database migration or browser/visual testing.
+
+## Device-setup suggestion in Activity — October 17, 2026
+
+- [x] Show one client-rendered suggestion at the top of Activity on phones and tablets right after onboarding, using the Activity row layout. iPhone/iPad browsers get Home Screen steps (hidden when push works on any device); the Home Screen app offers notifications; Android offers notifications, then the native install prompt. Desktop shows nothing.
+- [x] Make dismissal (a labeled × control matching Follow back) permanent for the account through the existing device-setup API; count a blocked permission prompt or dismissed install prompt opened from the row as No. Keep failed answers retryable.
+- [x] Add one badge count per unseen step on each device, using the 250 ms Activity visibility rule and a non-private browser-storage hint.
+- [x] Add `pushSubscribed` to bootstrap and automatic migration 0028, which offers the suggestion once to members who predate migration 0027 without re-asking later members who answered the onboarding screen.
+- [x] Add a development-only preview of every device permutation and row state at `/previews/device-setup.html` (`npm run dev:ui`); the production build excludes it.
+- [x] After owner review, move iPhone/iPad Home Screen steps into the shared modal dialog with numbered steps; Settings uses the same numbered instructions.
+- [x] Pass the Node 24 gate: formatting, lint, types, boundaries, all 500 tests and the production build. Apply migrations locally. No browser or visual testing.
+- [ ] Owner review of the preview, then deploy through `main` and record the release.
+- [ ] Confirm on real devices: iPhone browser → Home Screen app → notifications, and Android notifications → install. Automated tests simulate browser APIs only.
+
+## Timeline-ordered like groups without push — October 17, 2026
+
+- [x] Stop Web Push for likes in the delivery trigger, drop queued like deliveries, and skip opportunistic dispatch on post/comment like routes. Requests, followers, joins and comments still alert.
+- [x] Assign each new like to the recipient's newest group only when that is a like on the same post, so other activity splits groups; later groups on a post read “N more people like your photo.” Keep existing groups' keys and read state; read receipts and the badge count each group separately.
+- [x] Classify migration 0029 as automatic: it replaces triggers and removes queued like alerts without changing sources or receipts, and earlier code reads the new keys unchanged. Test grouping, receipts, unlikes, blocks, timestamp/identity updates, and migration preservation in isolated D1.
+- [ ] Deploy through `main` and confirm on a real device that likes no longer alert while comments still do.

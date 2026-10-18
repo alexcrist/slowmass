@@ -7,6 +7,7 @@ import { authConfigured } from '../../auth/options';
 import type { Env } from '../../env';
 import { ownProfile } from '../people';
 import { deviceSetupPending } from '../device-setup';
+import { hasPushSubscription } from '../push';
 
 export const bootstrap = new Hono<{ Bindings: Env }>();
 bootstrap.get('/', async (c) => {
@@ -15,17 +16,19 @@ bootstrap.get('/', async (c) => {
     ? await getActiveUser(c.env, c.req.raw.headers)
     : null;
   startupPhase('profile');
-  const [profile, pending] = user
+  const [profile, pending, pushSubscribed] = user
     ? await Promise.all([
         ownProfile(c.env.DB, user.id),
         deviceSetupPending(c.env.DB, user.id),
+        hasPushSubscription(c.env.DB, user.id),
       ])
-    : [null, false];
+    : [null, false, false];
   return c.json({
     signInAvailable,
     user,
     profile,
     deviceSetupPending: pending,
+    pushSubscribed,
   });
 });
 

@@ -9,6 +9,7 @@ import {
 type InstallPrompt = Event & {
   prompt: () => Promise<{ outcome: 'accepted' | 'dismissed' }>;
 };
+export type InstallOutcome = 'accepted' | 'dismissed' | 'failed' | null;
 function standalone() {
   return (
     window.matchMedia('(display-mode: standalone)').matches ||
@@ -35,7 +36,7 @@ const InstallContext = createContext<{
   prompt: InstallPrompt | null;
   busy: boolean;
   message: string;
-  install: () => Promise<void>;
+  install: () => Promise<InstallOutcome>;
 } | null>(null);
 export function InstallProvider({ children }: { children: ReactNode }) {
   const existing = useContext(InstallContext);
@@ -80,8 +81,8 @@ function InstallStateProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('focus', changed);
     };
   }, [mobile]);
-  async function install() {
-    if (!mobile || !prompt || busy) return;
+  async function install(): Promise<InstallOutcome> {
+    if (!mobile || !prompt || busy) return null;
     setPrompt(null);
     setBusy(true);
     setMessage('');
@@ -92,10 +93,12 @@ function InstallStateProvider({ children }: { children: ReactNode }) {
           ? 'Installation requested. Look for slowmass on your home screen or in your apps.'
           : 'You can install later using your browser menu.',
       );
+      return result.outcome;
     } catch {
       setMessage(
         'Use your browser menu to install slowmass. Follow the installation instructions here.',
       );
+      return 'failed';
     } finally {
       setPrompt(null);
       setBusy(false);
@@ -170,32 +173,58 @@ function InstallControls() {
     </div>
   );
 }
-function InstallInstructions({ appleMobile }: { appleMobile: boolean }) {
+// Numbered platform steps, shared by Settings and the Activity device-setup
+// dialog. Wording was checked against vendor documentation (see README).
+export function InstallInstructions({
+  appleMobile,
+  forNotifications = false,
+}: {
+  appleMobile: boolean;
+  forNotifications?: boolean;
+}) {
   return (
     <>
       {appleMobile ? (
-        <p>
-          Open your browser’s Share menu (sometimes inside the page menu), then
-          choose Add to Home Screen. On iPad, you may need View More or More.
-          Keep Open as Web App on if shown, then tap Add.
-        </p>
+        <ol className="install-steps">
+          <li>
+            Tap <strong>Share</strong>. In Safari, it may be inside the{' '}
+            <strong>•••</strong> menu.
+          </li>
+          <li>
+            Tap <strong>Add to Home Screen</strong>. If you don’t see it, tap{' '}
+            <strong>View More</strong> or <strong>More</strong> first.
+          </li>
+          <li>
+            Keep <strong>Open as Web App</strong> on, then tap{' '}
+            <strong>Add</strong>.
+          </li>
+          <li>
+            Open <strong>slowmass</strong> from your Home Screen. Sign in only
+            if asked.
+          </li>
+          {forNotifications && (
+            <li>
+              In Activity, tap <strong>Turn on</strong>, then{' '}
+              <strong>Allow</strong>.
+            </li>
+          )}
+        </ol>
       ) : (
-        <p>
-          In Chrome, open the three-dot menu → Install and create shortcut →
-          Install. Some versions use Add to Home screen. In other browsers, look
-          for Install or Add to Home screen.
-        </p>
+        <ol className="install-steps">
+          <li>
+            Open your browser’s menu (<strong>⋮</strong> in Chrome).
+          </li>
+          <li>
+            Tap <strong>Install and create shortcut</strong>, then{' '}
+            <strong>Install</strong>. Some versions say{' '}
+            <strong>Add to Home screen</strong>.
+          </li>
+        </ol>
       )}
-      <p>
-        If these options are missing inside an email or social app, open
-        slowmass.com in your regular browser.
+      <p className="install-note">
+        Can’t find these options? If slowmass opened inside an email or social
+        app, open slowmass.com in your regular browser first.
       </p>
-      {appleMobile && (
-        <p>
-          After adding it, open the slowmass icon. Your saved profile will be
-          there; sign in only if asked.
-        </p>
-      )}
     </>
   );
 }

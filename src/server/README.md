@@ -12,4 +12,4 @@ Feature `index.ts` files define public entry points; cross-feature consumers use
 
 [Startup diagnostics](diagnostics/README.md) retain bounded anonymous failure evidence in D1, independently of authentication. Telemetry supplies server snapshots; the composition root wires the write-only endpoint and retention cleanup.
 
-[Device setup](features/device-setup/README.md) retains legacy optional onboarding progress for previously loaded clients; the current client ignores it and ends onboarding after photo setup. Account bootstrap composes its public read with the people profile read; neither install nor push consent gates member access. Push owns independent browser endpoints within authenticated sessions.
+[Device setup](features/device-setup/README.md) records whether a member may still see the optional install/notification suggestion in Activity. Account bootstrap composes its read with the people profile read and push's subscription check; neither install nor push consent gates member access. Push owns independent browser endpoints within authenticated sessions.

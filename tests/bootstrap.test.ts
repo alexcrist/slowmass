@@ -15,6 +15,7 @@ it('returns availability, session and only the current member profile in one pri
   expect(await guest.json()).toEqual({
     signInAvailable: true,
     deviceSetupPending: false,
+    pushSubscribed: false,
     user: null,
     profile: null,
   });
@@ -23,6 +24,7 @@ it('returns availability, session and only the current member profile in one pri
   ).toEqual({
     signInAvailable: true,
     deviceSetupPending: true,
+    pushSubscribed: false,
     user: { id: 'alice', name: 'alice' },
     profile: null,
   });
@@ -44,6 +46,7 @@ it('returns availability, session and only the current member profile in one pri
     {
       signInAvailable: true,
       deviceSetupPending: true,
+      pushSubscribed: false,
       user: { id: 'bob', name: 'bob' },
       profile: null,
     },
@@ -56,6 +59,7 @@ it('returns availability, session and only the current member profile in one pri
   ).toEqual({
     signInAvailable: true,
     deviceSetupPending: false,
+    pushSubscribed: false,
     user: null,
     profile: null,
   });
@@ -66,6 +70,7 @@ it('returns availability, session and only the current member profile in one pri
     {
       signInAvailable: true,
       deviceSetupPending: false,
+      pushSubscribed: false,
       user: null,
       profile: null,
     },

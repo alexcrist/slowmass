@@ -342,17 +342,16 @@ it('queues invitation follower alerts only after profile photo completion and ne
     .run();
   expect(await count('push_delivery')).toBe(0);
 });
-it('coalesces likes and concurrent dispatchers, and prevents a stale completion from clearing a newer version', async () => {
+it('never queues likes, coalesces concurrent dispatchers, and prevents a stale completion from clearing a newer version', async () => {
   await enable();
   await photo();
-  await runtime.db
-    .prepare("INSERT INTO post_like VALUES('photo','bob',1000)")
-    .run();
-  await runtime.db
-    .prepare("INSERT INTO post_like VALUES('photo','carol',1000)")
-    .run();
+  await runtime.db.batch([
+    runtime.db.prepare("INSERT INTO post_like VALUES('photo','bob',1000)"),
+    runtime.db.prepare("INSERT INTO post_like VALUES('photo','carol',1000)"),
+  ]);
+  expect(await count('push_delivery')).toBe(0);
+  await pendingRequest();
   expect(await count('push_delivery')).toBe(1);
-  await runtime.db.prepare('UPDATE push_delivery SET available_at=0').run();
   let entered!: () => void;
   const sending = new Promise<void>((resolve) => {
     entered = resolve;
@@ -369,18 +368,25 @@ it('coalesces likes and concurrent dispatchers, and prevents a stale completion 
   await sending;
   await tick();
   expect(sent).toHaveLength(1);
-  await runtime.db
-    .prepare("INSERT INTO post_like VALUES('photo','david',1000)")
-    .run();
+  // Cancelling and re-sending the request creates a newer version of the alert.
+  await runtime.db.batch([
+    runtime.db.prepare("DELETE FROM follow WHERE follower_id='bob'"),
+    runtime.db.prepare(
+      "INSERT INTO follow VALUES('bob','alice','pending',2000)",
+    ),
+  ]);
   release();
   await first;
   pauseSend = undefined;
   expect(await count('push_delivery')).toBe(1);
-  await runtime.db.prepare('UPDATE push_delivery SET available_at=0').run();
   await tick();
   expect(sent).toHaveLength(2);
   expect(await count('push_delivery')).toBe(0);
   expect(sent[0].headers.get('topic')).toBe(sent[1].headers.get('topic'));
+  await runtime.db
+    .prepare("INSERT INTO post_like VALUES('photo','david',3000)")
+    .run();
+  expect(await count('push_delivery')).toBe(0);
 });
 it('retries transient and ambiguous failures with a lease, honors Retry-After, and removes expired subscriptions', async () => {
   await enable();

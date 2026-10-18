@@ -5,6 +5,15 @@ export function pushSupported() {
     typeof Notification !== 'undefined'
   );
 }
+// This device's state without a network request. The server-confirmed status in
+// usePush remains authoritative for Settings and opt-in.
+export async function localPushState() {
+  if (!pushSupported()) return 'unsupported';
+  if (Notification.permission === 'denied') return 'denied';
+  if (Notification.permission !== 'granted') return 'off';
+  const registration = await navigator.serviceWorker.getRegistration('/');
+  return (await registration?.pushManager.getSubscription()) ? 'on' : 'off';
+}
 export function applicationKey(value: string) {
   return Uint8Array.from(
     atob(value.replace(/-/g, '+').replace(/_/g, '/')),

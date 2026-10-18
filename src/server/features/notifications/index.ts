@@ -33,6 +33,8 @@ export type Notification = {
   version: number;
   unread: boolean;
   canFollowBack: boolean;
+  // A later like group on a post that already has an earlier visible group.
+  more: boolean;
 };
 export function parsePage(
   value: string | undefined,
@@ -98,6 +100,10 @@ export async function notificationPage(
       AND NOT EXISTS(SELECT 1 FROM follow f WHERE f.follower_id=e.recipient_id AND f.target_id=e.actor_id)
       AND EXISTS(SELECT 1 FROM activity_read_state r WHERE r.recipient_id=e.recipient_id
         AND r.event_key=e.event_key AND r.actor_id=e.actor_id AND r.follow_back_dismissed=0)) AS canFollowBack,
+    (e.kind='likes' AND EXISTS(SELECT 1 FROM activity_source o
+      WHERE o.recipient_id=e.recipient_id AND o.event_key>='likes:'||e.post_id
+        AND o.event_key<'likes:'||e.post_id||'.' AND o.event_key!=e.event_key
+        AND o.created_at<e.created_at AND ${visibleActor('o')})) AS more,
     (SELECT MAX(r.revision) FROM activity_source n JOIN activity_read_state r
       USING(recipient_id,event_key,actor_id)
       WHERE n.recipient_id=e.recipient_id AND n.event_key=e.event_key AND ${visibleActor('n')}) AS version,
@@ -108,15 +114,17 @@ export async function notificationPage(
     )
     .bind(actor, cursor?.time ?? Number.MAX_SAFE_INTEGER, cursor?.key ?? '')
     .all<
-      Omit<Notification, 'unread' | 'canFollowBack'> & {
+      Omit<Notification, 'unread' | 'canFollowBack' | 'more'> & {
         unread: number;
         canFollowBack: number;
+        more: number;
       }
     >();
   const items = rows.results.slice(0, 20).map((item) => ({
       ...item,
       unread: Boolean(item.unread),
       canFollowBack: Boolean(item.canFollowBack),
+      more: Boolean(item.more),
     })),
     last = items.at(-1);
   return {

@@ -14,6 +14,7 @@ import { Discover } from './Discover';
 import { Connections, type Kind } from './Connections';
 import { MemberNavigation } from './MemberNavigation';
 import { PushSettings } from '../push';
+import { DeviceSetupItem, useDeviceSetup } from '../device-setup';
 
 const titles: Record<string, string> = {
   feed: 'Feed',
@@ -29,8 +30,14 @@ const titles: Record<string, string> = {
   followers: 'Followers',
   blocked: 'Blocked accounts',
 };
+type DeviceSetupState = { pending: boolean; pushSubscribed: boolean };
+const noDeviceSetup: DeviceSetupState = {
+  pending: false,
+  pushSubscribed: false,
+};
 export function MemberApp(props: {
   initialProfile: Profile | null;
+  deviceSetup?: DeviceSetupState;
   onSignOut: () => void;
   signingOut: boolean;
 }) {
@@ -42,10 +49,12 @@ export function MemberApp(props: {
 }
 function MemberPages({
   initialProfile,
+  deviceSetup: initialDeviceSetup = noDeviceSetup,
   onSignOut,
   signingOut,
 }: {
   initialProfile: Profile | null;
+  deviceSetup?: DeviceSetupState;
   onSignOut: () => void;
   signingOut: boolean;
 }) {
@@ -64,6 +73,12 @@ function MemberPages({
     wasReady.current = ready;
   }, [ready]);
   const notifications = useNotificationCount(ready);
+  const deviceSetup = useDeviceSetup(initialDeviceSetup, ready);
+  // The device-setup row counts once per step until seen on this device.
+  const unreadCount =
+    notifications.count === null
+      ? null
+      : notifications.count + (deviceSetup.unseen ? 1 : 0);
   const profileRoute = profile ? profileHref(profile.handle) : '#profile';
   const back =
     page === 'settings' || page === 'following' || page === 'followers'
@@ -131,7 +146,11 @@ function MemberPages({
         );
       case 'notifications':
         return (
-          <Notifications onChange={notifications.refresh} focus={handle} />
+          <Notifications
+            onChange={notifications.refresh}
+            focus={handle}
+            leading={<DeviceSetupItem setup={deviceSetup} />}
+          />
         );
       case 'edit':
         return (
@@ -204,7 +223,7 @@ function MemberPages({
           page={page}
           profile={profile}
           avatarVersion={avatarVersion}
-          unreadCount={notifications.count}
+          unreadCount={unreadCount}
           onReselect={() => {
             notifications.refresh();
             setPageVersion((version) => version + 1);

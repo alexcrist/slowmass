@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" sizes="any" />
+    <title>slowmass device setup preview</title>
+    <style>
+      .preview {
+        padding: 24px;
+      }
+      .preview-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 32px;
+        margin-bottom: 48px;
+      }
+      .preview-frame {
+        width: var(--frame);
+      }
+      .preview-frame h3 {
+        margin: 0 0 4px;
+        font-size: 15px;
+      }
+      .preview-frame > p {
+        margin: 0 0 8px;
+      }
+      .preview-screen {
+        padding: 0 20px;
+        border: 1px solid #d6d6d6;
+        border-radius: 12px;
+      }
+      .preview-empty {
+        padding: 16px 0 !important;
+        color: #6b6b6b;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script
+      type="module"
+      src="/src/client/features/device-setup/preview.tsx"
+    ></script>
+  </body>
+</html>

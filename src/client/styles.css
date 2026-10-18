@@ -462,7 +462,7 @@ input::file-selector-button {
   gap: 12px;
   text-decoration: none;
 }
-.notification-person:hover {
+a.notification-person:hover {
   background: var(--hover);
 }
 .notification-actions {
@@ -724,6 +724,24 @@ input::file-selector-button {
 }
 .install-help ul {
   padding-left: 20px;
+}
+.install-steps {
+  margin: 0 0 16px;
+  padding-left: 24px;
+}
+.install-steps > li {
+  margin-bottom: 12px;
+  padding-left: 4px;
+}
+.install-steps > li::marker {
+  font-weight: 600;
+}
+.install-steps strong {
+  color: var(--ink);
+}
+.install-note {
+  color: var(--muted);
+  font-size: 15px;
 }
 .install-help li {
   margin-bottom: 12px;

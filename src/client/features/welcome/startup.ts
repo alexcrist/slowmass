@@ -3,6 +3,9 @@ export type Bootstrap = {
   signInAvailable: boolean;
   user: { id: string; name: string } | null;
   profile: Profile | null;
+  // Optional so an earlier Worker's response still starts the app.
+  deviceSetupPending?: boolean;
+  pushSubscribed?: boolean;
 };
 function validBootstrap(value: unknown): value is Bootstrap {
   if (!value || typeof value !== 'object') return false;

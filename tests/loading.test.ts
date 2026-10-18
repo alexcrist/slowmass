@@ -1722,16 +1722,25 @@ it('paginates one activity timeline and resolves inline requests without leaving
   await reply(pending('/api/notifications?'), {
     items: [
       {
-        key: 'likes:one',
+        key: 'likes:one-0123456789ab',
         kind: 'likes',
         postId: 'one',
-        count: 2,
-        createdAt: 3,
+        count: 1,
+        more: true,
+        createdAt: 4,
       },
       {
         key: 'request:bob',
         kind: 'request',
         handle: 'bob',
+        createdAt: 3,
+      },
+      {
+        key: 'likes:one',
+        kind: 'likes',
+        postId: 'one',
+        count: 2,
+        more: false,
         createdAt: 2,
       },
       {
@@ -1745,7 +1754,9 @@ it('paginates one activity timeline and resolves inline requests without leaving
     ],
     next: 'older',
   });
+  expect(visibleText()).toMatch(/1\s+more\s+person likes/);
   expect(visibleText()).toMatch(/2\s+people like/);
+  expect(visibleText()).not.toMatch(/2\s+more/);
   expect(visibleText()).toContain('requested to follow you');
   expect(visibleText()).toContain('Hello');
   expect(visibleText()).not.toMatch(/Unread|Mark this page/);
@@ -1764,7 +1775,8 @@ it('paginates one activity timeline and resolves inline requests without leaving
     .findAllByType('li');
   for (const [index, id] of [
     [0, 'one'],
-    [2, 'two'],
+    [2, 'one'],
+    [3, 'two'],
   ] as const) {
     const row = activityRows[index];
     const link = row.findByType('a');
@@ -2943,13 +2955,13 @@ it('opens the requested member page immediately after the required photo is save
 });
 
 it.each([
-  { userAgent: 'iPhone', standalone: false },
-  { userAgent: 'iPhone', standalone: true },
-  { userAgent: 'Android', standalone: false },
-  { userAgent: 'Desktop', standalone: false },
+  { userAgent: 'iPhone', standalone: false, summary: 'first add slowmass' },
+  { userAgent: 'iPhone', standalone: true, summary: 'Turn on notifications' },
+  { userAgent: 'Android', standalone: false, summary: 'Turn on notifications' },
+  { userAgent: 'Desktop', standalone: false, summary: null },
 ])(
-  'ignores legacy pending setup at sign-in and on return for %j',
-  async (device) => {
+  'offers pending device setup only in Activity, without prompts or setup requests, for %j',
+  async ({ summary, ...device }) => {
     Object.assign(navigator, device);
     vi.stubGlobal('PushManager', class {});
     const permission = vi.fn();
@@ -2964,6 +2976,7 @@ it.each([
     await reply(pending('/api/bootstrap'), {
       ...signedIn,
       deviceSetupPending: true,
+      pushSubscribed: false,
     });
     expect(renderer.root.findAllByProps({ 'data-page': 'feed' })).toHaveLength(
       1,
@@ -2971,7 +2984,11 @@ it.each([
     expect(pending('/api/posts?').path).toContain('/api/posts');
     expect(visibleText()).not.toContain('Create your profile');
     expect(visibleText()).not.toContain('Set up this device');
-    expect(visibleText()).not.toContain('Enable notifications');
+    expect(visibleText()).not.toContain('Turn on notifications');
+    await reply(pending('/api/notifications/unread-count'), { count: 2 });
+    expect(
+      renderer.root.findByProps({ className: 'nav-badge' }).children,
+    ).toEqual([summary ? '3' : '2']);
     await act(async () => window.dispatchEvent(new Event('focus')));
     expect(
       requests.some(
@@ -2980,11 +2997,17 @@ it.each([
           item.path === '/api/device-setup',
       ),
     ).toBe(false);
+    await go('#notifications');
+    await reply(pending('/api/notifications?'), { items: [], next: null });
+    if (summary) expect(visibleText()).toContain(summary);
+    else expect(visibleText()).not.toContain('Turn on notifications');
     expect(permission).not.toHaveBeenCalled();
+    expect(requests.some((item) => item.path === '/api/device-setup')).toBe(
+      false,
+    );
     await go('#settings');
     expect(visibleText()).toContain('Notifications');
-    if (device.userAgent !== 'Desktop')
-      expect(visibleText()).toContain('Install slowmass');
+    if (summary) expect(visibleText()).toContain('Install slowmass');
     expect(permission).not.toHaveBeenCalled();
   },
 );

@@ -95,6 +95,7 @@ it('serves independent signed-in startup requests during cold-start cancellation
           expect(await response.json()).toEqual({
             signInAvailable: true,
             deviceSetupPending: true,
+            pushSubscribed: false,
             user: { id, name: id },
             profile: null,
           });

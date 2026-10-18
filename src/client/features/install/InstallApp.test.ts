@@ -131,7 +131,7 @@ it.each(['dismissed', 'failed'])(
     expect(prompt).toHaveBeenCalledOnce();
     expect(renderer!.root.findAllByType('button')).toHaveLength(0);
     const text = JSON.stringify(renderer!.toJSON());
-    expect(text).toContain('three-dot menu');
+    expect(text).toContain('Install and create shortcut');
     expect(text).toContain('without opening the installed app');
     expect(text).toContain(
       outcome === 'failed' ? 'Use your browser menu' : 'You can install later',

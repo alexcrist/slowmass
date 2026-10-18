@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { api } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
 import { postHref, profileHref } from '../../navigation';
@@ -13,16 +13,19 @@ type Item = {
   | { kind: 'request'; handle: string }
   | { kind: 'follower'; handle: string; canFollowBack: boolean }
   | { kind: 'joined'; handle: string }
-  | { kind: 'likes'; postId: string; count: number }
+  | { kind: 'likes'; postId: string; count: number; more: boolean }
   | { kind: 'comment'; postId: string; handle: string; body: string }
 );
 type Page = { items: Item[]; next: string | null; focusFound?: boolean };
 export function Notifications({
   onChange,
   focus,
+  leading,
 }: {
   onChange?: () => void;
   focus?: string;
+  // A row rendered above the newest page, outside server pagination/read state.
+  leading?: ReactNode;
 }) {
   const [history, setHistory] = usePageHistory(
     focus ? `notifications/${focus}` : 'notifications',
@@ -101,6 +104,7 @@ export function Notifications({
       )}
       {!loading && page?.items.length === 0 && <p>No activity on this page.</p>}
       <ul className="notification-list" ref={list}>
+        {!focus && history.length === 1 && leading}
         {page?.items.map((item) => (
           <li key={item.key}>
             {item.kind === 'joined' ? (
@@ -203,7 +207,7 @@ export function Notifications({
                 <div className="notification-content">
                   {item.kind === 'likes' ? (
                     <p data-notification-key={item.key}>
-                      {item.count}{' '}
+                      {item.count} {item.more && 'more '}
                       {item.count === 1 ? 'person likes' : 'people like'} your
                       photo.
                     </p>

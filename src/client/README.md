@@ -2,13 +2,15 @@
 
 A static React application served by Workers Assets. [Welcome](features/welcome/README.md) handles invitation acceptance, email login and logout, then mounts [member screens](features/people/README.md). These compose [invitations](features/invitations/README.md), [avatars](features/avatars/README.md), [posts](features/posts/README.md), [interactions](features/interactions/README.md), and [notifications](features/notifications/README.md), using the shared [API client](api/README.md).
 
-Onboarding ends after the required profile photo is saved. Installation and notification opt-in are available from Settings.
+Onboarding ends after the required profile photo is saved. Installation and notification opt-in are available from Settings; [device setup](features/device-setup/README.md) suggests them once in Activity on phones and tablets.
 
 [Install support](features/install/README.md) adds a standalone web-app manifest, mobile-only install instructions and browser install prompts where available.
 
 [Account deletion](features/account/README.md) is available from Settings.
 
 [Shared UI controls](ui/README.md) provide native dialogs, overflow menus, and relative timestamps. [Local image decoding](images/README.md) is shared by the avatar and post crop editors.
+
+`previews/device-setup.html` is a development-only page served by `npm run dev:ui`; production builds include only `index.html`.
 
 Global styling lives in `styles.css`; [interface guidance](../../docs/design.md) defines the neutral white palette, self-hosted typography, and responsive navigation. [Push settings](features/push/README.md) registers a push-only service worker after explicit opt-in. No local auth bypass, persisted private content, or service-worker response cache exists. Verification uses API and static checks; browser and visual testing are prohibited.
 

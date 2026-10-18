@@ -109,6 +109,7 @@ push.delete('/device', async (c) => {
 });
 // Prompt dispatch is best effort; the committed outbox and cron survive a lost
 // request, process failure, or a mutation served by the previous deployment.
+// Post and comment likes never enqueue alerts, so they skip dispatch.
 export const pushAfterMutation: MiddlewareHandler<{ Bindings: Env }> = async (
   c,
   next,
@@ -119,6 +120,7 @@ export const pushAfterMutation: MiddlewareHandler<{ Bindings: Env }> = async (
     ['POST', 'PUT', 'DELETE'].includes(c.req.method) &&
     (/^\/api\/(people|interactions)\//.test(c.req.path) ||
       c.req.path === '/api/avatar') &&
+    !c.req.path.endsWith('/like') &&
     c.res.status < 300
   )
     c.executionCtx.waitUntil(

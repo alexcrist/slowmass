@@ -139,3 +139,15 @@ export async function removeSubscription(
     .bind(user, session, endpoint)
     .run();
 }
+// Any live subscription on another device or browser, for install guidance.
+export async function hasPushSubscription(db: D1Database, user: string) {
+  return Boolean(
+    await db
+      .prepare(
+        `SELECT 1 FROM push_subscription s JOIN session a ON a.id=s.session_id
+    WHERE s.user_id=? AND a.expiresAt>? LIMIT 1`,
+      )
+      .bind(user, Date.now())
+      .first(),
+  );
+}

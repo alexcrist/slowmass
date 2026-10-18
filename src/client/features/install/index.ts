@@ -1,1 +1,6 @@
-export { InstallApp, InstallProvider, useInstallState } from './InstallApp';
+export {
+  InstallApp,
+  InstallInstructions,
+  InstallProvider,
+  useInstallState,
+} from './InstallApp';
