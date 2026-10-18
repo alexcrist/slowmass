@@ -1,6 +1,7 @@
 import { act, createElement, type ReactElement } from 'react';
 import {
   create,
+  type ReactTestInstance,
   type ReactTestRenderer,
   type ReactTestRendererJSON,
 } from 'react-test-renderer';
@@ -47,14 +48,23 @@ const details = {
   over: false,
   photoUrl: `/media/events/${id}`,
   thumbnailUrl: `/media/events/${id}?size=thumb`,
-  hosts: [{ handle: 'alice', displayName: 'Alice', hasAvatar: true }],
+  hosts: [
+    {
+      handle: 'alice',
+      displayName: 'Alice',
+      hasAvatar: true,
+      isCreator: true,
+      isViewer: false,
+    },
+  ],
 };
 const url = `https://slowmass.com/#event/${token}`;
 function view(overrides: Record<string, unknown> = {}) {
   return {
     ...details,
     counts: { going: 1, maybe: 0, declined: 0 },
-    link: { id: 'version', url },
+    pendingHosts: [],
+    url,
     viewer: { isHost: false, isCreator: false, response: null },
     ...overrides,
   };
@@ -140,15 +150,19 @@ async function reply(request: Request, data: unknown, status = 200) {
     request.resolve(Response.json(data, { status }));
   });
 }
+// The accessible name skips decoration hidden from assistive technology.
+function labelText(value: ReactTestInstance | string): string {
+  if (typeof value === 'string') return value;
+  if (value.props['aria-hidden']) return '';
+  return value.children.map(labelText).join(' ');
+}
 function button(label: string) {
   const found = renderer.root
     .findAllByType('button')
     .find(
       (item) =>
         item.props['aria-label'] === label ||
-        visibleText(item.children as ReactTestRendererJSON[]).trim() ===
-          label ||
-        item.children.join('') === label,
+        item.children.map(labelText).join(' ').trim() === label,
     );
   expect(found, `Button ${label}`).toBeDefined();
   return found!;
@@ -196,6 +210,8 @@ it('shows members without a photo the event, with guests linked only by name', a
   });
   expect(visibleText()).toContain('Dinner');
   expect(visibleText()).toMatch(/Hosted by\s+Alice/);
+  // Events stays in the header instead of a back control.
+  expect(visibleText()).not.toContain('Back to');
   expect(
     renderer.root.findAllByProps({ 'aria-label': 'Main navigation' }),
   ).toHaveLength(0);
@@ -211,27 +227,28 @@ it('shows members without a photo the event, with guests linked only by name', a
   ).toHaveLength(0);
 });
 
-it('puts Activity and, for event-only members, Settings in the header', async () => {
+it('puts Activity and, for event-only members, Events and Settings in the header', async () => {
   const reselect = vi.fn();
   await mount(
     createElement(HeaderActions, {
       page: 'notifications',
       unreadCount: 3,
-      settings: true,
+      eventOnly: true,
       onReselect: reselect,
     }),
   );
   const links = renderer.root.findAllByType('a');
   expect(links.map((link) => link.props.href)).toEqual([
+    '#events',
     '#notifications',
     '#settings',
   ]);
-  expect(links[0].props['aria-description']).toBe('3 unread notifications.');
+  expect(links[1].props['aria-description']).toBe('3 unread notifications.');
   expect(
     renderer.root.findByProps({ className: 'nav-badge' }).children,
   ).toEqual(['3']);
   await act(async () =>
-    links[0].props.onClick({
+    links[1].props.onClick({
       button: 0,
       preventDefault: vi.fn(),
       defaultPrevented: false,
@@ -262,6 +279,7 @@ it('opens an event from its URL, then shows guests only after answering', async 
   });
   expect(visibleText()).toContain('Answer to see who’s going');
   expect(visibleText()).not.toContain('Guests');
+  expect(visibleText()).not.toContain('Back to');
   expect(button('Going').props['aria-pressed']).toBe(false);
   await click('Going');
   const answer = pending(`/api/events/${id}/response`);
@@ -279,7 +297,7 @@ it('opens an event from its URL, then shows guests only after answering', async 
   expect(visibleText()).toContain('Guests');
 });
 
-it('explains a replaced link instead of showing an event', async () => {
+it('explains an unavailable link instead of showing an event', async () => {
   location.hash = `#event/${token}`;
   await mount(
     createElement(MemberApp, {
@@ -443,25 +461,124 @@ it('edits details in the event time zone with a retry-safe change ID', async () 
   expect(saved).toHaveBeenCalledWith(id);
 });
 
-it('shares the event link from the share sheet, or copies it', async () => {
-  const shareSheet = vi.fn(() => Promise.resolve());
-  vi.stubGlobal('navigator', { standalone: false, share: shareSheet });
-  await mount(createElement(EventPage, { id, linkProfiles: true }));
-  await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
-  await click('Share link');
-  expect(shareSheet).toHaveBeenCalledWith({ title: 'Dinner', url });
-  expect(visibleText()).not.toContain('Link copied.');
-
-  await act(async () => renderer.unmount());
-  requests = [];
+it('shows the event link with a copy button from the mail icon', async () => {
   const writeText = vi.fn(() => Promise.resolve());
   vi.stubGlobal('navigator', { standalone: false, clipboard: { writeText } });
   await mount(createElement(EventPage, { id, linkProfiles: true }));
   // Guests can share the one URL too.
   await reply(pending(`/api/events/${id}`), { event: view() });
-  await click('Share link');
+  expect(visibleText()).not.toContain('Share link');
+  await click('Share event link');
+  expect(visibleText()).toContain(
+    'Send the link to your friends to invite them.',
+  );
+  expect(
+    renderer.root.findByProps({ 'aria-label': 'Event link' }).props.value,
+  ).toBe(url);
+  await click('Copy');
   expect(writeText).toHaveBeenCalledWith(url);
   expect(visibleText()).toContain('Link copied.');
+
+  await act(async () => renderer.unmount());
+  requests = [];
+  vi.stubGlobal('navigator', { standalone: false });
+  await mount(createElement(EventPage, { id, linkProfiles: true }));
+  await reply(pending(`/api/events/${id}`), { event: view() });
+  await click('Share event link');
+  await click('Copy');
+  expect(visibleText()).toContain('Couldn’t copy the link.');
+});
+
+it('lets hosts answer and add hosts by email', async () => {
+  await mount(createElement(EventPage, { id, linkProfiles: true }));
+  await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
+  // Hosts see the guests and activity.
+  await reply(pending(`/api/events/${id}/guests`), { items: [], next: null });
+  await reply(pending(`/api/events/${id}/activity`), { items: [], next: null });
+  await click('Maybe');
+  expect(
+    JSON.parse(String(pending(`/api/events/${id}/response`).options?.body)),
+  ).toEqual({ status: 'maybe' });
+  await reply(pending(`/api/events/${id}/response`), { status: 'maybe' });
+  await reply(pending(`/api/events/${id}`), {
+    event: view({ viewer: { ...host, response: 'maybe' } }),
+  });
+  expect(button('Maybe').props['aria-pressed']).toBe(true);
+  expect(
+    renderer.root
+      .findAllByType('button')
+      .some((item) => item.props.children === 'Replace link'),
+  ).toBe(false);
+
+  await click('Event options');
+  await click('Edit hosts');
+  // The creator always hosts, so there is nothing to remove yet.
+  expect(visibleText()).not.toContain('Remove');
+  const email = renderer.root.findByProps({ type: 'email' });
+  await act(async () =>
+    email.props.onChange({ target: { value: 'bob@example.com' } }),
+  );
+  await submit();
+  const added = pending(`/api/events/${id}/hosts`);
+  expect(added.options?.method).toBe('POST');
+  expect(JSON.parse(String(added.options?.body))).toEqual({
+    email: 'bob@example.com',
+  });
+  await reply(added, { ok: true });
+  await reply(pending(`/api/events/${id}`), {
+    event: view({ viewer: host, pendingHosts: ['bob@example.com'] }),
+  });
+  expect(visibleText()).toContain('bob@example.com');
+  expect(visibleText()).toContain('Pending');
+  await click('Remove bob@example.com');
+  const removed = pending(`/api/events/${id}/hosts`);
+  expect(removed.options?.method).toBe('DELETE');
+  expect(JSON.parse(String(removed.options?.body))).toEqual({
+    email: 'bob@example.com',
+  });
+});
+
+it('asks members a host added by email to accept hosting', async () => {
+  await mount(createElement(EventPage, { id, linkProfiles: true }));
+  await reply(pending(`/api/events/${id}`), {
+    event: view({
+      counts: null,
+      viewer: {
+        isHost: false,
+        isCreator: false,
+        hostInvited: true,
+        response: null,
+      },
+    }),
+  });
+  expect(visibleText()).toContain('You’ve been asked to host this event.');
+  await click('Become a host');
+  const accepted = pending(`/api/events/${id}/hosting`);
+  expect(accepted.options?.method).toBe('POST');
+  await reply(accepted, { ok: true });
+  await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
+  expect(visibleText()).not.toContain('asked to host');
+});
+
+it('puts the message composer below the event activity', async () => {
+  await mount(createElement(EventPage, { id, linkProfiles: true }));
+  await reply(pending(`/api/events/${id}`), {
+    event: view({ viewer: { ...host, response: 'going' } }),
+  });
+  await reply(pending(`/api/events/${id}/activity`), {
+    items: [],
+    next: null,
+  });
+  const text = visibleText();
+  expect(text.indexOf('No activity yet.')).toBeGreaterThan(-1);
+  const section = renderer.root.findByProps({
+    'aria-labelledby': `activity-${id}`,
+  });
+  const order = section
+    .findAll((node) => typeof node.type === 'string')
+    .filter((node) => node.type === 'p' || node.type === 'form')
+    .map((node) => node.type);
+  expect(order.indexOf('p')).toBeLessThan(order.indexOf('form'));
 });
 
 it('lets members without a photo change just their name', async () => {

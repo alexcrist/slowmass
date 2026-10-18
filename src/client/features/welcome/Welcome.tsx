@@ -22,7 +22,7 @@ export function Welcome() {
   const [sent, setSent] = useState(false);
   const [message, setMessage] = useState(() =>
     new URLSearchParams(location.search).get('error') === 'event'
-      ? 'That sign-in link could not be used for this event. The host may have replaced the event link, or the event may be over or cancelled. Ask the host for the current link.'
+      ? 'That sign-in link could not be used for this event. It may be over or cancelled, or its link may no longer work.'
       : new URLSearchParams(location.search).has('error')
         ? 'That sign-in link could not be used. It may have expired or been used already. Request a new link below.'
         : '',
@@ -219,7 +219,7 @@ export function Welcome() {
               <h1>Welcome to slowmass</h1>
               <p className="status-copy">
                 {eventToken
-                  ? 'This event link isn’t available. The host may have replaced it; ask them for the current link.'
+                  ? 'This event link isn’t available. The event may have ended, or the link may no longer work.'
                   : 'Sign in with your email. New here? Ask a member to text you an event link.'}
               </p>
             </>

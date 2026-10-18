@@ -5,6 +5,8 @@ import type { Profile } from './ProfileForm';
 
 const activityPath =
   'M20 5c-3-3-6-1-8 1-2-2-5-4-8-1-4 4 1 9 8 15 7-6 12-11 8-15Z';
+const eventsPath =
+  'M7 3v4M17 3v4M4 10h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z';
 const destinations = [
   { page: 'feed', label: 'Feed', path: 'M3 10 12 3l9 7v11h-6v-7H9v7H3Z' },
   {
@@ -13,11 +15,7 @@ const destinations = [
     path: 'M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',
   },
   { page: 'compose', label: 'New post', path: 'M12 4v16M4 12h16' },
-  {
-    page: 'events',
-    label: 'Events',
-    path: 'M7 3v4M17 3v4M4 10h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z',
-  },
+  { page: 'events', label: 'Events', path: eventsPath },
   // Phones reach Activity from the header; the desktop sidebar keeps it.
   { page: 'notifications', label: 'Activity', path: activityPath },
   {
@@ -166,22 +164,34 @@ function reselects(event: MouseEvent<HTMLAnchorElement>) {
   );
 }
 // Header controls on phones (and for members who only use events, on every
-// screen): Activity with its unread badge, plus Settings when there is no
-// profile tab to reach it from.
+// screen): Activity with its unread badge, plus Events and Settings when there
+// is no navigation bar to reach them from.
 export function HeaderActions({
   page,
   unreadCount,
-  settings,
+  eventOnly,
   onReselect,
 }: {
   page: string;
   unreadCount: number | null;
-  settings: boolean;
+  eventOnly: boolean;
   onReselect: () => void;
 }) {
   const unread = unreadCount ?? 0;
   return (
     <nav className="header-actions" aria-label="Account">
+      {eventOnly && (
+        <a
+          className="header-action"
+          href="#events"
+          aria-label="Events"
+          aria-current={
+            page === 'events' || page === 'feed' ? 'page' : undefined
+          }
+        >
+          <Icon path={eventsPath} />
+        </a>
+      )}
       <a
         className="header-action"
         href="#notifications"
@@ -207,7 +217,7 @@ export function HeaderActions({
           )}
         </span>
       </a>
-      {settings && (
+      {eventOnly && (
         <a
           className="header-action"
           href="#settings"

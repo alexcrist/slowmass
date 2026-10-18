@@ -28,5 +28,6 @@
   "0027_device_setup.sql": "manual",
   "0028_device_setup_offer.sql": "automatic",
   "0029_like_runs.sql": "automatic",
-  "0030_events.sql": "manual"
+  "0030_events.sql": "manual",
+  "0031_event_cohosts.sql": "automatic"
 }

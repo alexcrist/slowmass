@@ -5,9 +5,13 @@ import { getActiveSession } from '../../auth';
 import { authConfigured } from '../../auth/options';
 import { PhotoError, privatePhoto } from '../../photos';
 import {
+  MAX_EVENT_HOSTS,
+  acceptHosting,
+  addHost,
   cancelEvent,
   checkLink,
   createEvent,
+  declineHosting,
   deleteMessage,
   eventLog,
   eventMediaKey,
@@ -16,11 +20,13 @@ import {
   listGuests,
   parseCursor,
   parseDetails,
+  parseEmail,
   parseMessage,
   parseStatus,
   postMessage,
   openEvent,
-  replaceEventLink,
+  removeHost,
+  removePendingHost,
   respond,
   saveEventPhoto,
   updateEvent,
@@ -174,8 +180,7 @@ events.post('/open', bodyLimit({ maxSize: 1024 }), async (c) => {
     ? c.json({ id })
     : c.json(
         {
-          error:
-            'This event link isn’t available. The host may have replaced it; ask them for the current link.',
+          error: 'This event link isn’t available.',
         },
         404,
       );
@@ -190,7 +195,7 @@ events.post('/:id/response', bodyLimit({ maxSize: 1024 }), async (c) => {
     : c.json(
         {
           error:
-            'Answers are closed for this event, or its link was replaced. Open the current link to answer.',
+            'Answers are closed for this event, or you need to open its link to answer.',
         },
         409,
       );
@@ -254,26 +259,61 @@ events.delete('/:id/messages/:message', async (c) =>
     ? c.json({ ok: true })
     : c.json({ error: 'Message not found.' }, 404),
 );
-events.post('/:id/link', jsonLimit, async (c) => {
+// Pending hosts are emails, so they travel in request bodies, never URLs.
+events.post('/:id/hosts', bodyLimit({ maxSize: 1024 }), async (c) => {
   const body = (await json(c)) as Record<string, unknown> | null;
-  if (!validId(body?.id) || !validId(body?.expectedId))
-    return c.json({ error: 'Link IDs are required.' }, 400);
-  const link = await replaceEventLink(
-    c.env,
-    c.get('userId'),
-    c.req.param('id'),
-    body.id,
-    body.expectedId,
-  );
-  return link
-    ? c.json({ link })
+  const email = parseEmail(body?.email);
+  if (!email) return c.json({ error: 'Enter an email address.' }, 400);
+  return (await addHost(c.env.DB, c.get('userId'), c.req.param('id'), email))
+    ? c.json({ ok: true })
     : c.json(
         {
-          error:
-            'The link could not be replaced. Reload the event to see the current link.',
+          error: `Hosts can be added until the event ends or is cancelled, up to ${MAX_EVENT_HOSTS} including pending ones.`,
         },
         409,
       );
+});
+events.delete('/:id/hosts', bodyLimit({ maxSize: 1024 }), async (c) => {
+  const body = (await json(c)) as Record<string, unknown> | null;
+  const email = parseEmail(body?.email);
+  if (!email) return c.json({ error: 'Enter an email address.' }, 400);
+  return (await removePendingHost(
+    c.env.DB,
+    c.get('userId'),
+    c.req.param('id'),
+    email,
+  ))
+    ? c.json({ ok: true })
+    : c.json(notFound, 404);
+});
+events.delete('/:id/hosts/:handle', async (c) =>
+  (await removeHost(
+    c.env.DB,
+    c.get('userId'),
+    c.req.param('id'),
+    c.req.param('handle'),
+  ))
+    ? c.json({ ok: true })
+    : c.json(
+        { error: 'This host couldn’t be removed. The creator always hosts.' },
+        409,
+      ),
+);
+// The member a host added by email accepts or declines hosting.
+events.post('/:id/hosting', async (c) =>
+  (await acceptHosting(c.env.DB, c.get('userId'), c.req.param('id')))
+    ? c.json({ ok: true })
+    : c.json(
+        {
+          error:
+            'You can’t host this event. Add a profile photo, or ask a host to add the email you sign in with.',
+        },
+        409,
+      ),
+);
+events.delete('/:id/hosting', async (c) => {
+  await declineHosting(c.env.DB, c.get('userId'), c.req.param('id'));
+  return c.json({ ok: true });
 });
 
 // Signed-out visitors learn only whether a link works before signing in.

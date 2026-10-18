@@ -4,6 +4,7 @@ import { unstable_splitSqlQuery } from 'wrangler';
 import { testRuntime, seedProfilePhotos } from './support/runtime';
 import { cleanupAccounts } from '../src/server/features/account';
 import { cleanupEvents } from '../src/server/features/events';
+import { invitationTokenHash } from '../src/server/membership';
 
 let runtime: Awaited<ReturnType<typeof testRuntime>>;
 let sent: { to: string[]; text: string }[];
@@ -65,11 +66,29 @@ async function link(id: string, actor = 'alice') {
   const response = await runtime.request(actor, `/api/events/${id}`);
   if (response.status !== 200) return null;
   const { event } = (await response.json()) as {
-    event: { link: { id: string; url: string } | null };
+    event: { url: string | null };
   };
-  if (!event.link) return null;
-  const { id: linkId, url } = event.link;
-  return { id: linkId, url, token: url.split('#event/')[1] };
+  if (!event.url) return null;
+  return { url: event.url, token: event.url.split('#event/')[1] };
+}
+async function linkVersion(id: string) {
+  return runtime.db
+    .prepare('SELECT link_id FROM event WHERE id=?')
+    .bind(id)
+    .first<string>('link_id');
+}
+// Only restore quarantine gives an event a new link version; simulate one with
+// a working credential but, as after quarantine, no recoverable URL.
+async function newLinkVersion(id: string) {
+  const token = crypto.randomUUID().replaceAll('-', '').padEnd(48, 'q');
+  const version = crypto.randomUUID();
+  await runtime.db
+    .prepare(
+      'UPDATE event SET link_id=?,link_hash=?,link_encrypted=NULL WHERE id=?',
+    )
+    .bind(version, await invitationTokenHash(token), id)
+    .run();
+  return { version, token };
 }
 async function event(input = details()) {
   const { id } = await draft('alice', input);
@@ -214,7 +233,7 @@ it('shows the event only after sign-in, and guests only after answering', async 
   const opened = await runtime.db
     .prepare("SELECT link_id FROM event_access WHERE user_id='bob'")
     .first('link_id');
-  expect(opened).toBe((await link(id))!.id);
+  expect(opened).toBe(await linkVersion(id));
   // Opening shows details and the URL, but not who answered.
   expect(
     await (await runtime.request('bob', `/api/events/${id}`)).json(),
@@ -223,7 +242,8 @@ it('shows the event only after sign-in, and guests only after answering', async 
       id,
       title: 'Dinner',
       counts: null,
-      link: { url },
+      url,
+      pendingHosts: [],
       viewer: { isHost: false, response: null },
     },
   });
@@ -255,44 +275,23 @@ it('shows the event only after sign-in, and guests only after answering', async 
   // The credential never authorizes anything without a session.
   expect((await media(null, { 'X-Event-Link': token })).status).toBe(404);
 
-  // Replacing the link cuts off people who only opened it, not those who
-  // answered.
+  // A new link version cuts off people who only opened the old one, not those
+  // who answered.
   await respond('carol', id, 'going', token);
-  const current = (await link(id))!;
-  const replacement = crypto.randomUUID();
-  const replace = () =>
-    runtime.request('alice', `/api/events/${id}/link`, 'POST', {
-      id: replacement,
-      expectedId: current.id,
-    });
-  const replaced = (await (await replace()).json()) as {
-    link: { id: string; url: string };
-  };
-  expect(replaced.link.id).toBe(replacement);
-  expect(await (await replace()).json()).toEqual(replaced);
-  expect(
-    (
-      await runtime.request('alice', `/api/events/${id}/link`, 'POST', {
-        id: crypto.randomUUID(),
-        expectedId: current.id,
-      })
-    ).status,
-  ).toBe(409);
+  const fresh = await newLinkVersion(id);
   expect(await check(token)).toBeNull();
   expect((await runtime.request('bob', `/api/events/${id}`)).status).toBe(404);
   expect((await media('bob')).status).toBe(404);
   expect((await open('bob', token)).status).toBe(404);
-  expect((await runtime.request('carol', `/api/events/${id}`)).status).toBe(
-    200,
-  );
-  expect((await link(id, 'carol'))!.url).toBe(replaced.link.url);
-  const fresh = replaced.link.url.split('#event/')[1];
-  expect(await (await open('bob', fresh)).json()).toEqual({ id });
+  expect(
+    await (await runtime.request('carol', `/api/events/${id}`)).json(),
+  ).toMatchObject({ event: { id, url: null } });
+  expect(await (await open('bob', fresh.token)).json()).toEqual({ id });
   expect(
     await runtime.db
       .prepare("SELECT link_id FROM event_access WHERE user_id='bob'")
       .first('link_id'),
-  ).toBe(replacement);
+  ).toBe(fresh.version);
 });
 
 it('admits answers through the current link and keeps them without it', async () => {
@@ -309,7 +308,6 @@ it('admits answers through the current link and keeps them without it', async ()
     },
   });
   expect((await respond('bob', id, 'maybe')).status).toBe(200);
-  expect((await respond('alice', id, 'going', token)).status).toBe(409);
   // Members without a profile photo can still answer events.
   expect((await respond('david', id, 'declined', token)).status).toBe(200);
   expect(
@@ -382,6 +380,149 @@ it('admits answers through the current link and keeps them without it', async ()
   expect(
     await (await runtime.request('bob', `/api/events/${id}`)).json(),
   ).toMatchObject({ event: { cancelled: true } });
+});
+
+it('lets hosts answer and add co-hosts by email without revealing accounts', async () => {
+  const { id, token } = await event();
+  const view = async (actor: string) =>
+    (
+      (await (await runtime.request(actor, `/api/events/${id}`)).json()) as {
+        event: {
+          hosts: { handle: string; isCreator: boolean; isViewer: boolean }[];
+          pendingHosts: string[];
+          viewer: {
+            isHost: boolean;
+            hostInvited: boolean;
+            response: string | null;
+          };
+        };
+      }
+    ).event;
+  const add = (actor: string, email: unknown) =>
+    runtime.request(actor, `/api/events/${id}/hosts`, 'POST', { email });
+  const unpend = (actor: string, email: string) =>
+    runtime.request(actor, `/api/events/${id}/hosts`, 'DELETE', { email });
+  const remove = (actor: string, handle: string) =>
+    runtime.request(actor, `/api/events/${id}/hosts/${handle}`, 'DELETE');
+  const accept = (actor: string) =>
+    runtime.request(actor, `/api/events/${id}/hosting`, 'POST');
+
+  // Hosts answer without opening the link and appear among the guests.
+  expect((await respond('alice', id, 'going')).status).toBe(200);
+  expect(await view('alice')).toMatchObject({
+    viewer: { isHost: true, response: 'going' },
+  });
+  expect(
+    await (
+      await runtime.request('alice', `/api/events/${id}/guests?status=going`)
+    ).json(),
+  ).toEqual({
+    items: [{ handle: 'alice', displayName: 'Alice', hasAvatar: true }],
+    next: null,
+  });
+
+  // Adding replies the same whether or not an account uses the email.
+  expect((await add('alice', 'not an email')).status).toBe(400);
+  expect((await add('alice', ' Bob@Example.com ')).status).toBe(200);
+  expect((await add('alice', 'bob@example.com')).status).toBe(200);
+  expect((await add('alice', 'nobody@example.com')).status).toBe(200);
+  expect((await add('alice', 'david@example.com')).status).toBe(200);
+  expect((await view('alice')).pendingHosts).toEqual([
+    'bob@example.com',
+    'nobody@example.com',
+    'david@example.com',
+  ]);
+  // Only hosts add hosts or see pending ones; an email alone grants nothing.
+  expect((await respond('carol', id, 'maybe', token)).status).toBe(200);
+  expect((await add('carol', 'erin@example.com')).status).toBe(409);
+  expect((await view('carol')).pendingHosts).toEqual([]);
+  expect((await runtime.request('bob', `/api/events/${id}`)).status).toBe(404);
+
+  // Opening the event signed in with that email offers hosting; accepting is
+  // their consent to appear as a host.
+  expect((await accept('carol')).status).toBe(409);
+  await open('bob', token);
+  expect(await view('bob')).toMatchObject({
+    viewer: { isHost: false, hostInvited: true },
+    hosts: [{ handle: 'alice' }],
+  });
+  for (let attempt = 0; attempt < 2; attempt++)
+    expect((await accept('bob')).status).toBe(200);
+  expect(await view('bob')).toMatchObject({
+    viewer: { isHost: true, hostInvited: false },
+    hosts: [
+      { handle: 'alice', isCreator: true, isViewer: false },
+      { handle: 'bob', isCreator: false, isViewer: true },
+    ],
+    pendingHosts: ['nobody@example.com', 'david@example.com'],
+  });
+  // Co-hosts hear about answers like the creator does.
+  expect((await respond('carol', id, 'going')).status).toBe(200);
+  for (const host of ['alice', 'bob'])
+    expect(
+      (await activity(host)).find((item) => item.handle === 'carol'),
+    ).toMatchObject({ kind: 'event_response', response: 'going' });
+  // Without a profile photo, the invitation waits.
+  await open('david', token);
+  expect((await view('david')).viewer.hostInvited).toBe(false);
+  expect((await accept('david')).status).toBe(409);
+  expect((await view('alice')).pendingHosts).toContain('david@example.com');
+  // Declining removes the invitation.
+  await add('alice', 'carol@example.com');
+  expect((await view('carol')).viewer.hostInvited).toBe(true);
+  expect(
+    (await runtime.request('carol', `/api/events/${id}/hosting`, 'DELETE'))
+      .status,
+  ).toBe(200);
+  expect((await view('carol')).viewer.hostInvited).toBe(false);
+  expect((await view('alice')).pendingHosts).not.toContain('carol@example.com');
+
+  // Any host removes pending emails and co-hosts, never the creator.
+  expect((await unpend('carol', 'nobody@example.com')).status).toBe(404);
+  for (let attempt = 0; attempt < 2; attempt++)
+    expect((await unpend('bob', 'nobody@example.com')).status).toBe(200);
+  expect((await remove('bob', 'alice')).status).toBe(409);
+  expect((await remove('carol', 'bob')).status).toBe(409);
+  for (let attempt = 0; attempt < 2; attempt++)
+    expect((await remove('alice', 'bob')).status).toBe(200);
+  // Bob opened the link, so he still sees the event as a guest.
+  expect((await view('bob')).viewer.isHost).toBe(false);
+  expect((await add('bob', 'carol@example.com')).status).toBe(409);
+  // Co-hosts can stop hosting themselves; retrying succeeds.
+  await add('alice', 'bob@example.com');
+  await accept('bob');
+  expect((await view('bob')).viewer.isHost).toBe(true);
+  for (let attempt = 0; attempt < 2; attempt++)
+    expect((await remove('bob', 'bob')).status).toBe(200);
+  expect((await view('bob')).viewer.isHost).toBe(false);
+
+  // Hosts and pending emails together stay within ten.
+  for (let index = 0; index < 8; index++)
+    expect((await add('alice', `friend${index}@example.com`)).status).toBe(200);
+  expect((await add('alice', 'one-more@example.com')).status).toBe(409);
+  // Deleting an account drops pending invitations to its email.
+  expect(
+    (
+      await runtime.request('david', '/api/me', 'DELETE', {
+        confirmation: 'DELETE',
+      })
+    ).status,
+  ).toBe(200);
+  expect((await view('alice')).pendingHosts).not.toContain('david@example.com');
+  // Pending emails go once the event ends.
+  await runtime.request('alice', `/api/events/${id}/cancel`, 'POST', {
+    messageId: crypto.randomUUID(),
+  });
+  expect((await add('alice', 'late@example.com')).status).toBe(409);
+  await cleanupEvents(
+    runtime.db as unknown as D1Database,
+    (await runtime.worker.getR2Bucket('PHOTOS')) as unknown as R2Bucket,
+  );
+  expect(
+    await runtime.db
+      .prepare('SELECT COUNT(*) AS n FROM event_host_invite')
+      .first('n'),
+  ).toBe(0);
 });
 
 it('closes answers when the event is over and lists upcoming and past events', async () => {
@@ -648,7 +789,7 @@ it('notifies hosts of answers and guests of host messages, changes and cancellat
 
 it('lets people join only by signing in through an event link, recording the link', async () => {
   const { id, token } = await event();
-  const linkId = (await link(id))!.id;
+  const linkId = await linkVersion(id);
   const requestEmail = (email: string, eventLink: string = token) =>
     runtime.request(
       null,
@@ -783,12 +924,9 @@ it('lets people join only by signing in through an event link, recording the lin
       .first(),
   ).toEqual({ opened: linkId, invitation: before });
 
-  // Replacing the link before verification rejects the pending email.
+  // A new link version before verification rejects the pending email.
   await requestEmail('frank@example.com');
-  await runtime.request('alice', `/api/events/${id}/link`, 'POST', {
-    id: crypto.randomUUID(),
-    expectedId: linkId,
-  });
+  await newLinkVersion(id);
   const rejected = await verify();
   expect(rejected.headers.get('Location')).toMatch(/\/\?error=event$/);
   expect(

@@ -13,6 +13,7 @@ import {
   eventResponse,
   invitationTokenHash,
   newInvitationCredential,
+  normalizeEmail,
 } from '../../membership';
 
 const overAt = `COALESCE(e.ends_at,e.starts_at+${EVENT_OVER_AFTER})`;
@@ -28,10 +29,21 @@ const hosting = `EXISTS(SELECT 1 FROM event_host WHERE event_id=e.id AND user_id
 const answered = `EXISTS(SELECT 1 FROM event_response WHERE event_id=e.id AND user_id=viewer.id)`;
 const opened = `EXISTS(SELECT 1 FROM event_access a WHERE a.event_id=e.id AND a.user_id=viewer.id AND a.link_id=e.link_id)`;
 // Opening the current link shows the event; answering (or hosting) also shows
-// who else answered and the activity log, and outlasts link replacement.
+// who else answered and the activity log, and outlasts a new link version.
 const viewing = `${usable} AND (${hosting} OR ${answered} OR ${opened})`;
 const participating = `${usable} AND (${hosting} OR ${answered})`;
 const hostOf = `${usable} AND ${hosting}`;
+// Hosts, including pending ones, per event; this bounds host fan-out.
+export const MAX_EVENT_HOSTS = 10;
+// Someone a host added by email may accept hosting the open event once they
+// can view it, signed in with that email and a profile photo. Accepting is
+// their consent to appear as a host to everyone with the link. Binds the
+// current time.
+const promotable = `e.cancelled_at IS NULL AND ${overAt}>?
+ AND EXISTS(SELECT 1 FROM avatar WHERE user_id=viewer.id)
+ AND EXISTS(SELECT 1 FROM event_host_invite i JOIN user u ON u.id=viewer.id AND i.email=lower(u.email)
+   WHERE i.event_id=e.id)
+ AND (SELECT COUNT(*) FROM event_host WHERE event_id=e.id)<${MAX_EVENT_HOSTS}`;
 
 export type ResponseStatus = 'going' | 'maybe' | 'declined';
 export const statuses: readonly ResponseStatus[] = [
@@ -42,6 +54,13 @@ export const statuses: readonly ResponseStatus[] = [
 export function parseStatus(value: unknown): ResponseStatus | null {
   return statuses.includes(value as ResponseStatus)
     ? (value as ResponseStatus)
+    : null;
+}
+export function parseEmail(value: unknown) {
+  if (typeof value !== 'string') return null;
+  const email = normalizeEmail(value);
+  return email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    ? email
     : null;
 }
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -265,33 +284,58 @@ function publicDetails(row: EventRow) {
     thumbnailUrl: `/media/events/${row.id}?size=thumb`,
   };
 }
-type Host = { handle: string; displayName: string; hasAvatar: boolean };
+type Host = {
+  handle: string;
+  displayName: string;
+  hasAvatar: boolean;
+  // The creator always stays a host; other hosts can be removed or leave.
+  isCreator: boolean;
+  isViewer: boolean;
+};
+type Flag = 'hasAvatar' | 'isCreator' | 'isViewer';
 async function hosts(db: D1Database, id: string, viewer: string) {
   const rows = await db
     .prepare(
       `WITH viewer AS (SELECT ? AS id) SELECT p.handle,p.display_name AS displayName,
-      EXISTS(SELECT 1 FROM avatar a WHERE a.user_id=h.user_id) AS hasAvatar
+      EXISTS(SELECT 1 FROM avatar a WHERE a.user_id=h.user_id) AS hasAvatar,
+      h.user_id=(SELECT creator_id FROM event WHERE id=h.event_id) AS isCreator,
+      h.user_id=viewer.id AS isViewer
       FROM event_host h CROSS JOIN viewer JOIN profile p ON p.user_id=h.user_id
       JOIN membership m ON m.user_id=h.user_id AND m.status='active'
       WHERE h.event_id=? AND NOT ${blocked('viewer.id', 'h.user_id')}
-      ORDER BY h.created_at,h.user_id LIMIT 10`,
+      ORDER BY h.created_at,h.user_id LIMIT ${MAX_EVENT_HOSTS}`,
     )
     .bind(viewer, id)
-    .all<Omit<Host, 'hasAvatar'> & { hasAvatar: number }>();
+    .all<Omit<Host, Flag> & Record<Flag, number>>();
   return rows.results.map((row) => ({
     ...row,
     hasAvatar: Boolean(row.hasAvatar),
+    isCreator: Boolean(row.isCreator),
+    isViewer: Boolean(row.isViewer),
   }));
+}
+async function pendingHosts(db: D1Database, id: string, viewer: string) {
+  const rows = await db
+    .prepare(
+      `WITH viewer AS (SELECT ? AS id) SELECT i.email FROM event e CROSS JOIN viewer
+      JOIN event_host_invite i ON i.event_id=e.id WHERE e.id=? AND ${hostOf}
+      ORDER BY i.created_at,i.email LIMIT ${MAX_EVENT_HOSTS}`,
+    )
+    .bind(viewer, id)
+    .all<{ email: string }>();
+  return rows.results.map((row) => row.email);
 }
 const visibleResponder = `JOIN membership rm ON rm.user_id=r.user_id AND rm.status='active'
  JOIN profile rp ON rp.user_id=r.user_id`;
 
-export async function findEvent(env: Env, viewer: string, id: string) {
-  const row = await env.DB.prepare(
-    `WITH viewer AS (SELECT ? AS id) SELECT ${detailColumns},
+async function readEvent(db: D1Database, viewer: string, id: string) {
+  return db
+    .prepare(
+      `WITH viewer AS (SELECT ? AS id) SELECT ${detailColumns},
       ${hosting} AS isHost,e.creator_id=viewer.id AS isCreator,
+      NOT ${hosting} AND ${promotable} AS hostInvited,
       (SELECT status FROM event_response WHERE event_id=e.id AND user_id=viewer.id) AS response,
-      e.link_id AS linkId,e.link_encrypted AS link,
+      e.link_encrypted AS link,
       ${statuses
         .map(
           (
@@ -301,48 +345,181 @@ export async function findEvent(env: Env, viewer: string, id: string) {
         )
         .join(',')}
       FROM event e CROSS JOIN viewer WHERE e.id=? AND ${viewing}`,
-  )
-    .bind(viewer, id)
+    )
+    .bind(viewer, Date.now(), id)
     .first<
       EventRow & {
         isHost: number;
         isCreator: number;
+        hostInvited: number;
         response: ResponseStatus | null;
-        linkId: string;
         link: string | null;
       } & Record<ResponseStatus, number | null>
     >();
+}
+// Accepting is retry-safe: the pending email goes once its owner is a host.
+export async function acceptHosting(
+  db: D1Database,
+  viewer: string,
+  id: string,
+) {
+  const now = Date.now();
+  const [, , host] = await db.batch([
+    db
+      .prepare(
+        `WITH viewer AS (SELECT ? AS id) INSERT INTO event_host(event_id,user_id,created_at)
+        SELECT e.id,viewer.id,? FROM event e CROSS JOIN viewer
+        WHERE e.id=? AND ${viewing} AND ${promotable}
+        ON CONFLICT DO NOTHING`,
+      )
+      .bind(viewer, now, id, now),
+    db
+      .prepare(
+        `DELETE FROM event_host_invite WHERE event_id=? AND email=(SELECT lower(email) FROM user WHERE id=?)
+        AND EXISTS(SELECT 1 FROM event_host WHERE event_id=? AND user_id=?)`,
+      )
+      .bind(id, viewer, id, viewer),
+    db
+      .prepare(
+        `WITH viewer AS (SELECT ? AS id) SELECT 1 AS host FROM event e CROSS JOIN viewer
+        WHERE e.id=? AND ${hostOf}`,
+      )
+      .bind(viewer, id),
+  ]);
+  return host.results.length > 0;
+}
+// Declining removes the invitation to the member's own email.
+export async function declineHosting(
+  db: D1Database,
+  viewer: string,
+  id: string,
+) {
+  await db
+    .prepare(
+      'DELETE FROM event_host_invite WHERE event_id=? AND email=(SELECT lower(email) FROM user WHERE id=?)',
+    )
+    .bind(id, viewer)
+    .run();
+}
+
+export async function findEvent(env: Env, viewer: string, id: string) {
+  const row = await readEvent(env.DB, viewer, id);
   if (!row) return null;
   const {
     isHost,
     isCreator,
+    hostInvited,
     response,
-    linkId,
     link,
     going,
     maybe,
     declined,
     ...event
   } = row;
-  const url = await linkUrl(env, link);
   return {
     ...publicDetails(event),
     hosts: await hosts(env.DB, id, viewer),
+    // Emails hosts added that are not hosts yet, shown only to hosts.
+    pendingHosts: isHost ? await pendingHosts(env.DB, id, viewer) : [],
     // Only hosts and people who answered see how others answered.
     counts:
       going === null || maybe === null || declined === null
         ? null
         : { going, maybe, declined },
-    // Everyone who can see the event can share its one URL; the version lets
-    // hosts replace it safely, including when no URL is recoverable (after a
-    // restore quarantine or secret rotation).
-    link: { id: linkId, url },
+    // Everyone who can see the event can share its one URL. There is none when
+    // the credential cannot be recovered (after a restore quarantine).
+    url: await linkUrl(env, link),
     viewer: {
       isHost: Boolean(isHost),
       isCreator: Boolean(isCreator),
+      // A host added this member's email; they can accept or decline.
+      hostInvited: Boolean(hostInvited),
       response,
     },
   };
+}
+
+// Any host adds someone by email. The reply is the same whether or not an
+// account uses the address; adding it again succeeds.
+export async function addHost(
+  db: D1Database,
+  actor: string,
+  id: string,
+  email: string,
+) {
+  const now = Date.now();
+  await db
+    .prepare(
+      `WITH viewer AS (SELECT ? AS id) INSERT INTO event_host_invite(event_id,email,created_at)
+      SELECT e.id,?,? FROM event e CROSS JOIN viewer
+      WHERE e.id=? AND ${hostOf} AND e.cancelled_at IS NULL AND ${overAt}>?
+        AND (SELECT COUNT(*) FROM event_host WHERE event_id=e.id)
+          +(SELECT COUNT(*) FROM event_host_invite WHERE event_id=e.id)<${MAX_EVENT_HOSTS}
+      ON CONFLICT DO NOTHING`,
+    )
+    .bind(actor, email, now, id, now)
+    .run();
+  return Boolean(
+    await db
+      .prepare(
+        `WITH viewer AS (SELECT ? AS id) SELECT 1 FROM event e CROSS JOIN viewer
+        JOIN event_host_invite i ON i.event_id=e.id AND i.email=?
+        WHERE e.id=? AND ${hostOf}`,
+      )
+      .bind(actor, email, id)
+      .first(),
+  );
+}
+// Removing a pending email twice is a successful no-op for hosts.
+export async function removePendingHost(
+  db: D1Database,
+  actor: string,
+  id: string,
+  email: string,
+) {
+  const [, host] = await db.batch([
+    db
+      .prepare(
+        `WITH viewer AS (SELECT ? AS id) DELETE FROM event_host_invite WHERE event_id=? AND email=?
+        AND EXISTS(SELECT 1 FROM event e CROSS JOIN viewer WHERE e.id=event_host_invite.event_id AND ${hostOf})`,
+      )
+      .bind(actor, id, email),
+    db
+      .prepare(
+        `WITH viewer AS (SELECT ? AS id) SELECT 1 AS host FROM event e CROSS JOIN viewer
+        WHERE e.id=? AND ${hostOf}`,
+      )
+      .bind(actor, id),
+  ]);
+  return host.results.length > 0;
+}
+// Any host removes another host except the creator; hosts can also leave.
+// Succeeds once that person no longer hosts, so retries converge.
+export async function removeHost(
+  db: D1Database,
+  actor: string,
+  id: string,
+  handle: string,
+) {
+  const target = `(SELECT user_id FROM profile WHERE handle=?)`;
+  const [, removed] = await db.batch([
+    db
+      .prepare(
+        `WITH viewer AS (SELECT ? AS id) DELETE FROM event_host WHERE event_id=? AND user_id=${target}
+        AND EXISTS(SELECT 1 FROM event e CROSS JOIN viewer WHERE e.id=event_host.event_id
+          AND e.creator_id!=event_host.user_id AND (${hostOf} OR viewer.id=event_host.user_id))`,
+      )
+      .bind(actor, id, handle),
+    db
+      .prepare(
+        `WITH viewer AS (SELECT ? AS id) SELECT 1 AS removed FROM viewer
+        WHERE NOT EXISTS(SELECT 1 FROM event_host WHERE event_id=? AND user_id=${target})
+          AND (viewer.id=${target}
+            OR EXISTS(SELECT 1 FROM event e WHERE e.id=? AND ${hostOf}))`,
+      )
+      .bind(actor, id, handle, handle, id),
+  ]);
+  return removed.results.length > 0;
 }
 
 // Whether a link works, for signed-out visitors. Event details need sign-in.
@@ -732,42 +909,6 @@ async function linkUrl(env: Env, encrypted: string | null) {
     return null;
   }
 }
-// Replacing invalidates the previous link and its pending email claims. The
-// new version ID makes a retried replacement return the same link.
-export async function replaceEventLink(
-  env: Env,
-  actor: string,
-  id: string,
-  linkId: string,
-  expectedId: string,
-) {
-  if (linkId === expectedId) return null;
-  const credential = await newInvitationCredential();
-  await env.DB.prepare(
-    `UPDATE event SET link_id=?,link_hash=?,link_encrypted=?
-    WHERE id=? AND link_id=? AND state='published'
-      AND EXISTS(SELECT 1 FROM event_host h JOIN membership m ON m.user_id=h.user_id AND m.status='active'
-        WHERE h.event_id=event.id AND h.user_id=?)`,
-  )
-    .bind(
-      linkId,
-      credential.hash,
-      await symmetricEncrypt({ key: env.AUTH_SECRET!, data: credential.token }),
-      id,
-      expectedId,
-      actor,
-    )
-    .run();
-  const row = await env.DB.prepare(
-    `WITH viewer AS (SELECT ? AS id) SELECT e.link_id AS id,e.link_encrypted AS link
-    FROM event e CROSS JOIN viewer WHERE e.id=? AND ${hostOf}`,
-  )
-    .bind(actor, id)
-    .first<{ id: string; link: string | null }>();
-  const url = row?.id === linkId ? await linkUrl(env, row.link) : null;
-  return url ? { id: linkId, url } : null;
-}
-
 export async function cleanupEvents(db: D1Database, bucket: R2Bucket) {
   const now = Date.now();
   const due = await db
@@ -795,7 +936,8 @@ export async function cleanupEvents(db: D1Database, bucket: R2Bucket) {
       /* Retry on next scheduled pass. */
     }
   }
-  // Drafts whose photo never arrived stop holding a link after a day.
+  // Drafts whose photo never arrived stop holding a link after a day, and
+  // pending host emails go once their event has ended.
   await db.batch([
     db
       .prepare(
@@ -805,6 +947,13 @@ export async function cleanupEvents(db: D1Database, bucket: R2Bucket) {
     db
       .prepare(
         'DELETE FROM event_claim WHERE token_hash IN(SELECT token_hash FROM event_claim WHERE expires_at<=? LIMIT 100)',
+      )
+      .bind(now),
+    db
+      .prepare(
+        `DELETE FROM event_host_invite WHERE rowid IN(SELECT i.rowid FROM event_host_invite i
+        JOIN event e ON e.id=i.event_id
+        WHERE e.state!='published' OR e.cancelled_at IS NOT NULL OR ${overAt}<=? LIMIT 100)`,
       )
       .bind(now),
   ]);

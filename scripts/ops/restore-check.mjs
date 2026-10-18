@@ -121,7 +121,8 @@ try {
   }
   // Event links are the only invitations and, like join links, do not depend
   // on the auth secret. A new version also ends access granted by opening an
-  // old link; hosts replace the link once access is reconciled.
+  // old link. Links cannot be replaced, so a quarantined event invites no one
+  // new; hosts and people who answered keep access.
   if (
     db
       .prepare(

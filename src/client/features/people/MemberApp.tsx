@@ -97,20 +97,17 @@ function MemberPages({
       href: `#${route}`,
       label: `Back to ${(titles[route.split('/')[0]] || 'Feed').toLowerCase()}`,
     });
+    // Event pages have no back control: Events is always in the navigation
+    // (the header, for members without a photo).
     if (eventOnly) {
       if (page === 'photo' || page === 'edit')
         return { href: '#settings', label: 'Back to settings' };
-      // The event-only app has no feed; its lists start at Events.
-      if (page === 'event')
-        return toList(backRoute.startsWith('feed') ? 'events' : backRoute);
       return null;
     }
     if (page === 'new-event')
       return { href: '#events', label: 'Back to events' };
-    if (page === 'event')
-      return profileTab === 'edit'
-        ? { href: eventHref(handle ?? ''), label: 'Back to event' }
-        : toList(backRoute);
+    if (page === 'event' && profileTab === 'edit')
+      return { href: eventHref(handle ?? ''), label: 'Back to event' };
     if (page === 'settings' || page === 'following' || page === 'followers')
       return { href: profileRoute, label: 'Back to profile' };
     if (['edit', 'blocked'].includes(page))
@@ -351,7 +348,7 @@ function MemberPages({
           <HeaderActions
             page={page}
             unreadCount={unreadCount}
-            settings={eventOnly}
+            eventOnly={eventOnly}
             onReselect={reselect}
           />,
           headerSlot,

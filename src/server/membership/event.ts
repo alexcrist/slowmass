@@ -18,7 +18,7 @@ const unblocked = (member: string) =>
   `NOT EXISTS(SELECT 1 FROM block WHERE (blocker_id=${member} AND target_id=e.creator_id) OR (blocker_id=e.creator_id AND target_id=${member}))`;
 
 // Record that a member opened the event through its current link. Hosts need
-// no record. Opening again through a replaced link records the new version.
+// no record. Opening a new link version (after restore quarantine) records it.
 export function eventAccess(
   db: D1Database,
   userId: string,
@@ -48,9 +48,10 @@ export function eventAccess(
     );
 }
 
-// One answer per member: hosts never answer, blocks with the creator deny
-// access, and only members who already answered or opened the current link may
-// answer while the event is open.
+// One answer per member: blocks with the creator deny access, and only hosts,
+// members who already answered, or members who opened the current link may
+// answer while the event is open. Hosts are bounded separately, so they never
+// count against the answer cap.
 export function eventResponse(
   db: D1Database,
   userId: string,
@@ -65,9 +66,9 @@ export function eventResponse(
       WHERE e.id=? AND ${available} AND e.cancelled_at IS NULL
         AND COALESCE(e.ends_at,e.starts_at+${EVENT_OVER_AFTER})>?
         AND EXISTS(SELECT 1 FROM profile WHERE user_id=m.user_id)
-        AND NOT EXISTS(SELECT 1 FROM event_host WHERE event_id=e.id AND user_id=m.user_id)
         AND ${unblocked('m.user_id')}
-        AND (EXISTS(SELECT 1 FROM event_response WHERE event_id=e.id AND user_id=m.user_id)
+        AND (EXISTS(SELECT 1 FROM event_host WHERE event_id=e.id AND user_id=m.user_id)
+          OR EXISTS(SELECT 1 FROM event_response WHERE event_id=e.id AND user_id=m.user_id)
           OR (EXISTS(SELECT 1 FROM event_access a WHERE a.event_id=e.id AND a.user_id=m.user_id AND a.link_id=e.link_id)
             AND (SELECT COUNT(*) FROM event_response WHERE event_id=e.id)<${MAX_EVENT_RESPONSES}))
       ON CONFLICT(event_id,user_id) DO UPDATE SET status=excluded.status,

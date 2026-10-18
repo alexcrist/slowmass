@@ -1678,10 +1678,11 @@ a.profile-tab {
 }
 .event-answer {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 48px;
+  gap: 4px;
+  min-height: 64px;
   padding: 8px;
   border: 1px solid #d4d4d4;
   border-radius: 5px;
@@ -1696,10 +1697,9 @@ a.profile-tab {
   border: 2px solid var(--ink);
   background: var(--hover);
 }
-.event-answer svg {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
+.event-answer-emoji {
+  font-size: 24px;
+  line-height: 1;
 }
 .event section > h2 {
   margin-top: 36px;
@@ -1723,25 +1723,52 @@ a.profile-tab {
   margin-top: 16px;
   list-style: none;
 }
+.event .comment-composer {
+  margin-top: 16px;
+}
+/* The share and options icons beside the title. */
+.event-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.event-link-copy {
+  display: flex;
+  gap: 8px;
+}
+.event-link-copy input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.event-link-copy .primary-button {
+  flex: none;
+  width: auto;
+  margin: 0;
+}
+.event-host-invite {
+  margin-bottom: 16px;
+  font-weight: 400;
+}
+.event-host-invite > p {
+  margin: 0;
+}
+.event-host-invite .text-button {
+  display: block;
+}
+.event-host-list .compact-button {
+  margin-left: auto;
+}
+.event-host-pending {
+  min-width: 0;
+}
+.event-host-pending > .event-list-meta {
+  display: block;
+}
 .event-times {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-}
-/* Guests can share the event too; hosts get the primary button. */
-.event-share {
-  width: 100%;
-  min-height: 44px;
-  margin: 0 0 16px;
-  padding: 9px 15px;
-  border: 1px solid #d4d4d4;
-  border-radius: 5px;
-  background: var(--paper);
-  color: var(--ink);
-  font-weight: 600;
-}
-.event-share:enabled:hover {
-  background: var(--hover);
 }
 @media (max-width: 899px) {
   .photo-screen .event-details {

@@ -1,6 +1,12 @@
 import type { ReactNode } from 'react';
 import { eventWhen } from './time';
-import { answers, type Answer, type EventDetails, type Host } from './types';
+import {
+  answerEmoji,
+  answers,
+  type Answer,
+  type EventDetails,
+  type Host,
+} from './types';
 
 // Members without a profile photo show their initial instead.
 export function PersonPhoto({
@@ -126,19 +132,9 @@ export function EventAnswers({
           disabled={busy}
           onClick={() => onAnswer(answer.value)}
         >
-          {value === answer.value && (
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="m5 12.5 4.5 4.5L19 7.5" />
-            </svg>
-          )}
+          <span className="event-answer-emoji" aria-hidden="true">
+            {answerEmoji[answer.value]}
+          </span>
           {answer.label}
         </button>
       ))}

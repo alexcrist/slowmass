@@ -135,7 +135,8 @@ async function requestLink(email: string, eventLink?: string) {
   });
 }
 
-// A published event from a member with a profile photo, and its link token.
+// A published event from a member with a profile photo, its link token and
+// link version.
 async function hostEvent(cookie: string) {
   const id = crypto.randomUUID();
   const created = await emailWorker.dispatchFetch(`${origin}/api/events`, {
@@ -163,12 +164,12 @@ async function hostEvent(cookie: string) {
     await emailWorker.dispatchFetch(`${origin}/api/events/${id}`, {
       headers: requestHeaders(cookie),
     })
-  ).json()) as { event: { link: { id: string; url: string } } };
-  return {
-    id,
-    linkId: event.link.id,
-    token: event.link.url.split('#event/')[1],
-  };
+  ).json()) as { event: { url: string } };
+  const linkId = await db
+    .prepare('SELECT link_id FROM event WHERE id=?')
+    .bind(id)
+    .first<string>('link_id');
+  return { id, linkId, token: event.url.split('#event/')[1] };
 }
 
 function lastLink(email: string) {
@@ -440,24 +441,21 @@ describe('verified email and permanent invitation provenance', () => {
       ).status,
     ).toBe(200);
   });
-  it('rejects pending joins after the link is replaced without removing earlier joins', async () => {
+  it('rejects pending joins after the event is cancelled without removing earlier joins', async () => {
     const event = await hostEvent(founderCookie);
     expect(
       (await requestLink('replaced@example.com', event.token)).status,
     ).toBe(200);
     const pending = lastLink('replaced@example.com');
-    const replaced = await emailWorker.dispatchFetch(
-      `${origin}/api/events/${event.id}/link`,
+    const cancelled = await emailWorker.dispatchFetch(
+      `${origin}/api/events/${event.id}/cancel`,
       {
         method: 'POST',
         headers: requestHeaders(founderCookie),
-        body: JSON.stringify({
-          id: crypto.randomUUID(),
-          expectedId: event.linkId,
-        }),
+        body: JSON.stringify({ messageId: crypto.randomUUID() }),
       },
     );
-    expect(replaced.status).toBe(200);
+    expect(cancelled.status).toBe(200);
     const rejected = await emailWorker.dispatchFetch(pending, {
       redirect: 'manual',
       headers: requestHeaders(),

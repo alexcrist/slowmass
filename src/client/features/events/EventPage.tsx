@@ -5,18 +5,12 @@ import { ConfirmDialog } from '../../ui/ConfirmDialog';
 import { OverflowMenu } from '../../ui/OverflowMenu';
 import { EventAnswers, EventSummary } from './EventSummary';
 import { EventGuests } from './EventGuests';
+import { EventHosts } from './EventHosts';
+import { EventLinkDialog } from './EventLinkDialog';
 import { EventLog } from './EventLog';
 import { eventHref } from './EventsPage';
 import type { Answer, EventView } from './types';
 
-async function copy(url: string) {
-  try {
-    await navigator.clipboard.writeText(url);
-    return true;
-  } catch {
-    return false;
-  }
-}
 const linkToken = /^[a-zA-Z0-9]{48}$/;
 
 // An event's one URL carries its link. Opening it records the link version for
@@ -83,15 +77,13 @@ export function EventPage({
     event: EventView;
   }>(`/api/events/${encodeURIComponent(id)}`);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState('');
-  const [manualLink, setManualLink] = useState('');
   const [failure, setFailure] = useState('');
-  const [confirming, setConfirming] = useState<'replace' | 'cancel' | null>(
+  const [dialog, setDialog] = useState<'link' | 'hosts' | 'cancel' | null>(
     null,
   );
   const [messageId] = useState(() => crypto.randomUUID());
   const event = data?.event;
-  const url = event?.link.url;
+  const url = event?.url;
   // Show the shareable URL in the address bar, so copying it works too.
   useEffect(() => {
     if (!url) return;
@@ -103,7 +95,6 @@ export function EventPage({
     if (busy) return;
     setBusy(true);
     setFailure('');
-    setStatus('');
     try {
       await action();
     } catch (error) {
@@ -112,29 +103,6 @@ export function EventPage({
       );
     } finally {
       setBusy(false);
-    }
-  }
-  // Text the link from the share sheet where available; otherwise copy it.
-  // The URL arrives with the event, so the share sheet opens within the tap
-  // (Safari refuses it after waiting on a request).
-  async function share(title: string) {
-    if (!url) return;
-    setFailure('');
-    setStatus('');
-    if (navigator.share) {
-      try {
-        await navigator.share({ title, url });
-        return;
-      } catch (error) {
-        if (error instanceof Error && error.name === 'AbortError') return;
-      }
-    }
-    if (await copy(url)) {
-      setManualLink('');
-      setStatus('Link copied.');
-    } else {
-      setManualLink(url);
-      setStatus('Copy the link below to share it.');
     }
   }
   function answer(value: Answer) {
@@ -151,6 +119,20 @@ export function EventPage({
       }));
     });
   }
+  // Accepting is the member's consent to appear as a host to everyone with
+  // the link.
+  function host(accept: boolean) {
+    void run(async () => {
+      await api(`/api/events/${id}/hosting`, {
+        method: accept ? 'POST' : 'DELETE',
+      });
+      refresh();
+    });
+  }
+  function closeDialog() {
+    setDialog(null);
+    setFailure('');
+  }
   if (error)
     return (
       <div>
@@ -160,75 +142,100 @@ export function EventPage({
     );
   if (!event) return loading ? <p role="status">Loading event…</p> : null;
   const open = !event.cancelled && !event.over;
-  const shareButton = url && !event.cancelled && (
-    <button
-      type="button"
-      className={event.viewer.isHost ? 'primary-button' : 'event-share'}
-      disabled={busy}
-      onClick={() => void share(event.title)}
-    >
-      Share link
-    </button>
-  );
+  const sharing = Boolean(url) && !event.cancelled;
+  const managing = event.viewer.isHost && !event.cancelled;
   return (
     <article className="event">
       <EventSummary
         event={event}
         hosts={event.hosts}
         actions={
-          event.viewer.isHost &&
-          !event.cancelled && (
-            <OverflowMenu
-              label="Event options"
-              disabled={busy}
-              items={[
-                {
-                  label: 'Edit event',
-                  onSelect: () => {
-                    location.hash = eventHref(id, 'edit');
-                  },
-                },
-                {
-                  label: 'Replace link',
-                  onSelect: () => setConfirming('replace'),
-                },
-                {
-                  label: 'Cancel event',
-                  danger: true,
-                  onSelect: () => setConfirming('cancel'),
-                },
-              ]}
-            />
+          (sharing || managing) && (
+            <div className="event-actions">
+              {sharing && (
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="Share event link"
+                  aria-haspopup="dialog"
+                  onClick={() => setDialog('link')}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" />
+                    <path d="m3.5 6.5 8.5 7 8.5-7" />
+                  </svg>
+                </button>
+              )}
+              {managing && (
+                <OverflowMenu
+                  label="Event options"
+                  disabled={busy}
+                  items={[
+                    {
+                      label: 'Edit event',
+                      onSelect: () => {
+                        location.hash = eventHref(id, 'edit');
+                      },
+                    },
+                    {
+                      label: 'Edit hosts',
+                      onSelect: () => setDialog('hosts'),
+                    },
+                    {
+                      label: 'Cancel event',
+                      danger: true,
+                      onSelect: () => setDialog('cancel'),
+                    },
+                  ]}
+                />
+              )}
+            </div>
           )
         }
       />
       <div className="event-details">
-        {event.viewer.isHost ? (
-          shareButton
-        ) : (
-          <>
-            {open ? (
-              <EventAnswers
-                value={event.viewer.response}
-                busy={busy}
-                onAnswer={answer}
-              />
-            ) : (
-              <p>Answers are closed.</p>
-            )}
-            {shareButton}
-          </>
+        {event.viewer.hostInvited && (
+          <div className="event-notice event-host-invite">
+            <p>
+              You’ve been asked to host this event. Hosts appear with their name
+              and profile photo to everyone with the link.
+            </p>
+            <button
+              type="button"
+              className="primary-button"
+              disabled={busy}
+              onClick={() => host(true)}
+            >
+              Become a host
+            </button>
+            <button
+              type="button"
+              className="text-button"
+              disabled={busy}
+              onClick={() => host(false)}
+            >
+              Decline
+            </button>
+          </div>
         )}
-        {status && <p role="status">{status}</p>}
-        {manualLink && (
-          <input
-            readOnly
-            aria-label="Event link"
-            value={manualLink}
-            onFocus={(focus) => focus.target.select()}
+        {open ? (
+          <EventAnswers
+            value={event.viewer.response}
+            busy={busy}
+            onAnswer={answer}
           />
+        ) : (
+          <p>Answers are closed.</p>
         )}
-        {failure && !confirming && <p role="alert">{failure}</p>}
+        {failure && !dialog && <p role="alert">{failure}</p>}
         {event.counts ? (
           <>
             <section aria-labelledby={`guests-${id}`}>
@@ -253,61 +260,37 @@ export function EventPage({
           )
         )}
       </div>
-      {confirming === 'replace' && (
-        <ConfirmDialog
-          title="Replace link?"
-          confirmLabel="Replace link"
-          busy={busy}
-          error={failure}
-          onClose={() => {
-            setConfirming(null);
-            setFailure('');
-          }}
-          onConfirm={() =>
-            void run(async () => {
-              const replaced = await api<{
-                link: { id: string; url: string };
-              }>(
-                `/api/events/${id}/link`,
-                jsonRequest('POST', {
-                  id: crypto.randomUUID(),
-                  expectedId: event.link.id,
-                }),
-              );
-              refresh((page) => ({
-                event: { ...page.event, link: replaced.link },
-              }));
-              setManualLink('');
-              setConfirming(null);
-              setStatus('Link replaced. Share the new link.');
-            })
-          }
-        >
-          <p>
-            The current link stops working, including sign-in emails people
-            haven’t opened yet and people who opened the event without
-            answering. Everyone who answered keeps access.
-          </p>
-        </ConfirmDialog>
+      {dialog === 'link' && url && (
+        <EventLinkDialog url={url} onClose={closeDialog} />
       )}
-      {confirming === 'cancel' && (
+      {dialog === 'hosts' && (
+        <EventHosts
+          id={id}
+          hosts={event.hosts}
+          pending={event.pendingHosts}
+          onClose={closeDialog}
+          onChange={(left) => {
+            // Someone who stops hosting may no longer see the event.
+            if (left) location.hash = '#events';
+            else refresh();
+          }}
+        />
+      )}
+      {dialog === 'cancel' && (
         <ConfirmDialog
           title="Cancel event?"
           confirmLabel="Cancel event"
           danger
           busy={busy}
           error={failure}
-          onClose={() => {
-            setConfirming(null);
-            setFailure('');
-          }}
+          onClose={closeDialog}
           onConfirm={() =>
             void run(async () => {
               await api(
                 `/api/events/${id}/cancel`,
                 jsonRequest('POST', { messageId }),
               );
-              setConfirming(null);
+              setDialog(null);
               reload();
             })
           }

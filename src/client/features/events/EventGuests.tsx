@@ -3,7 +3,7 @@ import { useApiResource } from '../../api/useApiResource';
 import { profileHref } from '../../navigation';
 import { usePageHistory } from '../../navigation/PageHistory';
 import { PersonPhoto } from './EventSummary';
-import { answers, type Answer } from './types';
+import { answerEmoji, answers, type Answer } from './types';
 
 type Guest = { handle: string; displayName: string; hasAvatar: boolean };
 
@@ -82,6 +82,7 @@ export function EventGuests({
               select(next);
             }}
           >
+            <span aria-hidden="true">{answerEmoji[answer.value]}</span>{' '}
             {answer.label} {counts[answer.value]}
           </button>
         ))}

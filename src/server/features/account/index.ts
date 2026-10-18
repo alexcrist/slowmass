@@ -29,6 +29,11 @@ export async function deleteAccount(db: D1Database, id: string) {
         'DELETE FROM event_claim WHERE email=(SELECT lower(email) FROM user WHERE id=?)',
       )
       .bind(id),
+    db
+      .prepare(
+        'DELETE FROM event_host_invite WHERE email=(SELECT lower(email) FROM user WHERE id=?)',
+      )
+      .bind(id),
     db.prepare('DELETE FROM session WHERE userId=?').bind(id),
     db.prepare('DELETE FROM account WHERE userId=?').bind(id),
     db

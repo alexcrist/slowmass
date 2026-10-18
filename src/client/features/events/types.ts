@@ -4,7 +4,20 @@ export const answers: { value: Answer; label: string }[] = [
   { value: 'maybe', label: 'Maybe' },
   { value: 'declined', label: 'Can’t go' },
 ];
-export type Host = { handle: string; displayName: string; hasAvatar: boolean };
+// Decoration chosen by the owner; hidden from assistive technology.
+export const answerEmoji: Record<Answer, string> = {
+  going: '🪩',
+  maybe: '🎲',
+  declined: '🫠',
+};
+export type Host = {
+  handle: string;
+  displayName: string;
+  hasAvatar: boolean;
+  // The creator always hosts; other hosts can be removed or leave.
+  isCreator: boolean;
+  isViewer: boolean;
+};
 export type EventDetails = {
   id: string;
   title: string;
@@ -22,12 +35,19 @@ export type EventDetails = {
 };
 export type EventView = EventDetails & {
   hosts: Host[];
+  // Emails hosts added that have not become hosts yet; empty for guests.
+  pendingHosts: string[];
   // Only hosts and people who answered see how others answered.
   counts: Record<Answer, number> | null;
-  // The event's one URL and its version, for sharing and replacement.
-  // No URL when the credential cannot be recovered; hosts can replace it.
-  link: { id: string; url: string | null };
-  viewer: { isHost: boolean; isCreator: boolean; response: Answer | null };
+  // The event's one URL; null when the credential cannot be recovered.
+  url: string | null;
+  viewer: {
+    isHost: boolean;
+    isCreator: boolean;
+    // A host added this member's email; accepting makes them a host.
+    hostInvited: boolean;
+    response: Answer | null;
+  };
 };
 export type EventItem = EventDetails & {
   isHost: boolean;

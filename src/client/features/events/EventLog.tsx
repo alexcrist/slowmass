@@ -6,7 +6,7 @@ import { ConfirmDialog } from '../../ui/ConfirmDialog';
 import { RelativeTime } from '../../ui/RelativeTime';
 import { PersonPhoto } from './EventSummary';
 import { GuestName, guestPhoto } from './EventGuests';
-import type { Answer } from './types';
+import { answerEmoji, type Answer } from './types';
 
 type Entry = {
   key: string;
@@ -31,16 +31,17 @@ export function changedText(fields: string) {
 function entryText(entry: Entry) {
   if (entry.kind === 'response')
     return entry.status === 'going'
-      ? ' is going.'
+      ? ' is going '
       : entry.status === 'maybe'
-        ? ' might go.'
-        : ' can’t go.';
+        ? ' might go '
+        : ' can’t go ';
   if (entry.kind === 'changed') return ` changed ${changedText(entry.body)}.`;
   if (entry.kind === 'cancelled') return ' cancelled the event.';
   return ' ';
 }
 
-// Answers and messages, newest first, with a composer for hosts and guests.
+// Answers and messages, newest first, with a composer below for hosts and
+// guests.
 export function EventLog({
   id,
   linkProfiles,
@@ -110,52 +111,6 @@ export function EventLog({
   }
   return (
     <>
-      <form
-        className="comment-composer"
-        onSubmit={(submit) => void post(submit)}
-      >
-        <label className="visually-hidden" htmlFor={label}>
-          Write a message
-        </label>
-        <div className="comment-input">
-          <span className="comment-input-size" aria-hidden="true">
-            {body + ' '}
-          </span>
-          <textarea
-            id={label}
-            required
-            maxLength={2000}
-            rows={1}
-            placeholder="Write a message…"
-            value={body}
-            disabled={busy}
-            onChange={(change) => {
-              setBody(change.target.value);
-              setMessageId(crypto.randomUUID());
-            }}
-          />
-        </div>
-        <button
-          className="comment-submit"
-          type="submit"
-          disabled={busy || !body.trim()}
-          aria-label={busy ? 'Posting message' : 'Post message'}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="m21 3-6.5 18-4-7.5L3 9.5 21 3Z" />
-            <path d="m10.5 13.5 5-5" />
-          </svg>
-        </button>
-      </form>
-      {failure && !deleting && <p role="alert">{failure}</p>}
       {loading && !data && <p role="status">Loading activity…</p>}
       {error && (
         <div>
@@ -176,6 +131,9 @@ export function EventLog({
               <p className="comment-text">
                 <GuestName guest={entry} linkProfiles={linkProfiles} />
                 {entryText(entry)}
+                {entry.status && (
+                  <span aria-hidden="true">{answerEmoji[entry.status]}</span>
+                )}
                 {entry.kind === 'message' && entry.body}
               </p>
               <div className="comment-meta">
@@ -226,6 +184,52 @@ export function EventLog({
           </button>
         )}
       </nav>
+      <form
+        className="comment-composer"
+        onSubmit={(submit) => void post(submit)}
+      >
+        <label className="visually-hidden" htmlFor={label}>
+          Write a message
+        </label>
+        <div className="comment-input">
+          <span className="comment-input-size" aria-hidden="true">
+            {body + ' '}
+          </span>
+          <textarea
+            id={label}
+            required
+            maxLength={2000}
+            rows={1}
+            placeholder="Write a message…"
+            value={body}
+            disabled={busy}
+            onChange={(change) => {
+              setBody(change.target.value);
+              setMessageId(crypto.randomUUID());
+            }}
+          />
+        </div>
+        <button
+          className="comment-submit"
+          type="submit"
+          disabled={busy || !body.trim()}
+          aria-label={busy ? 'Posting message' : 'Post message'}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m21 3-6.5 18-4-7.5L3 9.5 21 3Z" />
+            <path d="m10.5 13.5 5-5" />
+          </svg>
+        </button>
+      </form>
+      {failure && !deleting && <p role="alert">{failure}</p>}
       {deleting && (
         <ConfirmDialog
           title="Delete message?"
