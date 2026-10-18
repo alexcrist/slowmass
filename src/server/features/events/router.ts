@@ -15,6 +15,7 @@ import {
   deleteMessage,
   eventLog,
   eventMediaKey,
+  eventPreviewMediaKey,
   findEvent,
   listEvents,
   listGuests,
@@ -36,7 +37,10 @@ import {
 
 type Variables = { userId: string; complete: boolean };
 export const events = new Hono<{ Bindings: Env; Variables: Variables }>();
-export const eventLinks = new Hono<{ Bindings: Env }>();
+export const eventLinks = new Hono<{
+  Bindings: Env;
+  Variables: { viewer: string | null };
+}>();
 export const eventMedia = new Hono<{ Bindings: Env }>();
 
 const notFound = { error: 'Event not found.' };
@@ -316,14 +320,34 @@ events.delete('/:id/hosting', async (c) => {
   return c.json({ ok: true });
 });
 
-// Signed-out visitors learn only whether a link works before signing in.
-eventLinks.post('/', bodyLimit({ maxSize: 1024 }), async (c) => {
+// Preview access requires the current link in a POST body, never a public
+// media URL. For known members, preserve blocking on preview requests too.
+eventLinks.use('*', async (c, next) => {
+  const session = authConfigured(c.env)
+    ? await getActiveSession(c.env, c.req.raw.headers)
+    : null;
+  c.set('viewer', session?.user.id ?? null);
+  await next();
+});
+const linkBodyLimit = bodyLimit({
+  maxSize: 1024,
+  onError: (c) => c.json({ error: 'Event link request is too large.' }, 413),
+});
+eventLinks.post('/', linkBodyLimit, async (c) => {
   const body = (await json(c)) as Record<string, unknown> | null;
   return c.json({
     event: validLinkToken(body?.token)
-      ? await checkLink(c.env.DB, body.token)
+      ? await checkLink(c.env.DB, body.token, c.get('viewer'))
       : null,
   });
+});
+eventLinks.post('/photo', linkBodyLimit, async (c) => {
+  const body = (await json(c)) as Record<string, unknown> | null;
+  const key = validLinkToken(body?.token)
+    ? await eventPreviewMediaKey(c.env.DB, body.token, c.get('viewer'))
+    : null;
+  const response = key ? await privatePhoto(c.env, key, c.executionCtx) : null;
+  return response ?? c.notFound();
 });
 
 // Covers load with the session; no credential or public URL is involved.

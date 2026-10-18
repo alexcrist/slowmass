@@ -218,13 +218,22 @@ it('creates events idempotently for members with a profile photo', async () => {
   expect((await draft()).response.status).toBe(429);
 });
 
-it('shows the event only after sign-in, and guests only after answering', async () => {
+it('previews a linked event, shows details after sign-in, and guests after answering', async () => {
   const { id, token, url } = await event();
   expect(new URL(url).pathname).toBe('/');
   expect(new URL(url).search).toBe('');
   expect(new URL(url).hash).toBe(`#event/${token}`);
-  // Signed out, a link reveals only whether it works.
-  expect(await check(token)).toEqual({ id, open: true });
+  // Signed out, expose only the preview (not times, location or people).
+  expect(await check(token)).toEqual({
+    id,
+    open: true,
+    preview: {
+      title: 'Dinner',
+      date: expect.any(String),
+      width: 4,
+      height: 3,
+    },
+  });
   expect(await check('x'.repeat(48))).toBeNull();
   expect(await link(id, 'bob')).toBeNull();
   expect((await runtime.request('bob', `/api/events/${id}`)).status).toBe(404);
@@ -949,7 +958,7 @@ it('lets people join only by signing in through an event link, recording the lin
   await runtime.request('alice', `/api/events/${other.id}/cancel`, 'POST', {
     messageId: crypto.randomUUID(),
   });
-  expect(await check(other.token)).toEqual({ id: other.id, open: false });
+  expect(await check(other.token)).toMatchObject({ id: other.id, open: false });
   expect((await requestEmail('gina@example.com', other.token)).status).toBe(
     403,
   );
@@ -1140,4 +1149,144 @@ it('keeps activity, receipts and queued alerts through migration 0030', async ()
   } finally {
     await old.worker.dispose();
   }
+});
+
+it('authorizes preview cover bytes through the current link, including warm cache revocation', async () => {
+  const { id, token } = await event(
+    details({ startsAt: Date.UTC(2030, 0, 5, 3) }),
+  );
+  const bucket = await runtime.worker.getR2Bucket('PHOTOS');
+  await bucket.put(`events/${id}-thumb.webp`, new Uint8Array([1, 2, 3]));
+  const cover = (credential = token, actor: string | null = null) =>
+    runtime.request(actor, '/api/event-link/photo', 'POST', {
+      token: credential,
+    });
+  const preview = await check(token);
+  expect(preview).toEqual({
+    id,
+    open: true,
+    preview: {
+      title: 'Dinner',
+      date: 'Friday, January 4, 2030',
+      width: 4,
+      height: 3,
+    },
+  });
+  const response = await cover();
+  expect(response.status).toBe(200);
+  expect(response.headers.get('cache-control')).toBe('private, no-store');
+  expect(response.headers.get('content-type')).toBe('image/webp');
+  expect(new Uint8Array(await response.arrayBuffer())).toEqual(
+    new Uint8Array([1, 2, 3]),
+  );
+  const cache = await (
+    await runtime.worker.getCaches()
+  ).open('slowmass-private-images-v1');
+  const cacheUrl = `http://localhost:8787/media/_objects/${encodeURIComponent(`events/${id}-thumb.webp`)}`;
+  await expect
+    .poll(async () => Boolean(await cache.match(cacheUrl)))
+    .toBe(true);
+  await bucket.delete(`events/${id}-thumb.webp`);
+  const warm = await cover();
+  expect(warm.status).toBe(200);
+  expect(warm.headers.get('Server-Timing')).toContain('desc="hit"');
+  await warm.arrayBuffer();
+  expect((await cover('x'.repeat(48))).status).toBe(404);
+  expect((await cover(id)).status).toBe(404);
+  expect((await runtime.request(null, '/api/event-link/photo')).status).toBe(
+    404,
+  );
+  expect(
+    (
+      await runtime.request(
+        null,
+        '/api/event-link/photo',
+        'POST',
+        { token },
+        { Origin: 'https://elsewhere.example' },
+      )
+    ).status,
+  ).toBe(403);
+  expect(
+    (
+      await runtime.request(null, '/api/event-link/photo', 'POST', {
+        token: 'x'.repeat(1200),
+      })
+    ).status,
+  ).toBe(413);
+  // Reading a preview never creates an event-access row or membership.
+  expect(
+    await runtime.db
+      .prepare('SELECT COUNT(*) AS n FROM event_access')
+      .first('n'),
+  ).toBe(0);
+  await runtime.db
+    .prepare(
+      "INSERT INTO block(blocker_id,target_id,created_at) VALUES('alice','bob',?)",
+    )
+    .bind(Date.now())
+    .run();
+  expect((await cover(token, 'bob')).status).toBe(404);
+  expect(
+    await (
+      await runtime.request('bob', '/api/event-link', 'POST', { token })
+    ).json(),
+  ).toEqual({ event: null });
+  await runtime.db.prepare("DELETE FROM block WHERE target_id='bob'").run();
+  // A replacement uses only the current processed cover.
+  await bucket.put('events/replacement-thumb.webp', new Uint8Array([4, 5]));
+  await runtime.db
+    .prepare(
+      "UPDATE event SET thumbnail_key='events/replacement-thumb.webp' WHERE id=?",
+    )
+    .bind(id)
+    .run();
+  expect(new Uint8Array(await (await cover()).arrayBuffer())).toEqual(
+    new Uint8Array([4, 5]),
+  );
+  await runtime.db
+    .prepare("UPDATE membership SET status='disabled' WHERE user_id='alice'")
+    .run();
+  expect(await check(token)).toBeNull();
+  expect((await cover()).status).toBe(404);
+  await runtime.db
+    .prepare("UPDATE membership SET status='active' WHERE user_id='alice'")
+    .run();
+  await newLinkVersion(id);
+  expect(await check(token)).toBeNull();
+  expect((await cover()).status).toBe(404);
+});
+
+it('keeps unpublished and deleted events out of previews and closes admission without leaking details', async () => {
+  const { id, token } = await event();
+  for (const state of ['pending', 'deleted']) {
+    await runtime.db
+      .prepare('UPDATE event SET state=? WHERE id=?')
+      .bind(state, id)
+      .run();
+    expect(await check(token)).toBeNull();
+    expect(
+      (await runtime.request(null, '/api/event-link/photo', 'POST', { token }))
+        .status,
+    ).toBe(404);
+  }
+  await runtime.db
+    .prepare("UPDATE event SET state='published',cancelled_at=? WHERE id=?")
+    .bind(Date.now(), id)
+    .run();
+  expect(await check(token)).toMatchObject({
+    open: false,
+    preview: { title: 'Dinner' },
+  });
+  await runtime.db
+    .prepare('UPDATE event SET cancelled_at=NULL,starts_at=? WHERE id=?')
+    .bind(Date.now() - 2 * day, id)
+    .run();
+  expect(await check(token)).toMatchObject({ open: false });
+  await runtime.db
+    .prepare('UPDATE event SET starts_at=? WHERE id=?')
+    .bind(Date.now() + day, id)
+    .run();
+  await runtime.db.prepare("DELETE FROM avatar WHERE user_id='alice'").run();
+  expect(await check(token)).toMatchObject({ open: false });
 });

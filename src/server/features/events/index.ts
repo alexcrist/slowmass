@@ -522,16 +522,66 @@ export async function removeHost(
   return removed.results.length > 0;
 }
 
-// Whether a link works, for signed-out visitors. Event details need sign-in.
-export async function checkLink(db: D1Database, token: string) {
+// A link authorizes only the preview before sign-in. Never select private
+// details here. Known members still respect blocks with the creator.
+const previewable = `${available} AND (? IS NULL OR NOT ${blocked('?', 'e.creator_id')})`;
+export async function checkLink(
+  db: D1Database,
+  token: string,
+  viewer: string | null = null,
+) {
   const row = await db
     .prepare(
-      `SELECT e.id,e.cancelled_at IS NULL AND ${overAt}>? AS open FROM event e
-      WHERE e.link_hash=? AND ${available}`,
+      `SELECT e.id,e.title,e.starts_at AS startsAt,e.time_zone AS timeZone,e.width,e.height,
+      e.cancelled_at IS NULL AND ${overAt}>?
+        AND EXISTS(SELECT 1 FROM avatar WHERE user_id=e.creator_id) AS open FROM event e
+      WHERE e.link_hash=? AND ${previewable}`,
     )
-    .bind(Date.now(), await invitationTokenHash(token))
-    .first<{ id: string; open: number }>();
-  return row ? { id: row.id, open: Boolean(row.open) } : null;
+    .bind(Date.now(), await invitationTokenHash(token), viewer, viewer, viewer)
+    .first<{
+      id: string;
+      title: string;
+      startsAt: number;
+      timeZone: string;
+      width: number;
+      height: number;
+      open: number;
+    }>();
+  return row
+    ? {
+        id: row.id,
+        open: Boolean(row.open),
+        preview: {
+          title: row.title,
+          date: new Intl.DateTimeFormat('en-US', {
+            timeZone: row.timeZone,
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          }).format(row.startsAt),
+          width: row.width,
+          height: row.height,
+        },
+      }
+    : null;
+}
+
+// Fetch the already processed cover thumbnail, rechecking the current link
+// even when its immutable bytes are warm in the internal image cache.
+export async function eventPreviewMediaKey(
+  db: D1Database,
+  token: string,
+  viewer: string | null = null,
+) {
+  const row = await db
+    .prepare(
+      `SELECT e.thumbnail_key AS key FROM event e
+    WHERE e.link_hash=? AND ${previewable}`,
+    )
+    .bind(await invitationTokenHash(token), viewer, viewer, viewer)
+    .first<{ key: string }>();
+  return row?.key ?? null;
 }
 
 // Opening the current link records the version for this member and returns

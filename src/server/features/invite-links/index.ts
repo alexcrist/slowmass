@@ -7,7 +7,9 @@ export const INVITE_LINK_LIFETIME = 7 * 86_400_000;
 async function currentLink(env: Env, member: string) {
   const row = await env.DB.prepare(
     `SELECT id,token_encrypted AS token,expires_at AS expiresAt FROM invite_link
-    WHERE inviter_id=? AND revoked_at IS NULL AND expires_at>? AND token_encrypted IS NOT NULL`,
+    WHERE inviter_id=? AND revoked_at IS NULL AND expires_at>? AND token_encrypted IS NOT NULL
+      AND EXISTS(SELECT 1 FROM membership m JOIN avatar a ON a.user_id=m.user_id
+        WHERE m.user_id=invite_link.inviter_id AND m.status='active')`,
   )
     .bind(member, Date.now())
     .first<{ id: string; token: string; expiresAt: number }>();
@@ -28,12 +30,27 @@ async function currentLink(env: Env, member: string) {
   }
 }
 
-// A member's one current invite link. It lasts seven days; after it expires
-// or is revoked, the next request issues a fresh credential and version in
-// the same row. Concurrent requests converge on whichever credential wins.
+// Opening the owner's dialog extends a current link to seven days from now.
+// Keep its credential/version so shared URLs and pending claims still work.
+// Expired or revoked links get a fresh version; never resurrect one by extending.
 export async function inviteLink(env: Env, member: string) {
   const current = await currentLink(env, member);
-  if (current?.url) return { url: current.url, expiresAt: current.expiresAt };
+  if (current?.url) {
+    const now = Date.now();
+    const extended = await env.DB.prepare(
+      `UPDATE invite_link SET expires_at=MAX(expires_at,?)
+      WHERE inviter_id=? AND id=? AND revoked_at IS NULL AND expires_at>?
+        AND token_encrypted IS NOT NULL
+        AND EXISTS(SELECT 1 FROM membership m JOIN avatar a ON a.user_id=m.user_id
+          WHERE m.user_id=invite_link.inviter_id AND m.status='active')
+      RETURNING expires_at AS expiresAt`,
+    )
+      .bind(now + INVITE_LINK_LIFETIME, member, current.id, now)
+      .first<{ expiresAt: number }>();
+    return extended
+      ? { url: current.url, expiresAt: extended.expiresAt }
+      : null;
+  }
   const credential = await newInvitationCredential();
   const now = Date.now();
   await env.DB.prepare(

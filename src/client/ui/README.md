@@ -15,3 +15,5 @@ On opening, measured placement prefers below the trigger, flips above when neede
 `ConfirmDialog` composes `Dialog` with shared Cancel/confirm actions, pending controls, and an inline failure message. Connections, profile unfollow/block actions, and comment deletion keep their selected target and mutation logic in the owning feature. Confirmation is a client safeguard; server authorization remains authoritative.
 
 `CopyLink` shows a link in a read-only field with a Copy button and a status message; when the clipboard is unavailable, focusing the field selects it for manual copying. `MailIcon` is the envelope that opens a link dialog. The event link and invite link dialogs both use them; each feature owns how its link is fetched.
+
+`LockIcon` marks the RSVP-gated guest list and photo-only navigation destinations. It is decorative; adjacent text or the link’s accessible description explains the restriction, and navigation links remain operable.

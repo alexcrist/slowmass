@@ -66,7 +66,7 @@ function MemberPages({
   onSignOut,
   signingOut,
 }: MemberProps) {
-  const { route, backRoute } = useRoute();
+  const { route, backRoute, eventRoute } = useRoute();
   const [page, handle, profileTab] = route.split('/');
   const pageKey =
     page === 'profile' ? route.split('/').slice(0, 2).join('/') : route;
@@ -77,6 +77,20 @@ function MemberPages({
   // Until they add a profile photo, members use only events, Activity and
   // Settings.
   const eventOnly = Boolean(profile && !ready);
+  const needsPhoto =
+    eventOnly &&
+    [
+      'feed',
+      'people',
+      'compose',
+      'profile',
+      'post',
+      'following',
+      'followers',
+      'blocked',
+      'new-event',
+      'photo',
+    ].includes(page);
   const active = ready || eventOnly;
   const heading = useRef<HTMLHeadingElement>(null);
   const wasReady = useRef(ready);
@@ -97,10 +111,10 @@ function MemberPages({
       href: `#${route}`,
       label: `Back to ${(titles[route.split('/')[0]] || 'Feed').toLowerCase()}`,
     });
-    // Event pages have no back control: Events is always in the navigation
-    // (the header, for members without a photo).
+    // Event pages have no back control: Events is always in the navigation.
     if (eventOnly) {
-      if (page === 'photo' || page === 'edit')
+      if (needsPhoto) return null;
+      if (page === 'edit')
         return { href: '#settings', label: 'Back to settings' };
       return null;
     }
@@ -132,8 +146,9 @@ function MemberPages({
   function photoSaved() {
     setProfile((current) => (current ? { ...current, hasAvatar: 1 } : current));
     setAvatarVersion((version) => version + 1);
-    // Adding a photo from the event-only app opens the full app.
-    if (eventOnly) location.hash = '#feed';
+    // Keep gated destinations in the address, so finishing opens the page
+    // originally selected. Standalone photo setup from Settings opens Feed.
+    if (eventOnly && page === 'photo') location.hash = '#feed';
   }
   function eventPage() {
     return handle ? (
@@ -143,8 +158,27 @@ function MemberPages({
     );
   }
   function eventOnlyScreen() {
+    if (needsPhoto)
+      return (
+        <>
+          <p className="onboarding-intro">
+            Add a profile photo to use the rest of slowmass. Your profile is
+            private, and follow requests need your approval.
+          </p>
+          <AvatarForm
+            handle={profile!.handle}
+            onChange={photoSaved}
+            onboarding
+          />
+          <a
+            className="text-button setup-return"
+            href={eventRoute ? `#${eventRoute}` : '#events'}
+          >
+            {eventRoute ? 'Back to event' : 'Back to events'}
+          </a>
+        </>
+      );
     switch (page) {
-      case 'feed':
       case 'events':
         return (
           <EventsPage
@@ -157,20 +191,6 @@ function MemberPages({
       case 'notifications':
         return (
           <Notifications onChange={notifications.refresh} focus={handle} />
-        );
-      case 'photo':
-        return (
-          <>
-            <p className="onboarding-intro">
-              Add a profile photo to share photos and follow friends on
-              slowmass.
-            </p>
-            <AvatarForm
-              handle={profile!.handle}
-              onChange={photoSaved}
-              onboarding
-            />
-          </>
         );
       case 'edit':
         return <ProfileForm profile={profile} onSave={saved} nameOnly />;
@@ -357,11 +377,12 @@ function MemberPages({
           />,
           headerSlot,
         )}
-      {ready && profile && (
+      {active && profile && (
         <MemberNavigation
           page={page}
           profile={profile}
           avatarVersion={avatarVersion}
+          eventOnly={eventOnly}
           unreadCount={unreadCount}
           onReselect={reselect}
         />
@@ -370,7 +391,7 @@ function MemberPages({
         <section
           key={active ? `${pageKey}:${pageVersion}` : 'onboarding'}
           data-page={active ? page : 'onboarding'}
-          className={`member-content ${!active ? 'onboarding' : ['feed', 'profile', 'post'].includes(page) || (page === 'event' && profileTab !== 'edit') ? 'photo-screen' : ''}${eventOnly ? ' event-only' : ''}`}
+          className={`member-content ${!active || needsPhoto ? 'onboarding' : ['feed', 'profile', 'post'].includes(page) || (page === 'event' && profileTab !== 'edit') ? 'photo-screen' : ''}${eventOnly ? ' event-only' : ''}`}
           aria-labelledby="screen-title"
         >
           {active && back && <BackControl {...back} />}
@@ -378,18 +399,14 @@ function MemberPages({
             id="screen-title"
             ref={heading}
             tabIndex={-1}
-            className={
-              active && !(eventOnly && page === 'photo')
-                ? 'visually-hidden'
-                : undefined
-            }
+            className={active && !needsPhoto ? 'visually-hidden' : undefined}
           >
             {profile === null
               ? 'What’s your name?'
               : !active
                 ? 'Add a profile photo'
-                : eventOnly && page === 'feed'
-                  ? 'Events'
+                : needsPhoto
+                  ? 'Share photos and follow friends'
                   : eventOnly && page === 'edit'
                     ? 'Edit name'
                     : titles[page] || 'slowmass'}

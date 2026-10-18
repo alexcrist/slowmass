@@ -577,3 +577,15 @@ Owner direction: slowmass is first a simpler, original-Instagram-style photo app
 - [x] Operations: a join-source query and a shutdown procedure (revoke the link version, disable the members it admitted and their descendants, end their sessions), each statement checked against local D1.
 - [x] Pass the Node 24 gate: formatting, lint, types, boundaries, all tests (23 new invite-link integration tests and 7 UI tests) and the production build. Removing the new version check from the trigger fails the direct-write test. No browser or visual testing.
 - [ ] Production release: pushing to `main` applies 0032 automatically and deploys; verify migration history and the post-deploy HTTP checks.
+
+## Event preview and photo-app discovery — October 18, 2026
+
+Owner direction: show a cover/title/date preview before email sign-in, keep descriptions private, make the RSVP gate explicit, and let event-only members discover photo sharing through the normal navigation.
+
+- [x] Add a credential-authorized preview with no description, exact time, location, or member data; independently authorize processed cover thumbnail bytes, including warm-cache access, and keep credentials out of HTTP URLs.
+- [x] Explain preview visibility in create/edit forms and account creation at email entry; show a locked Guests section until any RSVP.
+- [x] Show the normal mobile bottom bar and desktop sidebar for members without photos. Locked photo destinations lead to profile setup, retain the intended destination after upload, and offer a return to the event.
+- [x] Pass formatting, lint, types, boundary checks, all 508 tests, and the production build on Node 24. Privacy/navigation tests cover restricted preview fields and bytes, stale links, blocks, unpublished/deleted content, closed admission, setup destinations, and concurrent invitation refreshes with pending claims. No browser or visual testing.
+- [ ] Deploy through the main-branch workflow and verify production assets, migration history, and HTTP access boundaries. No new migration is required.
+
+The same release also replaces the invitation calendar date with “This link works for the next 7 days.” Opening the owner’s dialog extends an unexpired link without changing its version or pending claims; expired/revoked links still rotate. Concurrent requests never shorten expiry, and recipient visits never extend it. No migration is required.

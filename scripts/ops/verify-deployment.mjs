@@ -31,7 +31,10 @@ async function verify() {
     ['/api/status', 200],
     ['/api/bootstrap', 200],
     ['/api/posts', 401],
+    ['/api/events', 401],
     ['/media/posts/deployment-probe', 404],
+    ['/media/events/deployment-probe', 404],
+    ['/api/event-link/photo', 404],
   ]) {
     const response = await fetch(new URL(path, origin), {
       signal: AbortSignal.timeout(15000),
@@ -43,6 +46,25 @@ async function verify() {
     } else {
       await response.arrayBuffer();
     }
+  }
+  // Synthetic invalid credentials exercise preview rejection without reading
+  // a real event, admitting a member, or sending email.
+  for (const [path, status, requestOrigin] of [
+    ['/api/event-link', 200, origin],
+    ['/api/event-link/photo', 404, origin],
+    ['/api/event-link/photo', 403, 'https://invalid.example'],
+  ]) {
+    const response = await fetch(new URL(path, origin), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: requestOrigin },
+      body: JSON.stringify({ token: 'invalid-deployment-probe' }),
+      signal: AbortSignal.timeout(15000),
+    });
+    assert.equal(response.status, status, `${path}: preview boundary`);
+    assert.match(response.headers.get('cache-control') ?? '', /no-store/);
+    if (status === 200)
+      assert.deepEqual(await response.json(), { event: null });
+    else await response.arrayBuffer();
   }
 }
 

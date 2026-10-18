@@ -37,5 +37,8 @@ export function useRoute() {
   return {
     route: routes[routes.length - 1],
     backRoute: routes[routes.length - 2] ?? 'feed',
+    eventRoute: [...routes]
+      .reverse()
+      .find((route) => /^event\/[^/]+$/.test(route)),
   };
 }

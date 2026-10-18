@@ -142,6 +142,10 @@ export function EventForm({
   return (
     <>
       <form className="event-form" onSubmit={(submit) => void save(submit)}>
+        <p className="status-copy">
+          Anyone with the link can preview the cover photo, title, and date.
+          Other details require sign-in.
+        </p>
         <label htmlFor="event-photo" className="field-label">
           {event ? 'Replace cover photo' : 'Cover photo'}
         </label>

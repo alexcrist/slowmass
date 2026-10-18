@@ -13,6 +13,8 @@ import { Notifications } from '../src/client/features/notifications/Notification
 import { EventPage } from '../src/client/features/events/EventPage';
 import { EditEvent } from '../src/client/features/events/EventForm';
 import { fromZoned } from '../src/client/features/events/time';
+import { AvatarForm } from '../src/client/features/avatars/AvatarForm';
+import { EventPreview } from '../src/client/features/events/EventPreview';
 
 const authMocks = vi.hoisted(() => ({ magicLink: vi.fn() }));
 vi.mock('better-auth/react', () => ({
@@ -210,11 +212,11 @@ it('shows members without a photo the event, with guests linked only by name', a
   });
   expect(visibleText()).toContain('Dinner');
   expect(visibleText()).toMatch(/Hosted by\s+Alice/);
-  // Events stays in the header instead of a back control.
+  // Events stays in the main navigation instead of a back control.
   expect(visibleText()).not.toContain('Back to');
   expect(
     renderer.root.findAllByProps({ 'aria-label': 'Main navigation' }),
-  ).toHaveLength(0);
+  ).toHaveLength(1);
   await reply(pending(`/api/events/${id}/guests`), {
     items: [{ handle: 'bob_k3j9z', displayName: 'Bob', hasAvatar: false }],
     next: null,
@@ -223,11 +225,15 @@ it('shows members without a photo the event, with guests linked only by name', a
   expect(
     renderer.root
       .findAllByType('a')
-      .filter((link) => String(link.props.href).startsWith('#profile')),
+      .filter(
+        (link) =>
+          String(link.props.href).startsWith('#profile') &&
+          link.props['aria-label'] !== 'Profile',
+      ),
   ).toHaveLength(0);
 });
 
-it('puts Activity and, for event-only members, Events and Settings in the header', async () => {
+it('keeps Activity and Settings in the event-only phone header', async () => {
   const reselect = vi.fn();
   await mount(
     createElement(HeaderActions, {
@@ -239,16 +245,15 @@ it('puts Activity and, for event-only members, Events and Settings in the header
   );
   const links = renderer.root.findAllByType('a');
   expect(links.map((link) => link.props.href)).toEqual([
-    '#events',
     '#notifications',
     '#settings',
   ]);
-  expect(links[1].props['aria-description']).toBe('3 unread notifications.');
+  expect(links[0].props['aria-description']).toBe('3 unread notifications.');
   expect(
     renderer.root.findByProps({ className: 'nav-badge' }).children,
   ).toEqual(['3']);
   await act(async () =>
-    links[1].props.onClick({
+    links[0].props.onClick({
       button: 0,
       preventDefault: vi.fn(),
       defaultPrevented: false,
@@ -277,8 +282,11 @@ it('opens an event from its URL, then shows guests only after answering', async 
   await reply(pending(`/api/events/${id}`), {
     event: view({ counts: null }),
   });
-  expect(visibleText()).toContain('Answer to see who’s going');
-  expect(visibleText()).not.toContain('Guests');
+  expect(visibleText()).toContain('RSVP to see who’s going');
+  expect(visibleText()).toContain('Guests');
+  expect(
+    requests.some((request) => /\/guests|\/activity/.test(request.path)),
+  ).toBe(false);
   expect(visibleText()).not.toContain('Back to');
   expect(button('Going').props['aria-pressed']).toBe(false);
   await click('Going');
@@ -331,7 +339,7 @@ it('shows the shareable URL in the address bar', async () => {
   expect(replaceState).toHaveBeenCalledWith(null, '', `#event/${token}`);
 });
 
-it('asks signed-out link holders only for an email, tied to the event link', async () => {
+it('shows a limited event preview and ties email sign-in to its link', async () => {
   location.hash = `#event/${token}`;
   await mount(createElement(Welcome));
   await reply(pending('/api/bootstrap'), {
@@ -341,10 +349,26 @@ it('asks signed-out link holders only for an email, tied to the event link', asy
   });
   const check = pending('/api/event-link');
   expect(JSON.parse(String(check.options?.body))).toEqual({ token });
-  await reply(check, { event: { id, open: true } });
-  expect(visibleText()).toContain('You’re invited to an event');
-  // Nothing about the event is requested or shown before sign-in.
-  expect(visibleText()).not.toContain('Dinner');
+  await reply(check, {
+    event: {
+      id,
+      open: true,
+      preview: {
+        title: 'Dinner',
+        date: 'Friday, January 4, 2030',
+        width: 4,
+        height: 3,
+      },
+    },
+  });
+  expect(visibleText()).toContain('Dinner');
+  expect(visibleText()).toContain('Friday, January 4, 2030');
+  expect(visibleText()).toContain('Enter your email to see details and RSVP');
+  expect(visibleText()).not.toContain('Bring a dish');
+  expect(visibleText()).not.toContain('1 Main St');
+  expect(visibleText()).not.toContain('Alice');
+  const cover = pending('/api/event-link/photo');
+  expect(JSON.parse(String(cover.options?.body))).toEqual({ token });
   expect(
     requests.some(
       (request) =>
@@ -614,4 +638,122 @@ it('lets members without a photo change just their name', async () => {
     },
   });
   expect(location.hash).toBe('#settings');
+});
+
+it.each(['feed', 'people', 'compose', 'profile/erin'])(
+  'gates %s without private reads and resumes it after photo setup',
+  async (destination) => {
+    location.hash = `#event/${id}`;
+    await mount(
+      createElement(MemberApp, {
+        initialProfile: {
+          handle: 'erin',
+          displayName: 'Erin',
+          bio: '',
+          hasAvatar: 0,
+        },
+        onSignOut: vi.fn(),
+        signingOut: false,
+      }),
+    );
+    await reply(pending(`/api/events/${id}`), {
+      event: view({ counts: null }),
+    });
+    const nav = renderer.root.findByProps({ 'aria-label': 'Main navigation' });
+    expect(nav.findAllByProps({ className: 'nav-lock' })).toHaveLength(4);
+    expect(nav.findAllByType('img')).toHaveLength(0);
+    const target = nav
+      .findAllByType('a')
+      .find(
+        (link) =>
+          link.props.href === `#${destination}` &&
+          link.props.className === 'nav-link',
+      )!;
+    expect(target.props['aria-description']).toContain('Add a profile photo');
+    const before = requests.length;
+    await act(async () => {
+      location.hash = `#${destination}`;
+      window.dispatchEvent(new Event('hashchange'));
+    });
+    expect(visibleText()).toContain('Share photos and follow friends');
+    expect(visibleText()).toContain('follow requests need your approval');
+    expect(button('Add profile photo')).toBeDefined();
+    const back = renderer.root.findByProps({
+      className: 'text-button setup-return',
+    });
+    expect(back.props.href).toBe(`#event/${id}`);
+    expect(requests.slice(before)).toEqual([]);
+    // AvatarForm's callback fires only after its upload succeeds.
+    await act(async () =>
+      renderer.root.findByType(AvatarForm).props.onChange(),
+    );
+    expect(location.hash).toBe(`#${destination}`);
+    expect(
+      renderer.root.findAllByProps({ className: 'nav-lock' }),
+    ).toHaveLength(0);
+    expect(renderer.root.findAllByType(AvatarForm)).toHaveLength(0);
+    expect(visibleText()).not.toContain('Share photos and follow friends');
+  },
+);
+
+it('lets members leave setup for their event without changing access', async () => {
+  location.hash = `#event/${id}`;
+  await mount(
+    createElement(MemberApp, {
+      initialProfile: {
+        handle: 'erin',
+        displayName: 'Erin',
+        bio: '',
+        hasAvatar: 0,
+      },
+      onSignOut: vi.fn(),
+      signingOut: false,
+    }),
+  );
+  await reply(pending(`/api/events/${id}`), { event: view({ counts: null }) });
+  await act(async () => {
+    location.hash = '#compose';
+    window.dispatchEvent(new Event('hashchange'));
+  });
+  const href = renderer.root.findByProps({
+    className: 'text-button setup-return',
+  }).props.href;
+  await act(async () => {
+    location.hash = href;
+    window.dispatchEvent(new Event('hashchange'));
+  });
+  await reply(pending(`/api/events/${id}`), { event: view({ counts: null }) });
+  expect(visibleText()).toContain('RSVP to see who’s going');
+  expect(renderer.root.findAllByProps({ className: 'nav-lock' })).toHaveLength(
+    4,
+  );
+});
+
+it('retries a failed preview cover and releases its in-memory URL on unmount', async () => {
+  const createUrl = vi
+    .spyOn(URL, 'createObjectURL')
+    .mockReturnValue('blob:preview');
+  const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+  await mount(
+    createElement(EventPreview, {
+      token,
+      preview: { title: 'Dinner', date: 'Friday', width: 4, height: 3 },
+    }),
+  );
+  await reply(pending('/api/event-link/photo'), {}, 503);
+  expect(visibleText()).toContain('Couldn’t load the event photo');
+  await click('Try photo again');
+  const request = pending('/api/event-link/photo');
+  request.settled = true;
+  await act(async () =>
+    request.resolve(
+      new Response(new Uint8Array([1]), {
+        headers: { 'Content-Type': 'image/webp' },
+      }),
+    ),
+  );
+  expect(createUrl).toHaveBeenCalledOnce();
+  expect(renderer.root.findByType('img').props.src).toBe('blob:preview');
+  await act(async () => renderer.unmount());
+  expect(revoke).toHaveBeenCalledWith('blob:preview');
 });

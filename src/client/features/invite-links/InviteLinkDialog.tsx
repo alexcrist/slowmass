@@ -3,10 +3,10 @@ import { api } from '../../api';
 import { Dialog } from '../../ui/Dialog';
 import { CopyLink } from '../../ui/CopyLink';
 
-type Link = { url: string; expiresAt: number };
+type Link = { url: string };
 
-// The member's current invite link. Opening the dialog after a link expires
-// gets a new one, so there is always a link to send.
+// Opening refreshes a current link to seven days, or issues a new version
+// after expiry/revocation. The server owns that lifetime.
 export function InviteLinkDialog({ onClose }: { onClose: () => void }) {
   const [link, setLink] = useState<Link | null>(null);
   const [error, setError] = useState('');
@@ -17,7 +17,9 @@ export function InviteLinkDialog({ onClose }: { onClose: () => void }) {
       method: 'POST',
       signal: controller.signal,
     })
-      .then(setLink)
+      .then((value) => {
+        if (!controller.signal.aborted) setLink(value);
+      })
       .catch((failure: unknown) => {
         if (!controller.signal.aborted)
           setError(
@@ -33,16 +35,8 @@ export function InviteLinkDialog({ onClose }: { onClose: () => void }) {
       {link ? (
         <>
           <p>
-            Send the link to your friends to invite them to slowmass. Anyone
-            with it can join until{' '}
-            <time dateTime={new Date(link.expiresAt).toISOString()}>
-              {new Date(link.expiresAt).toLocaleDateString(undefined, {
-                weekday: 'long',
-                month: 'long',
-                day: 'numeric',
-              })}
-            </time>
-            .
+            Send the link to your friends to invite them to slowmass. This link
+            works for the next 7 days.
           </p>
           <CopyLink url={link.url} label="Invite link" />
         </>

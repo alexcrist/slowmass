@@ -217,7 +217,7 @@ export function AvatarForm({
           aria-describedby="avatar-file-help"
           onClick={() => input.current?.click()}
         >
-          {onboarding ? 'Choose profile photo' : 'Change photo'}
+          {onboarding ? 'Add profile photo' : 'Change photo'}
         </button>
         <input
           ref={input}

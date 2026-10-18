@@ -8,6 +8,7 @@ import { EventGuests } from './EventGuests';
 import { EventHosts } from './EventHosts';
 import { EventLinkDialog } from './EventLinkDialog';
 import { MailIcon } from '../../ui/MailIcon';
+import { LockIcon } from '../../ui/LockIcon';
 import { EventLog } from './EventLog';
 import { eventHref } from './EventsPage';
 import type { Answer, EventView } from './types';
@@ -243,11 +244,24 @@ export function EventPage({
             </section>
           </>
         ) : (
-          open && (
-            <p className="status-copy">
-              Answer to see who’s going and the event’s activity.
+          <section
+            className="event-guests-locked"
+            aria-labelledby={`guests-${id}`}
+          >
+            <h2 id={`guests-${id}`}>
+              <LockIcon /> Guests
+            </h2>
+            <p>
+              {open
+                ? 'RSVP to see who’s going.'
+                : 'The guest list is hidden. RSVPs are closed.'}
             </p>
-          )
+            {open && (
+              <p className="status-copy">
+                Any answer unlocks the guest list and event activity.
+              </p>
+            )}
+          </section>
         )}
       </div>
       {dialog === 'link' && url && (

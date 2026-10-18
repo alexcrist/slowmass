@@ -948,11 +948,11 @@ it.each([null, { ...ownProfile, hasAvatar: 0 }])(
     await mount(createElement(Welcome));
     await reply(pending('/api/bootstrap'), { ...signedIn, profile });
     expect(visibleText()).toContain(
-      profile ? 'Return to events' : 'What’s your name?',
+      profile ? 'Share photos and follow friends' : 'What’s your name?',
     );
     expect(
       renderer.root.findAllByProps({ 'aria-label': 'Main navigation' }),
-    ).toHaveLength(0);
+    ).toHaveLength(profile ? 1 : 0);
     expect(
       requests.some((request) => request.path.startsWith('/api/posts')),
     ).toBe(false);
@@ -1030,7 +1030,7 @@ it.each([false, true])(
     }
     expect(
       renderer.root.findAllByProps({ 'aria-label': 'Main navigation' }),
-    ).toHaveLength(0);
+    ).toHaveLength(1);
     expect(requests.some((item) => item.path.startsWith('/api/posts'))).toBe(
       false,
     );
@@ -2748,7 +2748,8 @@ it('uses authoritative like responses without a second post request and retains 
   expect(requests.every((r) => r.path.endsWith('/like'))).toBe(true);
 });
 
-it('shows events, not the photo app, until a member adds a profile photo', async () => {
+it('keeps Events usable with full navigation before adding a profile photo', async () => {
+  location.hash = '#events';
   Object.assign(navigator, { userAgent: 'iPhone', standalone: false });
   await mount(
     createElement(MemberApp, {
@@ -2760,7 +2761,7 @@ it('shows events, not the photo app, until a member adds a profile photo', async
   expect(pending('/api/events?when=upcoming')).toBeDefined();
   expect(
     renderer.root.findAllByProps({ 'aria-label': 'Main navigation' }),
-  ).toHaveLength(0);
+  ).toHaveLength(1);
   expect(requests.some((item) => item.path.startsWith('/api/posts'))).toBe(
     false,
   );

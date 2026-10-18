@@ -142,6 +142,20 @@ p {
   line-height: 18px;
   text-align: center;
 }
+.nav-lock {
+  position: absolute;
+  right: -7px;
+  bottom: -5px;
+  display: flex;
+  padding: 2px;
+  border-radius: 50%;
+  background: var(--paper);
+}
+.nav-link .nav-lock svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 1.8;
+}
 .app-navigation {
   position: fixed;
   z-index: 10;
@@ -213,6 +227,12 @@ p {
 }
 .onboarding-intro {
   margin: 0 0 24px;
+}
+.setup-return {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 16px;
 }
 .onboarding .avatar-form {
   margin-bottom: 0;
@@ -1365,20 +1385,6 @@ summary.settings-row::after {
   .member-shell .masthead {
     display: none;
   }
-  /* Members who only use events have no sidebar; keep the header instead. */
-  .member-shell:has(.event-only) {
-    padding: 0;
-  }
-  .member-shell:has(.event-only) .masthead {
-    display: flex;
-  }
-  .member-content.event-only {
-    max-width: 640px;
-    margin-inline: auto;
-  }
-  .member-content.event-only[data-page='event'] {
-    max-width: 520px;
-  }
   .member-content {
     margin-top: 48px;
   }
@@ -1523,11 +1529,47 @@ summary.settings-row::after {
     display: none;
   }
 }
-.member-shell:has(.event-only) {
-  padding-bottom: env(safe-area-inset-bottom);
-}
 
 /* Events */
+.guest-shell.event-preview-shell .account-section {
+  max-width: 520px;
+  margin: 24px auto;
+  padding: 0;
+}
+.event-preview-shell .sign-in-area,
+.event-preview-shell .event-details,
+.event-preview-intro {
+  padding-inline: 16px;
+}
+.event-preview-shell .event-title {
+  margin: 20px 0 8px;
+}
+.event-preview-shell .account-section {
+  container-type: inline-size;
+}
+.event-preview-photo {
+  display: grid;
+  place-items: center;
+  background: var(--hover);
+}
+.event-preview-photo > p,
+.event-preview-photo > div {
+  padding: 16px;
+}
+.event-guests-locked {
+  margin-top: 24px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+.event-guests-locked h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.event-guests-locked svg {
+  width: 20px;
+  height: 20px;
+}
 /* The tab row's divider spans the tabs and the right-aligned New event action. */
 .events-tabs {
   display: flex;

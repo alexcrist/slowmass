@@ -1,6 +1,7 @@
 import type { MouseEvent } from 'react';
 import { currentRoute, profileHref } from '../../navigation';
 import { SettingsIcon } from '../../navigation/SettingsIcon';
+import { LockIcon } from '../../ui/LockIcon';
 import type { Profile } from './ProfileForm';
 
 const activityPath =
@@ -44,12 +45,14 @@ export function MemberNavigation({
   page,
   profile,
   avatarVersion,
+  eventOnly = false,
   unreadCount,
   onReselect,
 }: {
   page: string;
   profile: Profile;
   avatarVersion: number;
+  eventOnly?: boolean;
   unreadCount: number | null;
   onReselect: () => void;
 }) {
@@ -70,12 +73,15 @@ export function MemberNavigation({
       </a>
       <div className="primary-nav">
         {destinations.map((item) => {
+          const locked =
+            eventOnly && !['events', 'notifications'].includes(item.page);
           const href =
             item.page === 'profile'
               ? profileHref(profile.handle)
               : `#${item.page}`;
           const route = currentRoute();
           const canRefresh =
+            !locked &&
             ['feed', 'events', 'notifications', 'profile'].includes(
               item.page,
             ) &&
@@ -103,6 +109,7 @@ export function MemberNavigation({
               aria-description={
                 [
                   unreadDescription,
+                  locked ? 'Add a profile photo to use this feature.' : '',
                   canRefresh ? 'Select again to load the latest updates.' : '',
                 ]
                   .filter(Boolean)
@@ -110,24 +117,37 @@ export function MemberNavigation({
               }
               aria-current={page === item.page ? 'page' : undefined}
             >
-              {item.page === 'profile' ? (
-                <img
-                  className="nav-avatar"
-                  src={`/media/avatar/${encodeURIComponent(profile.handle)}?v=${avatarVersion}`}
-                  width={24}
-                  height={24}
-                  alt=""
-                />
-              ) : (
-                <span className="nav-icon">
-                  <Icon path={item.path} />
-                  {Boolean(unread) && (
-                    <span className="nav-badge" aria-hidden="true">
-                      {unread! >= 100 ? '99+' : unread}
-                    </span>
-                  )}
-                </span>
-              )}
+              <span className="nav-icon">
+                {item.page === 'profile' && !eventOnly ? (
+                  <img
+                    className="nav-avatar"
+                    src={`/media/avatar/${encodeURIComponent(profile.handle)}?v=${avatarVersion}`}
+                    width={24}
+                    height={24}
+                    alt=""
+                  />
+                ) : (
+                  <>
+                    <Icon
+                      path={
+                        item.page === 'profile'
+                          ? 'M20 21v-2a7 7 0 0 0-14 0v2M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0'
+                          : item.path
+                      }
+                    />
+                    {Boolean(unread) && (
+                      <span className="nav-badge" aria-hidden="true">
+                        {unread! >= 100 ? '99+' : unread}
+                      </span>
+                    )}
+                  </>
+                )}
+                {locked && (
+                  <span className="nav-lock">
+                    <LockIcon />
+                  </span>
+                )}
+              </span>
               <span className="nav-label" aria-hidden="true">
                 {item.label}
               </span>
@@ -163,9 +183,7 @@ function reselects(event: MouseEvent<HTMLAnchorElement>) {
     event.altKey
   );
 }
-// Header controls on phones (and for members who only use events, on every
-// screen): Activity with its unread badge, plus Events and Settings when there
-// is no navigation bar to reach them from.
+// Phone header: Activity, plus Settings for members without a profile page.
 export function HeaderActions({
   page,
   unreadCount,
@@ -180,18 +198,6 @@ export function HeaderActions({
   const unread = unreadCount ?? 0;
   return (
     <nav className="header-actions" aria-label="Account">
-      {eventOnly && (
-        <a
-          className="header-action"
-          href="#events"
-          aria-label="Events"
-          aria-current={
-            page === 'events' || page === 'feed' ? 'page' : undefined
-          }
-        >
-          <Icon path={eventsPath} />
-        </a>
-      )}
       <a
         className="header-action"
         href="#notifications"

@@ -117,8 +117,18 @@ it('reuses one link per member, reveals only whether it works, and records the l
   expect(new URL(link.url).search).toBe('');
   expect(link.expiresAt).toBeGreaterThanOrEqual(before + 7 * day);
   expect(link.expiresAt).toBeLessThanOrEqual(Date.now() + 7 * day);
-  // Asking again returns the same link without extending it.
-  expect(await create()).toEqual(link);
+  // Asking again extends the same credential without changing its version.
+  const previousVersion = await version();
+  await runtime.db
+    .prepare("UPDATE invite_link SET expires_at=? WHERE inviter_id='alice'")
+    .bind(Date.now() + day)
+    .run();
+  const reopening = Date.now();
+  const refreshed = await create();
+  expect(refreshed.token).toBe(link.token);
+  expect(await version()).toBe(previousVersion);
+  expect(refreshed.expiresAt).toBeGreaterThanOrEqual(reopening + 7 * day);
+  expect(refreshed.expiresAt).toBeLessThanOrEqual(Date.now() + 7 * day);
   const bob = await create('bob');
   expect(bob.token).not.toBe(link.token);
   const stored = await runtime.db
@@ -250,7 +260,9 @@ it('converges concurrent requests on one credential', async () => {
       return response.json();
     }),
   );
-  expect(new Set(links.map((link) => JSON.stringify(link))).size).toBe(1);
+  expect(new Set(links.map((link) => (link as { url: string }).url)).size).toBe(
+    1,
+  );
   expect(
     (await runtime.db.prepare('SELECT * FROM invite_link').all()).results,
   ).toHaveLength(1);
@@ -646,4 +658,39 @@ it('migration 0032 keeps existing invitations and event joins working', async ()
   } finally {
     await old.worker.dispose();
   }
+});
+
+it('extends a shared link without disturbing pending claims or shortening concurrent refreshes', async () => {
+  const link = await create();
+  const originalVersion = await version();
+  await runtime.db
+    .prepare("UPDATE invite_link SET expires_at=? WHERE inviter_id='alice'")
+    .bind(Date.now() + day)
+    .run();
+  await requestEmail(link.token, 'pending@example.com');
+  const before = Date.now();
+  const refreshed = await Promise.all(
+    Array.from({ length: 6 }, () => create()),
+  );
+  expect(refreshed.every((item) => item.token === link.token)).toBe(true);
+  expect(refreshed.every((item) => item.expiresAt >= before + 7 * day)).toBe(
+    true,
+  );
+  const expiry = await runtime.db
+    .prepare("SELECT expires_at FROM invite_link WHERE inviter_id='alice'")
+    .first<number>('expires_at');
+  expect(expiry).toBe(Math.max(...refreshed.map((item) => item.expiresAt)));
+  expect(await version()).toBe(originalVersion);
+  expect(signedIn(await verify())).toBe(true);
+  expect(await source('pending@example.com')).toMatchObject({
+    link: originalVersion,
+    inviter: 'alice',
+  });
+  // Looking at an invitation as a recipient must never refresh it.
+  await check(link.token);
+  expect(
+    await runtime.db
+      .prepare("SELECT expires_at FROM invite_link WHERE inviter_id='alice'")
+      .first('expires_at'),
+  ).toBe(expiry);
 });

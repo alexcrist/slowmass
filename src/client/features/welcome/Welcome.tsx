@@ -3,6 +3,7 @@ import { createAuthClient } from 'better-auth/react';
 import { magicLinkClient } from 'better-auth/client/plugins';
 import { PasteLoginLink } from './PasteLoginLink';
 import { MemberApp } from '../people';
+import { EventPreview, type EventPreviewDetails } from '../events';
 import { api, jsonRequest, onUnauthorized } from '../../api';
 import { clearLocalPush } from '../push';
 import { loadStartup, type Bootstrap } from './startup';
@@ -11,11 +12,14 @@ const auth = createAuthClient({ plugins: [magicLinkClient()] });
 type State = 'loading' | 'ready' | 'unavailable' | 'error';
 
 // Invite and event links carry their credential in the URL fragment. Signed
-// out, Welcome learns only whether the link works before asking for an email;
-// signing in through it admits new people, and an event link shows the event.
+// out, event links show a limited preview before asking for an email.
 type Link = { kind: 'event' | 'invite'; token: string };
 // A working link: whether it admits new people, and an event link's event.
-type LinkCheck = { open: boolean; eventId?: string } | null;
+type LinkCheck = {
+  open: boolean;
+  eventId?: string;
+  preview?: EventPreviewDetails;
+} | null;
 
 // Members don't need an invite: drop its credential before member routes read
 // the address.
@@ -148,15 +152,27 @@ export function Welcome() {
       signal: controller.signal,
     };
     (link.kind === 'event'
-      ? api<{ event: { id: string; open: boolean } | null }>(
-          '/api/event-link',
-          request,
-        ).then(({ event }) => event && { open: event.open, eventId: event.id })
+      ? api<{
+          event: {
+            id: string;
+            open: boolean;
+            preview: EventPreviewDetails;
+          } | null;
+        }>('/api/event-link', request).then(
+          ({ event }) =>
+            event && {
+              open: event.open,
+              eventId: event.id,
+              preview: event.preview,
+            },
+        )
       : api<{ available: boolean }>('/api/invite-link/check', request).then(
           ({ available }) => (available ? { open: true } : null),
         )
     )
-      .then(setChecked)
+      .then((result) => {
+        if (!controller.signal.aborted) setChecked(result);
+      })
       .catch(() => {
         if (!controller.signal.aborted) setLinkError(true);
       });
@@ -224,7 +240,7 @@ export function Welcome() {
 
   return (
     <main
-      className={`welcome ${name !== null ? 'member-shell' : 'guest-shell'}${state !== 'ready' ? ' startup-shell' : ''}`}
+      className={`welcome ${name !== null ? 'member-shell' : 'guest-shell'}${state !== 'ready' ? ' startup-shell' : ''}${signedOut && checked?.preview ? ' event-preview-shell' : ''}`}
     >
       <header className="masthead">
         <a className="site-name" href="/" aria-label="slowmass home">
@@ -246,12 +262,28 @@ export function Welcome() {
           name === null &&
           (link?.kind === 'event' && checked !== null ? (
             <>
-              <h1>You’re invited to an event</h1>
-              <p className="status-copy">
-                {checked?.open === false
-                  ? 'This event is over or was cancelled. If you already use slowmass, sign in to see it.'
-                  : 'Enter your email to see it. We’ll send a sign-in link; if you’re new, this creates your slowmass account.'}
-              </p>
+              {checked?.preview ? (
+                <EventPreview
+                  key={link.token}
+                  token={link.token}
+                  preview={checked.preview}
+                />
+              ) : (
+                <h1>You’re invited to an event</h1>
+              )}
+              <div className="event-preview-intro">
+                <p className="status-copy">
+                  {checked?.open === false
+                    ? 'This event isn’t taking new members. If you already use slowmass, sign in to see the details.'
+                    : 'Enter your email to see details and RSVP.'}
+                </p>
+                {checked?.open && (
+                  <p className="status-copy">
+                    We’ll send a sign-in link. If you’re new, this creates your
+                    slowmass account.
+                  </p>
+                )}
+              </div>
             </>
           ) : link?.kind === 'invite' && checked !== null ? (
             <>
