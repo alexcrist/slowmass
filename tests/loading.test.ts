@@ -605,7 +605,7 @@ it('keeps uninvited addresses on the welcome form and allows a successful retry'
     callbackURL: '/',
     errorCallbackURL: '/?error=signin',
   });
-  // After joining through an event, the same address can retry in place.
+  // After joining through an invite link, the same address can retry in place.
   authMocks.magicLink.mockResolvedValueOnce({
     data: { status: true },
     error: null,
@@ -618,6 +618,202 @@ it('keeps uninvited addresses on the welcome form and allows a successful retry'
   expect(visibleText()).toContain('Check your email');
   expect(visibleText()).toContain('uninvited@example.com');
   expect(visibleText()).not.toContain('no slowmass account');
+});
+
+const inviteToken = 'b'.repeat(48);
+
+it('asks signed-out invite link holders only for an email, tied to the link', async () => {
+  location.hash = `#invite/${inviteToken}`;
+  await mount(createElement(Welcome));
+  await reply(pending('/api/bootstrap'), {
+    signInAvailable: true,
+    user: null,
+    profile: null,
+  });
+  expect(visibleText()).toContain('Checking this invite link…');
+  const check = pending('/api/invite-link/check');
+  expect(check.options?.method).toBe('POST');
+  expect(JSON.parse(String(check.options?.body))).toEqual({
+    token: inviteToken,
+  });
+  await reply(check, { available: true });
+  expect(visibleText()).toContain('You’re invited to slowmass');
+  await act(async () => {
+    renderer.root.findByProps({ id: 'email' }).props.onChange({
+      target: { value: 'Erin@Example.com ' },
+    });
+  });
+  authMocks.magicLink.mockResolvedValueOnce({
+    error: { code: 'INVITATION_REQUIRED', status: 403 },
+  });
+  await act(async () => {
+    await renderer.root.findByType('form').props.onSubmit({
+      preventDefault: vi.fn(),
+    });
+  });
+  expect(authMocks.magicLink).toHaveBeenLastCalledWith({
+    email: 'erin@example.com',
+    callbackURL: '/',
+    errorCallbackURL: '/?error=invite',
+    metadata: { inviteLink: inviteToken },
+  });
+  expect(visibleText()).toContain(
+    'This invite link isn’t taking new people anymore.',
+  );
+  authMocks.magicLink.mockResolvedValueOnce({ error: null });
+  await act(async () => {
+    await renderer.root.findByType('form').props.onSubmit({
+      preventDefault: vi.fn(),
+    });
+  });
+  expect(visibleText()).toContain('Check your email');
+});
+
+it('falls back to normal sign-in for an invite link that no longer works', async () => {
+  location.hash = `#invite/${inviteToken}`;
+  await mount(createElement(Welcome));
+  await reply(pending('/api/bootstrap'), {
+    signInAvailable: true,
+    user: null,
+    profile: null,
+  });
+  await reply(pending('/api/invite-link/check'), { available: false });
+  expect(visibleText()).toContain('This invite link isn’t available.');
+  expect(visibleText()).not.toContain('You’re invited');
+  await act(async () => {
+    renderer.root.findByProps({ id: 'email' }).props.onChange({
+      target: { value: 'bob@example.com' },
+    });
+  });
+  authMocks.magicLink.mockResolvedValueOnce({ error: null });
+  await act(async () => {
+    await renderer.root.findByType('form').props.onSubmit({
+      preventDefault: vi.fn(),
+    });
+  });
+  expect(authMocks.magicLink).toHaveBeenLastCalledWith({
+    email: 'bob@example.com',
+    callbackURL: '/',
+    errorCallbackURL: '/?error=signin',
+  });
+});
+
+it('explains a failed invite sign-in and asks members without a link to get an invite link', async () => {
+  location.search = '?error=invite';
+  await mount(createElement(Welcome));
+  await reply(pending('/api/bootstrap'), {
+    signInAvailable: true,
+    user: null,
+    profile: null,
+  });
+  expect(visibleText()).toContain(
+    'Sign in with your email. New here? Ask a member to text you an invite link.',
+  );
+  expect(visibleText()).toContain(
+    'That sign-in link could not be used to join.',
+  );
+});
+
+it('drops an invite link from the address when a member is already signed in', async () => {
+  Object.assign(location, {
+    hash: `#invite/${inviteToken}`,
+    pathname: '/',
+  });
+  const replaceState = vi.fn(() => {
+    location.hash = '';
+  });
+  window.history = { state: null, replaceState } as unknown as History;
+  await mount(createElement(Welcome));
+  await reply(pending('/api/bootstrap'), signedIn);
+  expect(replaceState).toHaveBeenCalledWith(null, '', '/');
+  expect(pending('/api/posts?')).toBeDefined();
+  expect(
+    requests.some((item) => item.path.startsWith('/api/invite-link')),
+  ).toBe(false);
+});
+
+it('sends members who named themselves outside an event on to add a profile photo', async () => {
+  location.hash = '';
+  await mount(createElement(Welcome));
+  await reply(pending('/api/bootstrap'), { ...signedIn, profile: null });
+  expect(visibleText()).toContain('Next, you’ll add a profile photo.');
+  await act(async () => {
+    renderer.root.findByProps({ id: 'display-name' }).props.onChange({
+      target: { value: 'Erin' },
+    });
+  });
+  await act(async () => {
+    await renderer.root.findByType('form').props.onSubmit({
+      preventDefault: vi.fn(),
+    });
+  });
+  await reply(pending('/api/people/self'), {
+    profile: { handle: 'erin', displayName: 'Erin', bio: '', hasAvatar: 0 },
+  });
+  expect(location.hash).toBe('#photo');
+});
+
+it('shows your invite link with a copy button from the mail icon on your profile', async () => {
+  const writeText = vi.fn(() => Promise.resolve());
+  vi.stubGlobal('navigator', { standalone: false, clipboard: { writeText } });
+  location.hash = '#profile/alice';
+  await mount(
+    createElement(MemberApp, {
+      initialProfile: ownProfile,
+      onSignOut: vi.fn(),
+      signingOut: false,
+    }),
+  );
+  await reply(pending('/api/people/alice'), {
+    profile: { ...ownProfile, relationship: 'self' },
+  });
+  expect(requests.some((item) => item.path === '/api/invite-link')).toBe(false);
+  await click('Share invite link');
+  const first = pending('/api/invite-link');
+  expect(first.options?.method).toBe('POST');
+  await reply(
+    first,
+    { error: 'Could not get your invite link. Try again.' },
+    409,
+  );
+  expect(visibleText()).toContain('Could not get your invite link.');
+  await click('Try again');
+  const url = `https://slowmass.com/#invite/${inviteToken}`;
+  await reply(pending('/api/invite-link'), {
+    url,
+    expiresAt: Date.UTC(2030, 0, 8, 12),
+  });
+  expect(visibleText()).toContain(
+    'Send the link to your friends to invite them to slowmass.',
+  );
+  expect(
+    renderer.root.findByProps({ 'aria-label': 'Invite link' }).props.value,
+  ).toBe(url);
+  await click('Copy');
+  expect(writeText).toHaveBeenCalledWith(url);
+  expect(visibleText()).toContain('Link copied.');
+});
+
+it('offers the invite link only on your own profile', async () => {
+  location.hash = '#profile/bob';
+  await mount(
+    createElement(MemberApp, {
+      initialProfile: ownProfile,
+      onSignOut: vi.fn(),
+      signingOut: false,
+    }),
+  );
+  await reply(pending('/api/people/bob'), {
+    profile: {
+      handle: 'bob',
+      displayName: 'Bob',
+      bio: null,
+      relationship: 'none',
+    },
+  });
+  expect(
+    renderer.root.findAllByProps({ 'aria-label': 'Share invite link' }),
+  ).toHaveLength(0);
 });
 
 it.each([403, 429, 500])(

@@ -1,14 +1,14 @@
 # Client
 
-A static React application served by Workers Assets. [Welcome](features/welcome/README.md) handles email login (including signing in through an event link) and logout, then mounts [member screens](features/people/README.md). These compose [avatars](features/avatars/README.md), [posts](features/posts/README.md), [interactions](features/interactions/README.md), [events](features/events/README.md), and [notifications](features/notifications/README.md), using the shared [API client](api/README.md).
+A static React application served by Workers Assets. [Welcome](features/welcome/README.md) handles email login (including signing in through an invite or event link) and logout, then mounts [member screens](features/people/README.md). These compose [avatars](features/avatars/README.md), [posts](features/posts/README.md), [interactions](features/interactions/README.md), [events](features/events/README.md), [invite links](features/invite-links/README.md), and [notifications](features/notifications/README.md), using the shared [API client](api/README.md).
 
-New members give only a name, then use events, Activity, and Settings until they add a profile photo. Installation and notification opt-in are available from Settings; [device setup](features/device-setup/README.md) suggests them once in Activity on phones and tablets.
+New members give only a name, then are asked for a profile photo unless they arrived through an event; until they add one they use events, Activity, and Settings. Installation and notification opt-in are available from Settings; [device setup](features/device-setup/README.md) suggests them once in Activity on phones and tablets.
 
 [Install support](features/install/README.md) adds a standalone web-app manifest, mobile-only install instructions and browser install prompts where available.
 
 [Account deletion](features/account/README.md) is available from Settings.
 
-[Shared UI controls](ui/README.md) provide native dialogs, overflow menus, and relative timestamps. [Local image decoding](images/README.md) is shared by the avatar and post crop editors.
+[Shared UI controls](ui/README.md) provide native dialogs, overflow menus, link copy fields, the mail icon, and relative timestamps. [Local image decoding](images/README.md) is shared by the avatar and post crop editors.
 
 `previews/device-setup.html` is a development-only page served by `npm run dev:ui`; production builds include only `index.html`.
 

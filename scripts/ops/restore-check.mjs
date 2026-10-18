@@ -119,9 +119,8 @@ try {
     )
       throw new Error('Shared invitation quarantine failed.');
   }
-  // Event links are the only invitations and, like join links, do not depend
-  // on the auth secret. A new version also ends access granted by opening an
-  // old link. Links cannot be replaced, so a quarantined event invites no one
+  // Event links, like invite and join links, do not depend on the auth
+  // secret. A new version also ends access granted by opening an old link. Links cannot be replaced, so a quarantined event invites no one
   // new; hosts and people who answered keep access.
   if (
     db

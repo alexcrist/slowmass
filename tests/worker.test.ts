@@ -308,7 +308,7 @@ describe('verified email and permanent invitation provenance', () => {
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({
       code: 'INVITATION_REQUIRED',
-      message: 'Ask a slowmass member to text you an event link.',
+      message: 'Ask a slowmass member to text you an invite link.',
     });
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');

@@ -1,3 +1,5 @@
+import { invitationTokenHash } from './credential';
+
 export { newInvitationCredential, invitationTokenHash } from './credential';
 export {
   EVENT_OVER_AFTER,
@@ -5,10 +7,32 @@ export {
   eventAccess,
   eventResponse,
   bindEventVerification,
-  hasEventClaim,
   eventClaim,
   acceptEventVerification,
 } from './event';
+export {
+  inviteLinkAdmits,
+  bindInviteVerification,
+  inviteClaim,
+  acceptInviteVerification,
+} from './invite';
+
+// Which link, if any, an email token was requested through. Claims are kept
+// until expiry, so an old email never switches to another source.
+export async function claimSource(
+  db: D1Database,
+  token: string,
+): Promise<'event' | 'invite' | null> {
+  const hash = await invitationTokenHash(token);
+  const row = await db
+    .prepare(
+      `SELECT EXISTS(SELECT 1 FROM event_claim WHERE token_hash=?) AS event,
+      EXISTS(SELECT 1 FROM invite_link_claim WHERE token_hash=?) AS invite`,
+    )
+    .bind(hash, hash)
+    .first<{ event: number; invite: number }>();
+  return row?.event ? 'event' : row?.invite ? 'invite' : null;
+}
 
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -40,8 +64,8 @@ export async function memberAccess(db: D1Database, userId: string) {
   return row ? { hasProfilePhoto: Boolean(row.hasProfilePhoto) } : null;
 }
 
-// Event links are the only invitations. Without one, only the configured first
-// member can join, and only while no membership exists.
+// Without an invite or event link, only the configured first member can join,
+// and only while no membership exists.
 export async function canJoin(
   db: D1Database,
   email: string,

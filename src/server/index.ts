@@ -19,6 +19,8 @@ import { dispatchPush } from './features/push';
 import { deviceSetup } from './features/device-setup/router';
 import { events, eventMedia, eventLinks } from './features/events/router';
 import { cleanupEvents } from './features/events';
+import { inviteLinks } from './features/invite-links/router';
+import { cleanupInviteLinks } from './features/invite-links';
 import type { Env } from './env';
 import { measuredEnvironment, performanceMetrics } from './telemetry';
 
@@ -67,9 +69,9 @@ app.on(['GET', 'POST'], '/api/auth/*', async (c) => {
     response.status >= 400
   )
     return c.redirect(
-      c.req.query('errorCallbackURL') === '/?error=event'
-        ? '/?error=event'
-        : '/?error=signin',
+      ['/?error=event', '/?error=invite'].find(
+        (target) => c.req.query('errorCallbackURL') === target,
+      ) ?? '/?error=signin',
       303,
     );
   // Preserve our privacy headers when returning the auth library's raw response.
@@ -88,6 +90,7 @@ app.route('/api/push', push);
 app.route('/api/device-setup', deviceSetup);
 app.route('/api/events', events);
 app.route('/api/event-link', eventLinks);
+app.route('/api/invite-link', inviteLinks);
 app.route('/media/posts', postMedia);
 app.route('/media/avatar', avatarMedia);
 app.route('/media/events', eventMedia);
@@ -123,6 +126,7 @@ export default {
     await cleanupPosts(env.DB, env.PHOTOS);
     await backfillThumbnail(env);
     await cleanupEvents(env.DB, env.PHOTOS);
+    await cleanupInviteLinks(env.DB);
     await cleanupAuth(env.DB);
     await cleanupEmailBudgets(env.DB);
   },

@@ -6,10 +6,13 @@ import {
   canJoin,
   ensureMembership,
   activeMember,
+  claimSource,
   bindEventVerification,
   eventClaim,
-  hasEventClaim,
   acceptEventVerification,
+  bindInviteVerification,
+  inviteClaim,
+  acceptInviteVerification,
 } from '../membership';
 import { emailConfigured, sendLoginEmail } from '../email';
 import { sessionStage } from '../telemetry';
@@ -22,23 +25,24 @@ export function authConfigured(env: Env): boolean {
 
 function forbidden(): never {
   throw new APIError('FORBIDDEN', {
-    message: 'An event link from an active member is required.',
+    message: 'An invite link or event link from an active member is required.',
   });
 }
 export function authOptions(env: Env): BetterAuthOptions {
-  const eventVerifications = new WeakSet<Request>();
-  // Whether an event-link claim is bound to this email token.
-  async function isEventVerification(
+  const linkVerifications = new WeakMap<Request, 'event' | 'invite'>();
+  // Which link's claim, if any, is bound to this email token.
+  async function linkVerification(
     token: string | null,
     request: Request | undefined,
   ) {
-    if (!token || !request) return false;
-    if (eventVerifications.has(request)) return true;
-    const event = await hasEventClaim(env.DB, token);
+    if (!token || !request) return null;
+    const known = linkVerifications.get(request);
+    if (known) return known;
+    const source = await claimSource(env.DB, token);
     // Keep the source from before token consumption through session issuance.
     // Cleanup can remove the claim in between; it must fail, not fall back.
-    if (event) eventVerifications.add(request);
-    return event;
+    if (source) linkVerifications.set(request, source);
+    return source;
   }
   return {
     appName: 'slowmass',
@@ -79,7 +83,7 @@ export function authOptions(env: Env): BetterAuthOptions {
         },
       },
       {
-        id: 'event-link-verification',
+        id: 'link-verification',
         hooks: {
           before: [
             {
@@ -87,7 +91,7 @@ export function authOptions(env: Env): BetterAuthOptions {
               handler: createAuthMiddleware(async (ctx) => {
                 const token =
                   typeof ctx.query?.token === 'string' ? ctx.query.token : null;
-                await isEventVerification(token, ctx.request);
+                await linkVerification(token, ctx.request);
               }),
             },
           ],
@@ -104,7 +108,8 @@ export function authOptions(env: Env): BetterAuthOptions {
             .bind(email.trim().toLowerCase())
             .first<{ id: string }>();
           const existing = user && (await activeMember(env.DB, user.id));
-          // Signing in through an event link records the link for members too.
+          // Signing in through an event link records the link for members too;
+          // members sign in through an invite link as they normally would.
           const eligible =
             metadata?.eventLink !== undefined
               ? await bindEventVerification(
@@ -114,11 +119,19 @@ export function authOptions(env: Env): BetterAuthOptions {
                   token,
                   Boolean(existing),
                 )
-              : existing || (await canJoin(env.DB, email, env.BOOTSTRAP_EMAIL));
+              : existing ||
+                (metadata?.inviteLink !== undefined
+                  ? await bindInviteVerification(
+                      env.DB,
+                      metadata.inviteLink,
+                      email,
+                      token,
+                    )
+                  : await canJoin(env.DB, email, env.BOOTSTRAP_EMAIL));
           if (!eligible)
             throw new APIError('FORBIDDEN', {
               code: 'INVITATION_REQUIRED',
-              message: 'Ask a slowmass member to text you an event link.',
+              message: 'Ask a slowmass member to text you an invite link.',
             });
           await sendLoginEmail(env, email, url);
         },
@@ -143,11 +156,15 @@ export function authOptions(env: Env): BetterAuthOptions {
               typeof ctx.query?.token === 'string'
                 ? ctx.query.token
                 : null;
-            const event = await isEventVerification(token, ctx?.request);
+            const source = await linkVerification(token, ctx?.request);
             if (
               !user.emailVerified ||
-              !(event && token
-                ? await eventClaim(env.DB, token, user.email)
+              !(source && token
+                ? await (source === 'event' ? eventClaim : inviteClaim)(
+                    env.DB,
+                    token,
+                    user.email,
+                  )
                 : await canJoin(env.DB, user.email, env.BOOTSTRAP_EMAIL))
             )
               forbidden();
@@ -169,14 +186,15 @@ export function authOptions(env: Env): BetterAuthOptions {
               typeof ctx.query?.token === 'string'
                 ? ctx.query.token
                 : null;
-            // Signing in through an event link records the link, joining new
-            // people first.
-            if (token && (await isEventVerification(token, ctx?.request)))
-              return (await acceptEventVerification(
-                env.DB,
-                session.userId,
-                token,
-              ))
+            // Signing in through a link joins new people first; event links
+            // also record the link for members.
+            const source = await linkVerification(token, ctx?.request);
+            if (token && source)
+              return (await (
+                source === 'event'
+                  ? acceptEventVerification
+                  : acceptInviteVerification
+              )(env.DB, session.userId, token))
                 ? { data: session }
                 : forbidden();
             if (

@@ -1,0 +1,3 @@
+# Invite links
+
+`InviteLinkDialog` shows the member's current invite link with a Copy button, opened from the mail icon beside Settings on their own profile. Opening it requests the link (`POST /api/invite-link`), which issues a new one after the old link expires, so the dialog always has a link to send. It says until when anyone with the link can join, and offers Try again if loading fails. The server owns expiry, renewal, and who may invite; see the [server feature](../../../server/features/invite-links/README.md). The signed-out side of an invite link lives in [Welcome](../welcome/README.md).

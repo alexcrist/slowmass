@@ -10,9 +10,24 @@ import { loadStartup, type Bootstrap } from './startup';
 const auth = createAuthClient({ plugins: [magicLinkClient()] });
 type State = 'loading' | 'ready' | 'unavailable' | 'error';
 
-// An event's URL is the only invitation. Signed out, it reveals only whether it
-// works; signing in through it shows the event and admits new people.
-type LinkEvent = { id: string; open: boolean } | null;
+// Invite and event links carry their credential in the URL fragment. Signed
+// out, Welcome learns only whether the link works before asking for an email;
+// signing in through it admits new people, and an event link shows the event.
+type Link = { kind: 'event' | 'invite'; token: string };
+// A working link: whether it admits new people, and an event link's event.
+type LinkCheck = { open: boolean; eventId?: string } | null;
+
+// Members don't need an invite: drop its credential before member routes read
+// the address.
+function signedIn(data: Bootstrap) {
+  if (location.hash.startsWith('#invite/'))
+    window.history?.replaceState(
+      window.history.state,
+      '',
+      location.pathname + location.search,
+    );
+  return data;
+}
 
 export function Welcome() {
   const [state, setState] = useState<State>('loading');
@@ -20,17 +35,23 @@ export function Welcome() {
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
-  const [message, setMessage] = useState(() =>
-    new URLSearchParams(location.search).get('error') === 'event'
+  const [message, setMessage] = useState(() => {
+    const error = new URLSearchParams(location.search).get('error');
+    return error === 'event'
       ? 'That sign-in link could not be used for this event. It may be over or cancelled, or its link may no longer work.'
-      : new URLSearchParams(location.search).has('error')
-        ? 'That sign-in link could not be used. It may have expired or been used already. Request a new link below.'
-        : '',
-  );
-  const [eventToken] = useState(
-    () => /^#event\/([a-zA-Z0-9]{48})$/.exec(location.hash)?.[1] ?? null,
-  );
-  const [linkEvent, setLinkEvent] = useState<LinkEvent | undefined>();
+      : error === 'invite'
+        ? 'That sign-in link could not be used to join. The invite link may have expired; ask your friend for a new one.'
+        : error !== null
+          ? 'That sign-in link could not be used. It may have expired or been used already. Request a new link below.'
+          : '';
+  });
+  const [link] = useState<Link | null>(() => {
+    const match = /^#(event|invite)\/([a-zA-Z0-9]{48})$/.exec(location.hash);
+    return match
+      ? { kind: match[1] === 'event' ? 'event' : 'invite', token: match[2] }
+      : null;
+  });
+  const [checked, setChecked] = useState<LinkCheck | undefined>();
   const [linkAttempt, setLinkAttempt] = useState(0);
   const [linkError, setLinkError] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -57,7 +78,7 @@ export function Welcome() {
       try {
         const status = await loadStartup(controller.signal);
         if (controller.signal.aborted) return;
-        setMember(status.user ? status : null);
+        setMember(status.user ? signedIn(status) : null);
         if (!controller.signal.aborted)
           setState(status.signInAvailable ? 'ready' : 'unavailable');
       } catch {
@@ -84,7 +105,8 @@ export function Welcome() {
         .then(async (response) => {
           if (response.ok) {
             const data = (await response.json()) as Bootstrap;
-            if (!controller.signal.aborted && data.user) setMember(data);
+            if (!controller.signal.aborted && data.user)
+              setMember(signedIn(data));
           }
         })
         .catch(() => {});
@@ -105,7 +127,7 @@ export function Welcome() {
       if (response.ok) {
         const data = (await response.json()) as Bootstrap;
         if (!data.signInAvailable) throw new Error();
-        if (data.user) setMember(data);
+        if (data.user) setMember(signedIn(data));
         else
           setLoginStatus(
             'No sign-in found in this window yet. Open your email link, then return here.',
@@ -119,20 +141,29 @@ export function Welcome() {
   }
   const signedOut = state === 'ready' && member === null;
   useEffect(() => {
-    if (!signedOut || !eventToken) return;
+    if (!signedOut || !link) return;
     const controller = new AbortController();
-    api<{ event: LinkEvent }>('/api/event-link', {
-      ...jsonRequest('POST', { token: eventToken }),
+    const request = {
+      ...jsonRequest('POST', { token: link.token }),
       signal: controller.signal,
-    })
-      .then((result) => setLinkEvent(result.event))
+    };
+    (link.kind === 'event'
+      ? api<{ event: { id: string; open: boolean } | null }>(
+          '/api/event-link',
+          request,
+        ).then(({ event }) => event && { open: event.open, eventId: event.id })
+      : api<{ available: boolean }>('/api/invite-link/check', request).then(
+          ({ available }) => (available ? { open: true } : null),
+        )
+    )
+      .then(setChecked)
       .catch(() => {
         if (!controller.signal.aborted) setLinkError(true);
       });
     return () => controller.abort();
-  }, [signedOut, eventToken, linkAttempt]);
-  // A working event link signs in through that event; otherwise sign in normally.
-  const event = eventToken && linkEvent ? linkEvent : null;
+  }, [signedOut, link, linkAttempt]);
+  // A working link signs in through it; otherwise sign in normally.
+  const working = link && checked ? { ...link, ...checked } : null;
   async function signIn(submit: FormEvent<HTMLFormElement>) {
     submit.preventDefault();
     if (busy) return;
@@ -141,19 +172,27 @@ export function Welcome() {
     try {
       const result = await auth.signIn.magicLink({
         email: email.trim().toLowerCase(),
-        ...(event
+        ...(working?.kind === 'event'
           ? {
-              callbackURL: `/#event/${event.id}`,
+              callbackURL: `/#event/${working.eventId}`,
               errorCallbackURL: '/?error=event',
-              metadata: { eventLink: eventToken },
+              metadata: { eventLink: working.token },
             }
-          : { callbackURL: '/', errorCallbackURL: '/?error=signin' }),
+          : working?.kind === 'invite'
+            ? {
+                callbackURL: '/',
+                errorCallbackURL: '/?error=invite',
+                metadata: { inviteLink: working.token },
+              }
+            : { callbackURL: '/', errorCallbackURL: '/?error=signin' }),
       });
       if (result.error?.code === 'INVITATION_REQUIRED') {
         setMessage(
-          event
+          working?.kind === 'event'
             ? 'This event isn’t taking new people. If you already use slowmass, use that email; otherwise ask the host for the current link.'
-            : 'There’s no slowmass account for this email. To join, ask a member to text you an event link.',
+            : working?.kind === 'invite'
+              ? 'This invite link isn’t taking new people anymore. If you already use slowmass, use that email; otherwise ask your friend for a new link.'
+              : 'There’s no slowmass account for this email. To join, ask a member to text you an invite link.',
         );
         return;
       }
@@ -205,22 +244,32 @@ export function Welcome() {
       >
         {state === 'ready' &&
           name === null &&
-          (eventToken && linkEvent !== null ? (
+          (link?.kind === 'event' && checked !== null ? (
             <>
               <h1>You’re invited to an event</h1>
               <p className="status-copy">
-                {linkEvent?.open === false
+                {checked?.open === false
                   ? 'This event is over or was cancelled. If you already use slowmass, sign in to see it.'
                   : 'Enter your email to see it. We’ll send a sign-in link; if you’re new, this creates your slowmass account.'}
+              </p>
+            </>
+          ) : link?.kind === 'invite' && checked !== null ? (
+            <>
+              <h1>You’re invited to slowmass</h1>
+              <p className="status-copy">
+                Enter your email to join. We’ll send a sign-in link; if you’re
+                new, this creates your slowmass account.
               </p>
             </>
           ) : (
             <>
               <h1>Welcome to slowmass</h1>
               <p className="status-copy">
-                {eventToken
+                {link?.kind === 'event'
                   ? 'This event link isn’t available. The event may have ended, or the link may no longer work.'
-                  : 'Sign in with your email. New here? Ask a member to text you an event link.'}
+                  : link
+                    ? 'This invite link isn’t available. It may have expired; ask your friend for a new one. Members can sign in below.'
+                    : 'Sign in with your email. New here? Ask a member to text you an invite link.'}
               </p>
             </>
           ))}
@@ -268,10 +317,10 @@ export function Welcome() {
                 Use another email or try again
               </button>
             </div>
-          ) : eventToken && linkEvent === undefined ? (
+          ) : link && checked === undefined ? (
             linkError ? (
               <div>
-                <p role="alert">Could not check this event link.</p>
+                <p role="alert">{`Could not check this ${link.kind} link.`}</p>
                 <button
                   onClick={() => {
                     setLinkError(false);
@@ -282,7 +331,7 @@ export function Welcome() {
                 </button>
               </div>
             ) : (
-              <p role="status">Checking this event link…</p>
+              <p role="status">{`Checking this ${link.kind} link…`}</p>
             )
           ) : (
             <form onSubmit={(submit) => void signIn(submit)}>

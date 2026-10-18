@@ -1,10 +1,10 @@
 import { invitationTokenHash } from './credential';
 
 // Event admission: who may open or answer an event, and joining slowmass by
-// signing in through an event link—the only way to invite someone. The events
-// feature owns everything else about events. An event without an end time is
-// over twelve hours after it starts; migration 0030 uses the same value.
-// Answers are capped to bound notification fan-out.
+// signing in through an event link. The events feature owns everything else
+// about events. An event without an end time is over twelve hours after it
+// starts; migration 0030 uses the same value. Answers are capped to bound
+// notification fan-out.
 export const EVENT_OVER_AFTER = 43_200_000;
 export const MAX_EVENT_RESPONSES = 500;
 const available = `e.state='published'
@@ -106,15 +106,6 @@ export async function bindEventVerification(
   return result.meta.changes > 0;
 }
 
-// Retain claims until expiry: an old email must never switch to another source.
-export async function hasEventClaim(db: D1Database, token: string) {
-  return Boolean(
-    await db
-      .prepare('SELECT 1 FROM event_claim WHERE token_hash=?')
-      .bind(await invitationTokenHash(token))
-      .first(),
-  );
-}
 // Whether a new person may join through this claim.
 export async function eventClaim(
   db: D1Database,

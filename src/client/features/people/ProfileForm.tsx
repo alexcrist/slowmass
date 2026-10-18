@@ -93,7 +93,7 @@ export function ProfileForm({
         autoComplete="name"
       />
       {nameOnly ? (
-        <p className="field-help">Hosts and other guests see this name.</p>
+        <p className="field-help">Other members see this name.</p>
       ) : (
         <>
           <label className="field-label" htmlFor="bio">

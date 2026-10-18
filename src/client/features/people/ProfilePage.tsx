@@ -8,6 +8,8 @@ import { ProfilePhoto } from '../avatars';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
 import { SettingsIcon } from '../../navigation/SettingsIcon';
 import { OverflowMenu } from '../../ui/OverflowMenu';
+import { MailIcon } from '../../ui/MailIcon';
+import { InviteLinkDialog } from '../invite-links';
 type VisibleProfile = {
   handle: string;
   displayName: string;
@@ -26,6 +28,7 @@ export function ProfilePage({
   const [confirming, setConfirming] = useState<'unfollow' | 'block' | null>(
     null,
   );
+  const [inviting, setInviting] = useState(false);
   const {
     data,
     error: loadError,
@@ -89,6 +92,15 @@ export function ProfilePage({
               </div>
               {self ? (
                 <div className="profile-shortcuts">
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Share invite link"
+                    aria-haspopup="dialog"
+                    onClick={() => setInviting(true)}
+                  >
+                    <MailIcon />
+                  </button>
                   <a
                     className="icon-button"
                     href="#settings"
@@ -151,6 +163,7 @@ export function ProfilePage({
             )}
             {error && !confirming && <p role="alert">{error}</p>}
           </header>
+          {inviting && <InviteLinkDialog onClose={() => setInviting(false)} />}
           {confirming && (
             <ConfirmDialog
               title={confirming === 'block' ? 'Block account' : 'Unfollow'}

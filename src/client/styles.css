@@ -1732,16 +1732,16 @@ a.profile-tab {
   align-items: center;
   flex-shrink: 0;
 }
-.event-link-copy {
+.link-copy {
   display: flex;
   gap: 8px;
 }
-.event-link-copy input {
+.link-copy input {
   flex: 1;
   min-width: 0;
   margin: 0;
 }
-.event-link-copy .primary-button {
+.link-copy .primary-button {
   flex: none;
   width: auto;
   margin: 0;

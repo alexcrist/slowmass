@@ -74,8 +74,8 @@ function MemberPages({
   const [avatarVersion, setAvatarVersion] = useState(0);
   const [pageVersion, setPageVersion] = useState(0);
   const ready = Boolean(profile?.hasAvatar);
-  // Everyone joins through an event. Until they add a profile photo, members
-  // use only events, Activity and Settings.
+  // Until they add a profile photo, members use only events, Activity and
+  // Settings.
   const eventOnly = Boolean(profile && !ready);
   const active = ready || eventOnly;
   const heading = useRef<HTMLHeadingElement>(null);
@@ -123,9 +123,11 @@ function MemberPages({
   function saved(value: Profile) {
     const created = profile === null;
     setProfile(value);
-    // A new member's name keeps them on the event that brought them here.
-    if (!created)
-      location.hash = eventOnly ? '#settings' : profileHref(value.handle);
+    // A new member's name keeps them on the event that brought them here;
+    // anyone else adds a profile photo next.
+    if (created) {
+      if (page !== 'event') location.hash = '#photo';
+    } else location.hash = eventOnly ? '#settings' : profileHref(value.handle);
   }
   function photoSaved() {
     setProfile((current) => (current ? { ...current, hasAvatar: 1 } : current));
@@ -218,7 +220,9 @@ function MemberPages({
       return (
         <>
           <p className="onboarding-intro">
-            Hosts and other guests see this name. It doesn’t need to be unique.
+            {page === 'event'
+              ? 'Hosts and other guests see this name. It doesn’t need to be unique.'
+              : 'It doesn’t need to be unique. Next, you’ll add a profile photo.'}
           </p>
           <ProfileForm profile={null} onSave={saved} nameOnly />
         </>
