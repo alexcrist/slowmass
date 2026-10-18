@@ -8,4 +8,6 @@ Backups may contain earlier content until expiration. Restores are quarantined, 
 
 `/api/bootstrap` combines sign-in availability, the current verified active session, that member's own profile, pending optional device setup, and whether the member has any live push subscription. The three member reads run concurrently after authentication. Anonymous or expired sessions return a null user/profile; service/database failures remain errors rather than false signed-out states. No response is cached. Existing `/api/me` and profile endpoints remain available for account operations and already-loaded clients.
 
-Deletion also removes email-bound shared-invite verification claims for the deleting account. Inactivity immediately prevents redemption of their links; bounded cleanup then revokes those links and clears encrypted credentials. Immutable link/redemption provenance and consumed-place counts remain.
+Deletion also removes email-bound claims for the deleting account. Inactivity immediately stops their event links from admitting anyone; bounded cleanup also revokes any legacy invite link and clears encrypted credentials. Immutable link/redemption provenance and consumed-place counts remain.
+
+Deletion removes pending event-link claims for the email immediately. Scheduled cleanup ends events the person created (cover photos to cleanup, link ciphertext cleared, details redacted), removes hosting rows and answers, and redacts their event messages in bounded batches; completion waits for all of them.

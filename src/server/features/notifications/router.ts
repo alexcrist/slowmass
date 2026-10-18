@@ -23,17 +23,19 @@ notifications.use('*', async (c, next) => {
   const session = await getActiveSession(c.env, c.req.raw.headers);
   const user = session?.user;
   if (!user) return c.json({ error: 'Sign in to continue.' }, 401);
-  if (!session?.hasProfilePhoto)
-    return c.json(
-      { error: 'Add a profile photo to finish setting up your account.' },
-      409,
-    );
+  // Members without a profile photo see activity for events they answered;
+  // every row is still authorized by its own visibility rules.
   c.set('userId', user.id);
   await next();
 });
+// Older open clients cannot render newer activity kinds.
+function kinds(c: { req: { query: (name: string) => string | undefined } }) {
+  return {
+    joined: c.req.query('includeJoined') === '1',
+    events: c.req.query('includeEvents') === '1',
+  };
+}
 notifications.get('/', async (c) => {
-  // Older open clients cannot render the new activity kind.
-  const includeJoined = c.req.query('includeJoined') === '1';
   const filter = c.req.query('filter') ?? 'all';
   if (filter !== 'all' && filter !== 'requests')
     return c.json({ error: 'Invalid activity filter.' }, 400);
@@ -52,7 +54,7 @@ notifications.get('/', async (c) => {
       c.env.DB,
       c.get('userId'),
       focus,
-      includeJoined,
+      kinds(c),
     );
     focusFound = cursor !== null;
   }
@@ -62,7 +64,7 @@ notifications.get('/', async (c) => {
       c.get('userId'),
       cursor,
       filter,
-      includeJoined,
+      kinds(c),
     )),
     ...(focus ? { focusFound } : {}),
   });
@@ -70,11 +72,7 @@ notifications.get('/', async (c) => {
 
 notifications.get('/unread-count', async (c) =>
   c.json({
-    count: await unreadCount(
-      c.env.DB,
-      c.get('userId'),
-      c.req.query('includeJoined') === '1',
-    ),
+    count: await unreadCount(c.env.DB, c.get('userId'), kinds(c)),
   }),
 );
 notifications.post('/read', bodyLimit({ maxSize: 6000 }), async (c) => {

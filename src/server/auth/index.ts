@@ -58,27 +58,56 @@ export function handleAuthRequest(env: Env, request: Request) {
   return authOperation(env, 'handler', (auth) => auth.handler(request));
 }
 
-export async function getActiveSession(env: Env, headers: Headers) {
-  const session = await authOperation(env, 'session', (auth) =>
-    auth.api.getSession({ headers }),
+async function readActiveSession(env: Env, headers: Headers, renew: boolean) {
+  const { headers: responseHeaders, response: session } = await authOperation(
+    env,
+    'session',
+    (auth) =>
+      auth.api.getSession({
+        headers,
+        query: { disableRefresh: !renew },
+        returnHeaders: true,
+      }),
   );
   startupPhase('membership');
-  if (!session?.user.emailVerified) return null;
+  const cookies = responseHeaders.getSetCookie();
+  if (!session?.user.emailVerified) return { session: null, cookies };
   const access = await memberAccess(env.DB, session.user.id);
-  if (!access) return null;
+  if (!access) return { session: null, cookies };
   return {
-    user: { id: session.user.id, name: session.user.name },
-    sessionId: session.session.id,
-    hasProfilePhoto: access.hasProfilePhoto,
+    session: {
+      user: { id: session.user.id, name: session.user.name },
+      sessionId: session.session.id,
+      hasProfilePhoto: access.hasProfilePhoto,
+    },
+    cookies,
   };
+}
+
+export async function getActiveSession(env: Env, headers: Headers) {
+  return (await readActiveSession(env, headers, false)).session;
 }
 
 export async function getActiveUser(env: Env, headers: Headers) {
   return (await getActiveSession(env, headers))?.user ?? null;
 }
 
+// Renewal extends the session row and reissues its cookie, so only a response
+// that forwards these Set-Cookie values may renew. Every app start calls
+// bootstrap; other reads skip renewal rather than extend only the row.
+export async function renewActiveUser(env: Env, headers: Headers) {
+  const { session, cookies } = await readActiveSession(env, headers, true);
+  return { user: session?.user ?? null, cookies };
+}
+
+// Better Auth stores dates as ISO-8601 text. SQLite orders every number before
+// every text value, so raw comparisons with those columns must use this format.
+export function authDate() {
+  return new Date().toISOString();
+}
+
 export async function cleanupAuth(db: D1Database) {
-  const now = Date.now();
+  const now = authDate();
   await db.batch([
     db
       .prepare(

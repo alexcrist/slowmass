@@ -1,24 +1,43 @@
 export type ProfileInput = { handle: string; displayName: string; bio: string };
-export function parseProfile(value: unknown): ProfileInput | null {
+// A missing username keeps the current one, or generates one for a new profile:
+// new members give only a name, which need not be unique.
+export type ProfileUpdate = Omit<ProfileInput, 'handle'> & {
+  handle: string | null;
+};
+export function parseProfile(value: unknown): ProfileUpdate | null {
   if (!value || typeof value !== 'object') return null;
   const input = value as Record<string, unknown>;
   if (
-    typeof input.handle !== 'string' ||
+    (input.handle !== undefined && typeof input.handle !== 'string') ||
     typeof input.displayName !== 'string' ||
-    typeof input.bio !== 'string'
+    (input.bio !== undefined && typeof input.bio !== 'string')
   )
     return null;
-  const handle = input.handle.trim().toLowerCase();
+  const handle =
+    typeof input.handle === 'string' ? input.handle.trim().toLowerCase() : null;
   const displayName = input.displayName.trim();
-  const bio = input.bio.trim();
+  const bio = typeof input.bio === 'string' ? input.bio.trim() : '';
   if (
-    !/^[a-z0-9_]{3,30}$/.test(handle) ||
+    (handle !== null && !/^[a-z0-9_]{3,30}$/.test(handle)) ||
     !displayName ||
     displayName.length > 60 ||
     bio.length > 500
   )
     return null;
   return { handle, displayName, bio };
+}
+// These names are literal API routes, not member profile addresses.
+const reserved = ['self', 'discover', 'connections'];
+export function suggestedHandle(name: string) {
+  const base = name
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 24)
+    .replace(/_+$/, '');
+  return base.length >= 3 && !reserved.includes(base) ? base : 'member';
 }
 
 export async function ownProfile(db: D1Database, id: string) {
@@ -33,10 +52,28 @@ export async function ownProfile(db: D1Database, id: string) {
 export async function saveProfile(
   db: D1Database,
   id: string,
-  input: ProfileInput,
+  update: ProfileUpdate,
 ) {
-  // These names are literal API routes, not member profile addresses.
-  if (['self', 'discover', 'connections'].includes(input.handle)) return false;
+  if (update.handle === null) {
+    const current = await ownProfile(db, id);
+    if (current)
+      return saveProfile(db, id, { ...update, handle: current.handle });
+    // Try the name, then random suffixes; the unique index arbitrates races.
+    const base = suggestedHandle(update.displayName);
+    for (const candidate of [
+      base,
+      ...Array.from(
+        { length: 3 },
+        () =>
+          `${base}_${(crypto.getRandomValues(new Uint32Array(1))[0] % 36 ** 5).toString(36)}`,
+      ),
+    ])
+      if (await saveProfile(db, id, { ...update, handle: candidate }))
+        return true;
+    return false;
+  }
+  const input = { ...update, handle: update.handle };
+  if (reserved.includes(input.handle)) return false;
   // The single conditional write and unique index arbitrate simultaneous claims.
   const result = await db
     .prepare(

@@ -1,6 +1,6 @@
 # Slowmass
 
-A mobile-first photo app for friends. The home feed contains the member’s own posts and posts from accepted follows, newest first, with explicit pagination. One still image per post. Every profile is private. Onboarding requires a username, profile name, and profile photo before member features unlock; photos can be replaced, not removed. No recommendations, ads, videos, albums, stories, reels, or infinite scroll. Login uses verified one-time email links only. Every member after the bootstrap root must be invited by an active member; preserve the invitation tree permanently.
+A mobile-first photo app for friends. The home feed contains the member’s own posts and posts from accepted follows, newest first, with explicit pagination. One still image per post. Every profile is private. New members give only a profile name (a username is generated); until they add a profile photo they use only events, Activity, and Settings. Photos can be replaced, not removed. Members can also host simple events (cover photo, details, guest answers, messages); texting an event’s URL is the only way to invite someone, and events never enter the feed. No recommendations, ads, videos, albums, stories, reels, or infinite scroll. Login uses verified one-time email links only. Every member after the bootstrap root must join through an active member’s event link; preserve the invitation tree, including the link version used, permanently.
 
 Initial operating target: $0/month within free allowances, with a measured path to paid capacity. Minimize both hosting cost and maintenance. Do not trade away authorization, data integrity, or recovery to save pennies.
 
@@ -11,7 +11,7 @@ Initial operating target: $0/month within free allowances, with a measured path 
 - [docs/architecture.md](docs/architecture.md): proposed architecture, privacy, cost model, and scaling decisions.
 - [docs/implementation-plan.md](docs/implementation-plan.md): executable build stages and acceptance criteria.
 
-The repository contains email-link authentication, member invitations, profiles, private avatars, follow relationships, photo posts, a paginated feed, likes, comments, and in-app notifications. Account deletion, storage limits, and recovery tools are implemented; operational rollout status and limitations are tracked in the plan. Keep proposed behavior visibly separate from verified implementation. As features ship, their local READMEs become the authority for implemented behavior.
+The repository contains email-link authentication, event-link joining, profiles, private avatars, follow relationships, photo posts, a paginated feed, likes, comments, in-app notifications, and events. Account deletion, storage limits, and recovery tools are implemented; operational rollout status and limitations are tracked in the plan. Keep proposed behavior visibly separate from verified implementation. As features ship, their local READMEs become the authority for implemented behavior.
 
 - [docs/design.md](docs/design.md): visual direction.
 - [docs/setup.md](docs/setup.md): external setup and migration workflow.

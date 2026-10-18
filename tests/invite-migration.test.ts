@@ -119,6 +119,20 @@ it('migrates joined activity atomically without backfill or losing read versions
     );
     for (const index of [0, 2, 3])
       expect(afterDismissal[index]).toEqual(beforeDismissal[index]);
+    // The current page reader also requires every later migration.
+    for (const file of [
+      '0024_fixed_invite_links',
+      '0025_current_invite_link',
+      '0027_device_setup',
+      '0028_device_setup_offer',
+      '0029_like_runs',
+      '0030_events',
+    ])
+      await db.batch(
+        unstable_splitSqlQuery(
+          await readFile(`migrations/${file}.sql`, 'utf8'),
+        ).map((sql) => db.prepare(sql)),
+      );
     expect(
       (
         await runtime.request(

@@ -52,7 +52,9 @@ it('returns availability, session and only the current member profile in one pri
     },
   );
   await runtime.db
-    .prepare("UPDATE session SET expiresAt=0 WHERE userId='alice'")
+    .prepare(
+      "UPDATE session SET expiresAt='2020-01-01T00:00:00.000Z' WHERE userId='alice'",
+    )
     .run();
   expect(
     await (await runtime.request('alice', '/api/bootstrap')).json(),
@@ -75,4 +77,41 @@ it('returns availability, session and only the current member profile in one pri
       profile: null,
     },
   );
+});
+
+it('renews a sixty-day session cookie only through bootstrap', async () => {
+  const day = 86400000;
+  const expiry = () =>
+    runtime.db
+      .prepare("SELECT expiresAt FROM session WHERE id='carol'")
+      .first<string>('expiresAt');
+  // Last renewed 59 days ago, so the daily renewal is due.
+  const due = new Date(Date.now() + day).toISOString();
+  await runtime.db
+    .prepare("UPDATE session SET expiresAt=? WHERE id='carol'")
+    .bind(due)
+    .run();
+  const ordinary = await runtime.request('carol', '/api/me');
+  expect(ordinary.status).toBe(200);
+  // Other responses cannot carry the renewed cookie, so they must not renew.
+  expect(ordinary.headers.get('Set-Cookie')).toBeNull();
+  expect(await expiry()).toBe(due);
+
+  const before = Date.now();
+  const renewed = await runtime.request('carol', '/api/bootstrap');
+  expect((await renewed.json()) as unknown).toMatchObject({
+    user: { id: 'carol' },
+  });
+  const cookie = renewed.headers.get('Set-Cookie') ?? '';
+  expect(cookie).toContain('better-auth.session_token=');
+  expect(cookie).toContain('Max-Age=5184000');
+  expect(cookie).toContain('HttpOnly');
+  const extended = Date.parse((await expiry()) ?? '');
+  expect(extended).toBeGreaterThanOrEqual(before + 60 * day);
+  expect(extended).toBeLessThanOrEqual(Date.now() + 60 * day);
+
+  // Renewal happens at most daily, so most app starts write nothing.
+  const repeat = await runtime.request('carol', '/api/bootstrap');
+  expect(repeat.headers.get('Set-Cookie')).toBeNull();
+  expect(Date.parse((await expiry()) ?? '')).toBe(extended);
 });

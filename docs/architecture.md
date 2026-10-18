@@ -34,11 +34,13 @@ Private media is served through an authenticated Worker route with a resource ID
 
 Membership retains a permanent parent pointer to the inviter and the accepted invitation. D1 triggers atomically consume invitations and reject changes to provenance. Issuance and acceptance require an active inviter. The single bootstrap root is protected by a unique index. Preserve minimal tombstones through account deletion; do not build mass-ban tools yet.
 
-Invitation email links are seven-day, join-only credentials. Their confirmation page does not accept on load, avoiding consumption by email prefetchers. A Better Auth plugin uses a same-origin POST and the conditional membership insert to accept exactly once, then uses the library's identity/session APIs. An indexed credential hash is separate from the invitation ID exposed to the inviter. Retry email payloads are encrypted with the library until delivery is confirmed. Joining through any path disables invitation credentials for that email; returning-member login links remain valid for ten minutes. This reuses the existing Worker, D1, and Resend setup.
+Event links are the only invitations (personal email invitations and invite links were removed in October 2026; their records remain). See [Events](#events) below.
 
-An initial-profile trigger creates mutual accepted follows between inviter and invitee once both profiles exist. It checks active membership and blocks in the same transaction. It does not run on profile edits or sign-in, and does not backfill completed profiles, so historical unfollows remain respected.
+An initial-profile trigger creates mutual accepted follows between a former personal-invitation inviter and invitee once both profiles exist. It checks active membership and blocks in the same transaction, does not run on profile edits or sign-in, and does not backfill completed profiles. Event links create no follows.
 
 Email delivery uses Resend with explicit application-wide and per-recipient budgets, without tracking pixels or link tracking. Better Auth stores one-time tokens hashed and rate-limits requests through D1. Real hosted delivery is an external setup gate.
+
+When Resend's free daily ceiling becomes binding, the chosen upgrade is Cloudflare Email Service. As of October 2026 it requires Workers Paid and includes 3,000 emails a month, with no stated daily cap. It was still described as beta. Before switching, replace the Resend idempotency key that invitation retries rely on, verify sender authentication and deliverability, and change the daily budget to a monthly allowance that keeps sign-in mail available. Combining several free providers is rejected because the second setup, failure mode and data processor cost more than they save.
 
 ## Photo lifecycle
 
@@ -92,12 +94,6 @@ Production fetch handlers use a Washington-region placement hint to reduce round
 - [Images pricing](https://developers.cloudflare.com/images/pricing/) and [private byte processing binding](https://developers.cloudflare.com/images/optimization/binding/)
 - [Better Auth database support](https://better-auth.com/docs/adapters/other-relational-databases)
 
-## Current shared invitation model
-
-Admission, email authentication, and private-post access use the existing Worker, D1, Better Auth magic-link delivery, and membership graph. Migration 0025 stores one rotating credential per inviter with fixed seven-day expiry and no sign-up cap. Conditional writes converge concurrent copies and compare versions on replacement. Short-lived claims pin the chosen inviter and exact credential hash/version across browsers; membership checks them inside the atomic invitation/membership batch. Shared invitations grant no automatic follows. Each successful join retains immutable invitation type, inviter, and timestamps independently of the rotating credential. Join Activity waits for required photo completion and uses existing indexed sources, read receipts, and opt-in push.
-
-The current model is deployed with migration 0025; see the dated release record in setup.md. It replaces the original multi-link/capacity model from migrations 0022–0024. Migration 0025 requires unused shared-link state, preserves personal invitations and existing membership, and removes the old history/capacity schema. See the invitations README and operations runbook for failure and rollout behavior.
-
 ## Optional device setup
 
 Migration 0027 introduces account-level pending setup for future members only and allows multiple browser push endpoints to belong to one authenticated session. This models iOS cookie copying at installation without confusing session identity with isolated browser storage. Consent stays per endpoint; logout revokes every endpoint owned by that session. Migration preserves queued work and requires a maintenance window with the matching Worker. Bootstrap includes one additional indexed pending-state read, concurrent with the profile read. There is no new service, polling loop, device fingerprint, or client credential storage. See the device-setup and push feature READMEs for implemented behavior.
@@ -105,3 +101,13 @@ Migration 0027 introduces account-level pending setup for future members only an
 The October 15 client removes the optional installation/notification onboarding screen. Profile/photo completion opens the app directly, and Settings owns both opt-ins.
 
 The same pending state now drives one device-setup row at the top of Activity on mobile devices. The row is client-rendered rather than an `activity_source` item: activity sources are actor-based social events with block/membership visibility and push enqueue triggers, and the unread count is account-wide while the right suggestion is device-specific. Bootstrap adds one indexed read for whether the member has any live push subscription, so an iPhone browser tab can skip Home Screen guidance it cannot otherwise verify. The client chooses the step from install state and local push permission/subscription without network requests; a per-device seen hint in browser storage limits the badge to one count per step. Answering No deletes the account's pending row. Migration 0028 is an automatic, insert-only backfill for members who predate 0027. No service, polling loop, device fingerprint, or new push behavior is added.
+
+## Events
+
+Events stay inside the existing Worker, D1 database, private R2 bucket, Better Auth magic links, and Activity/push pipeline; no service is added. A cover photo uses the trusted photo processor, quotas, and storage ledger.
+
+Each event has one URL, `/#event/<token>`: an unguessable credential in the fragment (so it never reaches server logs, referrers, or link previews), stored as a hash with host-recoverable ciphertext and replaced by compare-and-set. It is the only invitation. Signed out, a link reveals only whether it works. Signing in through it binds a short-lived email claim to the exact link version; verification records an access row (event, member, link version) and, for new people, atomically creates a shared invitation from the event creator recording the event and link version, plus the membership. Opening the URL while signed in records the same access row. Access rows authorize viewing only while their version is current; answering authorizes participation that survives replacement. Every request rechecks publication, the creator’s and viewer’s membership, and blocks in SQL, and covers load only with a session. Invitation and access rows let an operator count joins per link version to trace mass sign-ups and replace the link.
+
+New members give only a name; the server generates a unique username. Members without a profile photo can use events, Activity, and push but nothing else, keeping the photo requirement for the photo network.
+
+Event activity extends the Activity source table (migration 0030, a manual rebuild preserving receipts and queued push) rather than adding a parallel notification system. Keys identify the source, so no column is added. Fan-out is bounded by 500 answers per event; each host message writes one source per guest atomically with the message. Lists and the activity log read at most one page per index. Costs scale with D1 rows written per answer or message plus one photo per event; event pages add no polling. Sign-in email for new people uses the existing delivery budget and the [email upgrade path](#authorization-and-sessions) above.

@@ -7,10 +7,28 @@ const visibleActor = (alias: string) => `
 const latestLike = `SELECT n.actor_id FROM activity_source n
  WHERE n.recipient_id=e.recipient_id AND n.event_key=e.event_key AND ${visibleActor('n')}
  ORDER BY n.created_at DESC,n.actor_id DESC LIMIT 1`;
+// Event keys name their source, like comment keys: 'event_response:<event>.<member>'
+// and 'event_message:<message>'. Event activity follows event access: a
+// published event whose creator is active and unblocked, which the recipient
+// still hosts or has answered.
+const eventId = `CASE e.kind WHEN 'event_response' THEN substr(e.event_key,16,36)
+ WHEN 'event_message' THEN (SELECT event_id FROM event_message WHERE id=substr(e.event_key,15)) END`;
+const eventAccess = `ev.state='published'
+ AND EXISTS(SELECT 1 FROM membership c WHERE c.user_id=ev.creator_id AND c.status='active')
+ AND NOT EXISTS(SELECT 1 FROM block WHERE (blocker_id=e.recipient_id AND target_id=ev.creator_id) OR (blocker_id=ev.creator_id AND target_id=e.recipient_id))`;
 const visibleSource = `
  EXISTS(SELECT 1 FROM membership v WHERE v.user_id=e.recipient_id AND v.status='active')
  AND ${visibleActor('e')}
  AND (e.kind='request'
+   OR (e.kind='event_response' AND EXISTS(SELECT 1 FROM event ev
+     JOIN event_host h ON h.event_id=ev.id AND h.user_id=e.recipient_id
+     JOIN event_response r ON r.event_id=ev.id AND r.user_id=e.actor_id
+     WHERE ev.id=substr(e.event_key,16,36) AND ${eventAccess}))
+   OR (e.kind='event_message' AND EXISTS(SELECT 1 FROM event ev
+     JOIN event_message msg ON msg.event_id=ev.id AND msg.id=substr(e.event_key,15) AND msg.deleted_at IS NULL
+     WHERE ${eventAccess}
+       AND (EXISTS(SELECT 1 FROM event_host WHERE event_id=ev.id AND user_id=e.recipient_id)
+         OR EXISTS(SELECT 1 FROM event_response WHERE event_id=ev.id AND user_id=e.recipient_id))))
    OR (e.kind='joined'
      AND EXISTS(SELECT 1 FROM membership child WHERE child.user_id=e.actor_id AND child.invited_by=e.recipient_id)
      AND EXISTS(SELECT 1 FROM avatar WHERE user_id=e.actor_id)
@@ -24,9 +42,23 @@ const eligible = `${visibleSource}
  AND (e.kind!='likes' OR e.actor_id=(${latestLike}))`;
 export type Notification = {
   key: string;
-  kind: 'request' | 'follower' | 'joined' | 'likes' | 'comment';
+  kind:
+    | 'request'
+    | 'follower'
+    | 'joined'
+    | 'likes'
+    | 'comment'
+    | 'event_response'
+    | 'event_message';
   postId: string | null;
+  eventId: string | null;
+  eventTitle: string | null;
+  // The guest's current answer, or the kind of event message.
+  response: 'going' | 'maybe' | 'declined' | null;
+  messageKind: 'message' | 'changed' | 'cancelled' | null;
   handle: string | null;
+  // Event activity names people, since guests never choose a username.
+  displayName: string | null;
   body: string | null;
   count: number;
   createdAt: number;
@@ -47,7 +79,7 @@ export function parsePage(
       !Number.isSafeInteger(p.time) ||
       p.time < 0 ||
       typeof p.key !== 'string' ||
-      p.key.length > 100
+      p.key.length > 140
     )
       throw new Error();
     return { time: p.time, key: p.key };
@@ -56,20 +88,30 @@ export function parsePage(
   }
 }
 export function validNotificationKey(key: string) {
-  return /^(request|follower|joined|likes|comment):[a-zA-Z0-9-]{1,64}$/.test(
+  return /^(?:(?:request|follower|joined|likes|comment):[a-zA-Z0-9-]{1,64}|event_response:[a-f0-9-]{36}\.[a-zA-Z0-9-]{1,64}|event_message:[a-f0-9-]{36})$/.test(
     key,
   );
+}
+// Older open clients cannot render newer kinds; this affects rendering only.
+export type ActivityKinds = { joined: boolean; events: boolean };
+const allKinds: ActivityKinds = { joined: true, events: true };
+function kindFilter(kinds: ActivityKinds) {
+  const hidden = [
+    ...(kinds.joined ? [] : ["'joined'"]),
+    ...(kinds.events ? [] : ["'event_response'", "'event_message'"]),
+  ];
+  return hidden.length ? `e.kind NOT IN (${hidden.join(',')})` : '1';
 }
 export async function notificationStart(
   db: D1Database,
   actor: string,
   key: string,
-  includeJoined = true,
+  kinds = allKinds,
 ) {
   const item = await db
     .prepare(
       `SELECT e.created_at AS time,e.event_key AS key FROM activity_source e
-    WHERE e.recipient_id=? AND e.event_key=? AND ${includeJoined ? '1' : "e.kind!='joined'"} AND ${eligible} LIMIT 1
+    WHERE e.recipient_id=? AND e.event_key=? AND ${kindFilter(kinds)} AND ${eligible} LIMIT 1
   `,
     )
     .bind(actor, key)
@@ -82,18 +124,23 @@ export async function notificationPage(
   actor: string,
   cursor: ReturnType<typeof parsePage>,
   filter: 'all' | 'requests' = 'all',
-  includeJoined = true,
+  kinds = allKinds,
 ) {
   const rows = await db
     .prepare(
       `WITH chosen AS MATERIALIZED (
     SELECT e.* FROM activity_source e
-    WHERE e.recipient_id=? AND ${includeJoined ? '1' : "e.kind!='joined'"} AND ${filter === 'requests' ? "e.kind='request' AND" : ''}
+    WHERE e.recipient_id=? AND ${kindFilter(kinds)} AND ${filter === 'requests' ? "e.kind='request' AND" : ''}
     (e.created_at,e.event_key)<(?,?) AND ${eligible}
     ORDER BY e.created_at DESC,e.event_key DESC LIMIT 21
-  ) SELECT e.event_key AS key,e.kind,e.post_id AS postId,
+  ) SELECT e.event_key AS key,e.kind,e.post_id AS postId,${eventId} AS eventId,
+    (SELECT title FROM event WHERE id=${eventId}) AS eventTitle,
+    CASE WHEN e.kind='event_response' THEN (SELECT status FROM event_response WHERE event_id=${eventId} AND user_id=e.actor_id) END AS response,
+    CASE WHEN e.kind='event_message' THEN (SELECT kind FROM event_message WHERE id=substr(e.event_key,15)) END AS messageKind,
     CASE WHEN e.kind!='likes' THEN (SELECT handle FROM profile WHERE user_id=e.actor_id) END AS handle,
-    CASE WHEN e.kind='comment' THEN (SELECT body FROM comment WHERE id=substr(e.event_key,9)) END AS body,
+    CASE WHEN e.kind IN ('event_response','event_message') THEN (SELECT display_name FROM profile WHERE user_id=e.actor_id) END AS displayName,
+    CASE WHEN e.kind='comment' THEN (SELECT body FROM comment WHERE id=substr(e.event_key,9))
+      WHEN e.kind='event_message' THEN (SELECT body FROM event_message WHERE id=substr(e.event_key,15)) END AS body,
     CASE WHEN e.kind='likes' THEN (SELECT COUNT(*) FROM activity_source n WHERE n.recipient_id=e.recipient_id AND n.event_key=e.event_key AND ${visibleActor('n')}) ELSE 1 END AS count,
     e.created_at AS createdAt,
     (e.kind='follower'
@@ -140,7 +187,7 @@ export async function notificationPage(
 export async function unreadCount(
   db: D1Database,
   actor: string,
-  includeJoined = true,
+  kinds = allKinds,
 ) {
   return (
     (await db
@@ -148,7 +195,7 @@ export async function unreadCount(
         `SELECT COUNT(*) AS count FROM (
     SELECT DISTINCT r.event_key FROM activity_read_state r
     JOIN activity_source e USING(recipient_id,event_key,actor_id)
-    WHERE r.recipient_id=? AND r.is_read=0 AND ${includeJoined ? '1' : "e.kind!='joined'"} AND ${visibleSource} LIMIT 100
+    WHERE r.recipient_id=? AND r.is_read=0 AND ${kindFilter(kinds)} AND ${visibleSource} LIMIT 100
   )`,
       )
       .bind(actor)

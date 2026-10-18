@@ -57,7 +57,10 @@ it.each(['legacy', 'thumbnails', 'large avatars'])(
         INSERT INTO push_subscription VALUES('push','alice','push-session','https://fcm.googleapis.com/synthetic','synthetic-key','synthetic-auth',1);`;
       if (largeAvatars)
         sql += `INSERT INTO invite_link(id,inviter_id,token_hash,token_encrypted,created_at,expires_at) VALUES('shared','alice','hash','synthetic-encrypted-credential',1,9999999999999);
-          INSERT INTO invite_link_claim VALUES('claim','claim-invitation','alice','shared','hash','friend@example.com',9999999999999);`;
+          INSERT INTO invite_link_claim VALUES('claim','claim-invitation','alice','shared','hash','friend@example.com',9999999999999);
+          INSERT INTO event(id,creator_id,title,starts_at,time_zone,state,object_key,thumbnail_key,link_id,link_hash,link_encrypted,created_at)
+            VALUES('party','alice','Party',9999999999999,'UTC','published','posts/photo.webp','posts/photo.webp','link','event-hash','synthetic-encrypted-link',1);
+          INSERT INTO event_claim VALUES('event-claim','event-invitation','party','alice','link','event-hash','friend@example.com',9999999999999);`;
       const keys = ['posts/photo.webp', 'avatars/small.webp'];
       if (thumbnails) keys.push('posts/grid.webp');
       if (largeAvatars) keys.push('avatars/large.webp');

@@ -22,8 +22,6 @@ it('requires onboarding photos, validates uploads, preserves replacements and pr
     ['/api/posts', 'GET', undefined],
     ['/api/posts', 'POST', {}],
     ['/api/interactions/example/like', 'PUT', undefined],
-    ['/api/notifications', 'GET', undefined],
-    ['/api/invitations', 'POST', { email: 'new@example.com' }],
     ['/api/people/bob/request', 'POST', undefined],
     ['/api/people/discover', 'GET', undefined],
   ] as const)
@@ -32,6 +30,10 @@ it('requires onboarding photos, validates uploads, preserves replacements and pr
       path,
     ).toBe(409);
   expect((await runtime.request('alice', '/api/people/self')).status).toBe(200);
+  // Activity stays readable so members without a photo can follow events.
+  expect((await runtime.request('alice', '/api/notifications')).status).toBe(
+    200,
+  );
   expect((await runtime.request(null, '/api/avatar', 'PUT')).status).toBe(401);
   expect((await runtime.request('bob', '/api/avatar', 'PUT')).status).toBe(409);
   const photo = new Blob(

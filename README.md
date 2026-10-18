@@ -16,9 +16,11 @@ Auth instances are now request-local after a captured startup timeout before any
 
 Private post images, thumbnails, and avatars now reuse immutable bytes in a Worker-internal cache after fresh authorization on every request. Browser responses remain private/no-store, and deletion, blocking, follower removal, session expiry, and avatar replacement are verified with warm entries. See the [image cache release](docs/setup.md#private-image-byte-cache-release-october-13-2026); hosted hit rates and latency remain unmeasured.
 
+Events (cover photo, details, hosts, answers, guest list, and activity log) are implemented and tested locally but not deployed. Texting an event’s URL is now the only way to invite someone: signed out, the URL asks only for an email; signing in through it records the link version and, for new people, joins them with the host as inviter. New members give only a name and use events, Activity, and Settings until they add a profile photo. Email invitations and invite links are removed. Production rollout needs manual migration 0030; see the [implementation plan](docs/implementation-plan.md#events--october-17-2026).
+
 The operating target is $0/month within Cloudflare's free allowances, followed by measured upgrades. See [architecture](docs/architecture.md) for constraints and the scaling path.
 
-One current invite link per member is deployed with seven-day expiry and no sign-up cap. Copy reuses a valid link or creates a fresh one after expiry; Replace link lives in an overflow menu with confirmation. Link history and per-link joiner panels are removed. Migration 0025 is applied locally and in production. Joined-invitee Activity remains available for both invitation types.
+Invite links and email invitations (deployed through migration 0025) are removed in the events change; their records remain for provenance.
 
 Activity follow requests and new followers show private avatars and inline actions. Eligible follower items offer a normal Follow back request with cross-device dismissal; the unread badge is green. See the [Activity release](docs/setup.md#follow-back-activity-release--october-13-2026) for deployment and verification.
 

@@ -1,4 +1,5 @@
 import { buildPushPayload } from '@block65/webcrypto-web-push';
+import { authDate } from '../../auth';
 import type { Env } from '../../env';
 import { isUnreadNotification } from '../notifications';
 import { pushConfigured, validEndpoint } from './subscriptions';
@@ -37,7 +38,7 @@ async function target(db: D1Database, item: Delivery) {
     )
     .bind(
       item.subscription_id,
-      Date.now(),
+      authDate(),
       item.event_key,
       item.version,
       item.lease,

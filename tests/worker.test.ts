@@ -82,9 +82,13 @@ beforeAll(async () => {
   const database = await worker.getD1Database('DB');
   const now = Date.now();
   for (const [id, email, expires] of [
-    ['friend', 'friend@example.com', now + 86400000],
-    ['stranger', 'stranger@example.com', now + 86400000],
-    ['expired', 'expired@example.com', now - 1000],
+    ['friend', 'friend@example.com', new Date(now + 86400000).toISOString()],
+    [
+      'stranger',
+      'stranger@example.com',
+      new Date(now + 86400000).toISOString(),
+    ],
+    ['expired', 'expired@example.com', new Date(now - 1000).toISOString()],
   ] as const) {
     await database
       .prepare(
@@ -118,7 +122,7 @@ async function cookieFor(id: string) {
   return `better-auth.session_token=${encodeURIComponent(`${token}.${await makeSignature(token, secret)}`)}`;
 }
 
-async function requestLink(email: string) {
+async function requestLink(email: string, eventLink?: string) {
   return emailWorker.dispatchFetch(`${origin}/api/auth/sign-in/magic-link`, {
     method: 'POST',
     headers: requestHeaders(),
@@ -126,8 +130,45 @@ async function requestLink(email: string) {
       email,
       callbackURL: '/',
       errorCallbackURL: '/?error=signin',
+      ...(eventLink ? { metadata: { eventLink } } : {}),
     }),
   });
+}
+
+// A published event from a member with a profile photo, and its link token.
+async function hostEvent(cookie: string) {
+  const id = crypto.randomUUID();
+  const created = await emailWorker.dispatchFetch(`${origin}/api/events`, {
+    method: 'POST',
+    headers: requestHeaders(cookie),
+    body: JSON.stringify({
+      id,
+      title: 'Dinner',
+      description: '',
+      location: '',
+      startsAt: Date.now() + 86400000,
+      endsAt: null,
+      timeZone: 'UTC',
+    }),
+  });
+  expect(created.status).toBe(200);
+  const db = await emailWorker.getD1Database('DB');
+  await db
+    .prepare(
+      "UPDATE event SET state='published',object_key='events/x',thumbnail_key='events/x',width=1,height=1 WHERE id=?",
+    )
+    .bind(id)
+    .run();
+  const { event } = (await (
+    await emailWorker.dispatchFetch(`${origin}/api/events/${id}`, {
+      headers: requestHeaders(cookie),
+    })
+  ).json()) as { event: { link: { id: string; url: string } } };
+  return {
+    id,
+    linkId: event.link.id,
+    token: event.link.url.split('#event/')[1],
+  };
 }
 
 function lastLink(email: string) {
@@ -226,13 +267,13 @@ describe('Worker authentication boundary', () => {
     expect(response.status).toBe(404);
     expect(response.headers.get('Content-Type')).toContain('application/json');
   });
-  it('requires active membership to issue invitations', async () => {
+  it('requires active membership to create events', async () => {
     expect(
       (
-        await worker.dispatchFetch(`${origin}/api/invitations`, {
+        await worker.dispatchFetch(`${origin}/api/events`, {
           method: 'POST',
           headers: requestHeaders(await cookieFor('stranger')),
-          body: '{"email":"new@example.com"}',
+          body: '{}',
         })
       ).status,
     ).toBe(401);
@@ -266,7 +307,7 @@ describe('verified email and permanent invitation provenance', () => {
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({
       code: 'INVITATION_REQUIRED',
-      message: 'You need an invitation from a slowmass member to join.',
+      message: 'Ask a slowmass member to text you an event link.',
     });
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
     expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
@@ -343,23 +384,11 @@ describe('verified email and permanent invitation provenance', () => {
         ),
     ).toBe(false);
   });
-  it('lets an active member invite a specific email, without duplicate invitations', async () => {
-    const options = {
-      method: 'POST',
-      headers: requestHeaders(founderCookie),
-      body: '{"email":"Friend@Example.com"}',
-    };
-    expect(
-      (await emailWorker.dispatchFetch(`${origin}/api/invitations`, options))
-        .status,
-    ).toBe(201);
-    expect(
-      (await emailWorker.dispatchFetch(`${origin}/api/invitations`, options))
-        .status,
-    ).toBe(200);
-  });
-  it('atomically joins the invited member and records who invited whom', async () => {
-    expect((await requestLink('friend@example.com')).status).toBe(200);
+  it('joins through an event link and records the inviter, event and link version', async () => {
+    const event = await hostEvent(founderCookie);
+    expect((await requestLink('friend@example.com', event.token)).status).toBe(
+      200,
+    );
     const response = await emailWorker.dispatchFetch(
       lastLink('friend@example.com'),
       { redirect: 'manual', headers: requestHeaders() },
@@ -369,10 +398,26 @@ describe('verified email and permanent invitation provenance', () => {
     const db = await emailWorker.getD1Database('DB');
     const row = await db
       .prepare(
-        'SELECT m.user_id, m.invited_by, i.accepted_by FROM membership m JOIN invitation i ON i.id = m.invitation_id',
+        `SELECT m.user_id, m.invited_by, i.accepted_by, i.kind, i.event_id, i.event_link_id, a.link_id AS opened
+        FROM membership m JOIN invitation i ON i.id = m.invitation_id
+        JOIN event_access a ON a.user_id = m.user_id`,
       )
-      .first<{ user_id: string; invited_by: string; accepted_by: string }>();
-    expect(row?.invited_by).toBe(founderId);
+      .first<{
+        user_id: string;
+        invited_by: string;
+        accepted_by: string;
+        kind: string;
+        event_id: string;
+        event_link_id: string;
+        opened: string;
+      }>();
+    expect(row).toMatchObject({
+      invited_by: founderId,
+      kind: 'shared',
+      event_id: event.id,
+      event_link_id: event.linkId,
+      opened: event.linkId,
+    });
     expect(row?.accepted_by).toBe(row?.user_id);
     friendId = row!.user_id;
     await db
@@ -395,75 +440,25 @@ describe('verified email and permanent invitation provenance', () => {
       ).status,
     ).toBe(200);
   });
-  it('lists only your invitations and cancels only your unused invitations without removing history', async () => {
-    const create = await emailWorker.dispatchFetch(
-      `${origin}/api/invitations`,
+  it('rejects pending joins after the link is replaced without removing earlier joins', async () => {
+    const event = await hostEvent(founderCookie);
+    expect(
+      (await requestLink('replaced@example.com', event.token)).status,
+    ).toBe(200);
+    const pending = lastLink('replaced@example.com');
+    const replaced = await emailWorker.dispatchFetch(
+      `${origin}/api/events/${event.id}/link`,
       {
         method: 'POST',
         headers: requestHeaders(founderCookie),
-        body: '{"email":"cancelled@example.com"}',
+        body: JSON.stringify({
+          id: crypto.randomUUID(),
+          expectedId: event.linkId,
+        }),
       },
     );
-    expect(create.status).toBe(201);
-    const { invitation } = (await create.json()) as {
-      invitation: { id: string };
-    };
-    expect((await requestLink('cancelled@example.com')).status).toBe(200);
-    const unusedLink = lastLink('cancelled@example.com');
-    const list = async (cookie: string) =>
-      (
-        await emailWorker.dispatchFetch(`${origin}/api/invitations`, {
-          headers: requestHeaders(cookie),
-        })
-      ).json() as Promise<{
-        items: {
-          id: string;
-          email: string;
-          accepted: boolean;
-          revokedAt: number | null;
-          createdAt: number;
-        }[];
-      }>;
-    expect(await list(friendCookie)).toMatchObject({ items: [] });
-    const initial = await list(founderCookie);
-    expect(initial.items).toHaveLength(2);
-    expect(
-      initial.items.find((i) => i.email === 'friend@example.com')?.accepted,
-    ).toBe(true);
-    const item = initial.items.find((i) => i.id === invitation.id)!;
-    expect(item.createdAt).toBeGreaterThan(0);
-    await emailWorker.dispatchFetch(
-      `${origin}/api/invitations/${invitation.id}`,
-      {
-        method: 'DELETE',
-        headers: requestHeaders(friendCookie),
-      },
-    );
-    expect(
-      (await list(founderCookie)).items.find((i) => i.id === invitation.id)
-        ?.revokedAt,
-    ).toBeNull();
-    for (let i = 0; i < 2; i++)
-      await emailWorker.dispatchFetch(
-        `${origin}/api/invitations/${invitation.id}`,
-        {
-          method: 'DELETE',
-          headers: requestHeaders(founderCookie),
-        },
-      );
-    const cancelled = (await list(founderCookie)).items.find(
-      (i) => i.id === invitation.id,
-    )!;
-    expect(cancelled.revokedAt).toBeGreaterThan(0);
-    expect(cancelled.createdAt).toBe(item.createdAt);
-    const count = emails.length;
-    const linkRequest = await requestLink('cancelled@example.com');
-    expect(linkRequest.status).toBe(403);
-    expect(await linkRequest.json()).toMatchObject({
-      code: 'INVITATION_REQUIRED',
-    });
-    expect(emails).toHaveLength(count);
-    const rejected = await emailWorker.dispatchFetch(unusedLink, {
+    expect(replaced.status).toBe(200);
+    const rejected = await emailWorker.dispatchFetch(pending, {
       redirect: 'manual',
       headers: requestHeaders(),
     });
@@ -471,19 +466,50 @@ describe('verified email and permanent invitation provenance', () => {
     const db = await emailWorker.getD1Database('DB');
     expect(
       await db
-        .prepare("SELECT 1 FROM user WHERE email='cancelled@example.com'")
+        .prepare(
+          "SELECT 1 FROM membership m JOIN user u ON u.id=m.user_id WHERE u.email='replaced@example.com'",
+        )
         .first(),
     ).toBeNull();
+    const count = emails.length;
     expect(
-      (
-        await emailWorker.dispatchFetch(
-          `${origin}/api/invitations?after=9999999999999999:invalid`,
-          {
+      (await requestLink('replaced@example.com', event.token)).status,
+    ).toBe(403);
+    expect(emails).toHaveLength(count);
+    expect(
+      await db
+        .prepare('SELECT status FROM membership WHERE user_id=?')
+        .bind(friendId)
+        .first('status'),
+    ).toBe('active');
+  });
+  it('no longer admits anyone through an email invitation', async () => {
+    const db = await emailWorker.getD1Database('DB');
+    const now = Date.now();
+    await db
+      .prepare(
+        'INSERT INTO invitation (id, inviter_id, recipient_email, created_at, expires_at) VALUES (?, ?, ?, ?, ?)',
+      )
+      .bind(
+        'legacy-invitation',
+        founderId,
+        'legacy@example.com',
+        now,
+        now + 86400000,
+      )
+      .run();
+    const count = emails.length;
+    const response = await requestLink('legacy@example.com');
+    expect(response.status).toBe(403);
+    expect(emails).toHaveLength(count);
+    for (const path of ['/api/invitations', '/api/invite-link'])
+      expect(
+        (
+          await emailWorker.dispatchFetch(`${origin}${path}`, {
             headers: requestHeaders(founderCookie),
-          },
-        )
-      ).status,
-    ).toBe(400);
+          })
+        ).status,
+      ).toBe(404);
   });
   it('prevents rewriting invitation attribution', async () => {
     const db = await emailWorker.getD1Database('DB');
@@ -499,6 +525,14 @@ describe('verified email and permanent invitation provenance', () => {
       db
         .prepare('UPDATE invitation SET inviter_id = ? WHERE accepted_by = ?')
         .bind(friendId, friendId)
+        .run(),
+    ).rejects.toThrow();
+    await expect(
+      db
+        .prepare(
+          'UPDATE invitation SET event_link_id = NULL WHERE accepted_by = ?',
+        )
+        .bind(friendId)
         .run(),
     ).rejects.toThrow();
   });
@@ -529,25 +563,22 @@ describe('verified email and permanent invitation provenance', () => {
         .run(),
     ).rejects.toThrow();
   });
-  it('rejects a join if the inviter is disabled after a link was sent', async () => {
-    expect(
-      (
-        await emailWorker.dispatchFetch(`${origin}/api/invitations`, {
-          method: 'POST',
-          headers: requestHeaders(friendCookie),
-          body: '{"email":"next@example.com"}',
-        })
-      ).status,
-    ).toBe(201);
-    expect((await requestLink('next@example.com')).status).toBe(200);
+  it('rejects a join if the event creator is disabled after a link was sent', async () => {
+    const event = await hostEvent(friendCookie);
+    expect((await requestLink('next@example.com', event.token)).status).toBe(
+      200,
+    );
     const db = await emailWorker.getD1Database('DB');
     await db
       .prepare("UPDATE membership SET status = 'disabled' WHERE user_id = ?")
       .bind(friendId)
       .run();
     const count = emails.length;
-    for (const email of ['next@example.com', 'friend@example.com']) {
-      const linkRequest = await requestLink(email);
+    for (const [email, link] of [
+      ['next@example.com', event.token],
+      ['friend@example.com', undefined],
+    ] as const) {
+      const linkRequest = await requestLink(email, link);
       expect(linkRequest.status).toBe(403);
       expect(await linkRequest.json()).toMatchObject({
         code: 'INVITATION_REQUIRED',
@@ -564,15 +595,6 @@ describe('verified email and permanent invitation provenance', () => {
         .prepare("SELECT 1 FROM user WHERE email = 'next@example.com'")
         .first(),
     ).toBeNull();
-    expect(
-      (
-        await emailWorker.dispatchFetch(`${origin}/api/invitations`, {
-          method: 'POST',
-          headers: requestHeaders(friendCookie),
-          body: '{"email":"another@example.com"}',
-        })
-      ).status,
-    ).toBe(401);
     expect(
       (
         await emailWorker.dispatchFetch(`${origin}/api/me`, {
@@ -598,29 +620,6 @@ describe('verified email and permanent invitation provenance', () => {
           .first<{ count: number }>()
       )?.count,
     ).toBe(1);
-  });
-  it('does not send a join link for an expired invitation', async () => {
-    const db = await emailWorker.getD1Database('DB');
-    const now = Date.now();
-    await db
-      .prepare(
-        'INSERT INTO invitation (id, inviter_id, recipient_email, created_at, expires_at) VALUES (?, ?, ?, ?, ?)',
-      )
-      .bind(
-        'expired-invitation',
-        founderId,
-        'late@example.com',
-        now - 10000,
-        now - 1,
-      )
-      .run();
-    const count = emails.length;
-    const response = await requestLink('late@example.com');
-    expect(response.status).toBe(403);
-    expect(await response.json()).toMatchObject({
-      code: 'INVITATION_REQUIRED',
-    });
-    expect(emails).toHaveLength(count);
   });
   it('enforces the single-root database constraint', async () => {
     const db = await emailWorker.getD1Database('DB');

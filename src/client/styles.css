@@ -364,9 +364,6 @@ input::file-selector-button {
   flex-wrap: wrap;
   gap: 8px;
 }
-.invitation-form {
-  margin-top: 16px;
-}
 .person {
   margin-top: 24px;
   padding-top: 16px;
@@ -1352,37 +1349,9 @@ summary.settings-row::after {
   gap: 4px;
   flex-shrink: 0;
 }
-.invitation-list p {
-  margin: 6px 0;
-}
-.invitation-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px 20px;
-  color: var(--muted);
-  font-size: 14px;
-}
-.invitation-meta .text-button {
-  margin: 0;
-}
-.invitation-actions {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
 .empty-state {
   padding: 24px 20px;
   text-align: center;
-}
-.invitation-result {
-  padding: 16px;
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  margin-top: 20px;
 }
 @media (max-width: 899px) {
   .profile-header {
@@ -1396,11 +1365,26 @@ summary.settings-row::after {
   .member-shell .masthead {
     display: none;
   }
+  /* Members who only use events have no sidebar; keep the header instead. */
+  .member-shell:has(.event-only) {
+    padding: 0;
+  }
+  .member-shell:has(.event-only) .masthead {
+    display: flex;
+  }
+  .member-content.event-only {
+    max-width: 640px;
+    margin-inline: auto;
+  }
+  .member-content.event-only[data-page='event'] {
+    max-width: 520px;
+  }
   .member-content {
     margin-top: 48px;
   }
   .member-content[data-page='feed'],
-  .member-content[data-page='post'] {
+  .member-content[data-page='post'],
+  .member-content[data-page='event'] {
     max-width: 520px;
     margin-inline: auto;
   }
@@ -1505,21 +1489,236 @@ summary.settings-row::after {
   }
 }
 
-.invite-link-section {
-  margin-bottom: 40px;
+/* Header controls: Activity on phones, plus Settings for event-only members. */
+.masthead-actions:empty {
+  display: none;
 }
-.invite-link-heading {
+.header-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 4px;
 }
-.invite-link-heading h2 {
+.header-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  color: var(--ink);
+}
+.header-action:hover,
+.header-action[aria-current='page'] {
+  background: var(--hover);
+}
+.header-action svg {
+  width: 24px;
+  height: 24px;
+}
+.header-action[aria-current='page'] svg {
+  stroke-width: 2.5;
+}
+@media (max-width: 899px) {
+  .nav-link.nav-link-desktop {
+    display: none;
+  }
+}
+.member-shell:has(.event-only) {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Events */
+.events-new {
+  margin-bottom: 16px;
+}
+a.profile-tab {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.profile-tab[aria-current='page'] {
+  border-bottom-color: var(--ink);
+  color: var(--ink);
+  font-weight: 600;
+}
+.event-list .notification-content > p {
   margin: 0;
 }
-.invite-link-result {
-  margin-top: 16px;
+.event-list .notification-content > p + p {
+  margin-top: 2px;
 }
-.invite-link-result input {
-  font-size: 14px;
+.event-list-meta {
+  font-size: 15px;
+  color: var(--muted);
+}
+.event {
+  --post-content-gap: 16px;
+  container-type: inline-size;
+  overflow-wrap: anywhere;
+}
+.event-photo {
+  width: 100%;
+  max-height: 200cqw;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--hover);
+  overflow: hidden;
+}
+.event-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: var(--paper);
+}
+.event-details > p {
+  margin: 0 0 12px;
+}
+.event-notice {
+  margin-top: 16px;
+  padding: 10px 12px;
+  border-radius: 5px;
+  background: var(--hover);
+  font-weight: 600;
+}
+.event-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 20px 0 8px;
+}
+.event-title {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.15;
+  font-weight: 700;
+}
+.event-when {
+  font-size: 17px;
+}
+.event-location {
+  white-space: pre-wrap;
+}
+.event-hosts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 16px;
+}
+.event-hosts p {
+  margin: 0;
+}
+.event-host-photos {
+  display: flex;
+  flex-shrink: 0;
+}
+.event-host-photos > * + * {
+  margin-left: -8px;
+}
+.event-host-photos > * {
+  box-shadow: 0 0 0 2px var(--paper);
+}
+.event-person-photo,
+.event-person-initial {
+  display: inline-flex;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+.event-person-photo {
+  object-fit: cover;
+}
+.event-person-initial {
+  align-items: center;
+  justify-content: center;
+  background: var(--hover);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 15px;
+}
+.event-description {
+  white-space: pre-wrap;
+}
+.event-answers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 8px 0 16px;
+}
+.event-answer {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 8px;
+  border: 1px solid #d4d4d4;
+  border-radius: 5px;
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 600;
+}
+.event-answer:enabled:hover {
+  background: var(--hover);
+}
+.event-answer[aria-pressed='true'] {
+  border: 2px solid var(--ink);
+  background: var(--hover);
+}
+.event-answer svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.event section > h2 {
+  margin-top: 36px;
+}
+.event-guest-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+}
+.event-guest-list > li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-block: 8px;
+}
+.event-guest-list a {
+  text-decoration: none;
+}
+.event-log {
+  padding: 0;
+  margin-top: 16px;
+  list-style: none;
+}
+.event-times {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+/* Guests can share the event too; hosts get the primary button. */
+.event-share {
+  width: 100%;
+  min-height: 44px;
+  margin: 0 0 16px;
+  padding: 9px 15px;
+  border: 1px solid #d4d4d4;
+  border-radius: 5px;
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 600;
+}
+.event-share:enabled:hover {
+  background: var(--hover);
+}
+@media (max-width: 899px) {
+  .photo-screen .event-details {
+    padding-inline: 16px;
+  }
+  .photo-screen .event-photo {
+    border-inline: 0;
+    border-radius: 0;
+  }
 }

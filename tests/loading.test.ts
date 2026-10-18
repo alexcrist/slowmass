@@ -16,7 +16,6 @@ import {
   PostList,
 } from '../src/client/features/posts/Posts';
 import { Notifications } from '../src/client/features/notifications/Notifications';
-import { InvitationForm } from '../src/client/features/invitations/InvitationForm';
 import { Interactions } from '../src/client/features/interactions/Interactions';
 import { AvatarForm } from '../src/client/features/avatars/AvatarForm';
 import { PostCropEditor } from '../src/client/features/posts/PostCropEditor';
@@ -546,116 +545,6 @@ const signedIn = {
   profile: ownProfile,
 };
 
-const invitationPreview = {
-  status: 'ready',
-  email: 'invited@example.com',
-  expiresAt: Date.now() + 7 * 86400000,
-  inviter: { name: 'Alice Example', handle: 'alice' },
-  signedInAs: null,
-};
-async function mountInvitation() {
-  location.pathname = '/join';
-  location.hash = '#' + 'a'.repeat(48);
-  await mount(createElement(Welcome));
-}
-
-it('checks an invitation without showing login or consuming it, then accepts only on click', async () => {
-  await mountInvitation();
-  expect(visibleText()).toContain('Checking your invitation…');
-  expect(requests.map((r) => r.path)).toEqual(['/api/auth/invitation/preview']);
-  noLogin();
-  await reply(pending('/api/auth/invitation/preview'), invitationPreview);
-  expect(visibleText()).toContain('Alice Example');
-  expect(visibleText()).toContain('invited you.');
-  expect(visibleText()).toContain('invited@example.com');
-  expect(renderer.root.findAllByType('input')).toHaveLength(0);
-  expect(requests).toHaveLength(1);
-  await click('Accept invitation');
-  expect(visibleText()).toContain('Joining…');
-  expect(renderer.root.findAllByType('button')[0].props.disabled).toBe(true);
-  const request = pending('/api/auth/invitation/accept');
-  expect(JSON.parse(request.options!.body as string)).toEqual({
-    token: 'a'.repeat(48),
-  });
-  await reply(request, { ok: true });
-  expect(location.replace).toHaveBeenCalledWith('/');
-});
-
-it('retries a failed invitation lookup without falling back to the login form', async () => {
-  await mountInvitation();
-  await reply(pending('/api/auth/invitation/preview'), {}, 503);
-  expect(visibleText()).toContain('couldn’t check this invitation');
-  noLogin();
-  await click('Try again');
-  expect(visibleText()).toContain('Checking your invitation…');
-  await reply(pending('/api/auth/invitation/preview'), invitationPreview);
-  expect(visibleText()).toContain('Accept invitation');
-});
-
-it('requires explicit account switching before accepting an invitation for another email', async () => {
-  await mountInvitation();
-  await reply(pending('/api/auth/invitation/preview'), {
-    ...invitationPreview,
-    signedInAs: 'bob@example.com',
-  });
-  expect(visibleText()).toContain('bob@example.com');
-  expect(visibleText()).not.toContain('Accept invitation');
-  expect(requests).toHaveLength(1);
-  await click('Sign out to continue');
-  await reply(pending('/api/auth/sign-out'), { success: true });
-  await reply(pending('/api/auth/invitation/preview'), invitationPreview);
-  expect(visibleText()).toContain('Accept invitation');
-});
-
-it('rechecks invitation status when it was cancelled or used between preview and acceptance', async () => {
-  await mountInvitation();
-  await reply(pending('/api/auth/invitation/preview'), invitationPreview);
-  await click('Accept invitation');
-  await reply(
-    pending('/api/auth/invitation/accept'),
-    { code: 'INVITATION_UNAVAILABLE' },
-    400,
-  );
-  await reply(pending('/api/auth/invitation/preview'), { status: 'cancelled' });
-  expect(visibleText()).toContain('no longer active');
-  expect(visibleText()).not.toContain('Accept invitation');
-  expect(location.replace).not.toHaveBeenCalled();
-});
-
-it.each([
-  ['used', 'can’t be used again'],
-  ['expired', 'has expired'],
-  ['invalid', 'incomplete or invalid'],
-])(
-  'explains an %s invitation and offers the normal sign-in path',
-  async (status, message) => {
-    await mountInvitation();
-    await reply(pending('/api/auth/invitation/preview'), { status });
-    expect(visibleText()).toContain(message);
-    expect(renderer.root.findAllByType('button')).toHaveLength(0);
-    expect(renderer.root.findAllByType('a').at(-1)!.props.href).toBe('/');
-  },
-);
-
-it('leaves a failed acceptance retryable and gives a sign-in recovery path', async () => {
-  await mountInvitation();
-  await reply(pending('/api/auth/invitation/preview'), invitationPreview);
-  await click('Accept invitation');
-  const request = pending('/api/auth/invitation/accept');
-  request.settled = true;
-  await act(async () => request.reject(new Error('Connection lost')));
-  expect(visibleText()).toContain('couldn’t confirm joining');
-  expect(location.replace).not.toHaveBeenCalled();
-  await click('Accept invitation');
-  await reply(
-    pending('/api/auth/invitation/accept'),
-    { code: 'INVITATION_UNAVAILABLE' },
-    400,
-  );
-  await reply(pending('/api/auth/invitation/preview'), { status: 'used' });
-  expect(visibleText()).toContain('Already joined');
-});
-
 it('loads the feed after one bootstrap request without login, onboarding, or redundant account reads', async () => {
   await mount(createElement(Welcome));
   expect(visibleText()).toContain('Loading slowmass…');
@@ -667,7 +556,7 @@ it('loads the feed after one bootstrap request without login, onboarding, or red
   expect(requests.map((request) => request.path)).toEqual([
     '/api/bootstrap',
     '/api/posts?',
-    '/api/notifications/unread-count?includeJoined=1',
+    '/api/notifications/unread-count?includeJoined=1&includeEvents=1',
   ]);
   await reply(pending('/api/posts?'), { items: [], next: null });
   expect(visibleText()).toContain('No posts on this page.');
@@ -706,9 +595,7 @@ it('keeps uninvited addresses on the welcome form and allows a successful retry'
       preventDefault: vi.fn(),
     });
   });
-  expect(visibleText()).toContain(
-    'You need an invitation from a slowmass member',
-  );
+  expect(visibleText()).toContain('There’s no slowmass account for this email');
   expect(visibleText()).not.toContain('Check your email');
   expect(renderer.root.findByProps({ id: 'email' }).props.value).toBe(
     'Uninvited@Example.com',
@@ -718,7 +605,7 @@ it('keeps uninvited addresses on the welcome form and allows a successful retry'
     callbackURL: '/',
     errorCallbackURL: '/?error=signin',
   });
-  // Once invited, the same address can retry without reloading the page.
+  // After joining through an event, the same address can retry in place.
   authMocks.magicLink.mockResolvedValueOnce({
     data: { status: true },
     error: null,
@@ -730,7 +617,7 @@ it('keeps uninvited addresses on the welcome form and allows a successful retry'
   });
   expect(visibleText()).toContain('Check your email');
   expect(visibleText()).toContain('uninvited@example.com');
-  expect(visibleText()).not.toContain('You need an invitation');
+  expect(visibleText()).not.toContain('no slowmass account');
 });
 
 it.each([403, 429, 500])(
@@ -751,7 +638,7 @@ it.each([403, 429, 500])(
       });
     });
     expect(visibleText()).toContain('Wait a minute and try again');
-    expect(visibleText()).not.toContain('You need an invitation');
+    expect(visibleText()).not.toContain('no slowmass account');
     expect(visibleText()).not.toContain('Check your email');
   },
 );
@@ -850,27 +737,29 @@ it('keeps unavailable and offline startup separate from login', async () => {
   expect(pending('/api/startup-diagnostics').options?.credentials).toBe('omit');
 });
 
-it('opens onboarding only when bootstrap has confirmed the missing profile', async () => {
+it('asks for a name only when bootstrap has confirmed the missing profile', async () => {
   await mount(createElement(Welcome));
-  expect(visibleText()).not.toContain('Create your profile');
+  expect(visibleText()).not.toContain('What’s your name?');
   await reply(pending('/api/bootstrap'), { ...signedIn, profile: null });
-  expect(visibleText()).toContain('Create your profile');
+  expect(visibleText()).toContain('What’s your name?');
+  expect(renderer.root.findAllByProps({ id: 'handle' })).toHaveLength(0);
 });
 
 it.each([null, { ...ownProfile, hasAvatar: 0 }])(
-  'restores onboarding from bootstrap even when returning to a main-app deep link (%j)',
+  'keeps members without a photo out of the photo app, even on a photo deep link (%j)',
   async (profile) => {
     location.hash = '#post/saved-post';
     await mount(createElement(Welcome));
     await reply(pending('/api/bootstrap'), { ...signedIn, profile });
     expect(visibleText()).toContain(
-      profile ? 'Add a profile photo' : 'Create your profile',
+      profile ? 'Return to events' : 'What’s your name?',
     );
     expect(
       renderer.root.findAllByProps({ 'aria-label': 'Main navigation' }),
     ).toHaveLength(0);
-    expect(requests.map((request) => request.path)).toEqual(['/api/bootstrap']);
-    expect(visibleText()).not.toContain('follow each other automatically');
+    expect(
+      requests.some((request) => request.path.startsWith('/api/posts')),
+    ).toBe(false);
   },
 );
 
@@ -909,9 +798,10 @@ it('prioritizes the first feed photo and uses smaller files for profile grids', 
 });
 
 it.each([false, true])(
-  'requires a saved photo before opening the app (resuming onboarding: %s)',
+  'names new members, then unlocks the photo app after an optional photo (named already: %s)',
   async (existing) => {
     const onSignOut = vi.fn();
+    location.hash = '#event/opened-event';
     await mount(
       createElement(MemberApp, {
         initialProfile: existing ? { ...ownProfile, hasAvatar: 0 } : null,
@@ -920,48 +810,45 @@ it.each([false, true])(
       }),
     );
     if (!existing) {
-      expect(visibleText()).toContain('Continue');
+      expect(renderer.root.findAllByProps({ id: 'handle' })).toHaveLength(0);
+      await click('Use a different account');
+      expect(onSignOut).toHaveBeenCalledOnce();
       await act(async () => {
         renderer.root
-          .findByProps({ id: 'handle' })
-          .props.onChange({ target: { value: 'alice' } });
-        renderer.root
           .findByProps({ id: 'display-name' })
-          .props.onChange({ target: { value: 'Alice' } });
+          .props.onChange({ target: { value: 'Alice C' } });
       });
       await act(async () =>
         renderer.root
           .findByType('form')
           .props.onSubmit({ preventDefault: vi.fn() }),
       );
-      await reply(pending('/api/people/self'), {
-        profile: { ...ownProfile, hasAvatar: 0 },
+      const save = pending('/api/people/self');
+      expect(JSON.parse(String(save.options?.body))).toEqual({
+        displayName: 'Alice C',
+        bio: '',
       });
-      await go(location.hash);
+      await reply(save, { profile: { ...ownProfile, hasAvatar: 0 } });
+      // Naming yourself keeps you on the event that brought you here.
+      expect(location.hash).toBe('#event/opened-event');
     }
-    expect(renderer.root.findByType('h1').children).toEqual([
-      'Add a profile photo',
-    ]);
     expect(
       renderer.root.findAllByProps({ 'aria-label': 'Main navigation' }),
     ).toHaveLength(0);
-    expect(requests.every((item) => item.path === '/api/people/self')).toBe(
-      true,
+    expect(requests.some((item) => item.path.startsWith('/api/posts'))).toBe(
+      false,
     );
+    await go('#photo');
     expect(renderer.root.findByType(AvatarForm).props.onboarding).toBe(true);
-    expect(visibleText()).not.toContain('Delete account');
-    await click('Use a different account');
-    expect(onSignOut).toHaveBeenCalledOnce();
     await act(async () =>
       renderer.root.findByType(AvatarForm).props.onChange(),
     );
+    expect(location.hash).toBe('#feed');
+    await go('#feed');
     expect(
       renderer.root.findAllByProps({ 'aria-label': 'Main navigation' }),
     ).toHaveLength(1);
-    expect(
-      pending(existing ? '/api/posts?' : '/api/people/alice'),
-    ).toBeDefined();
-    expect(visibleText()).not.toContain('Add a profile photo');
+    expect(pending('/api/posts?')).toBeDefined();
   },
 );
 
@@ -996,14 +883,6 @@ const lists = [
     path: '/api/notifications?',
     loading: 'Loading notifications…',
     empty: 'No activity on this page.',
-    retry: 'Retry',
-  },
-  {
-    name: 'invitations',
-    element: () => createElement(InvitationForm),
-    path: '/api/invitations?',
-    loading: 'Loading invitations…',
-    empty: 'No invitations yet.',
     retry: 'Retry',
   },
 ];
@@ -1525,43 +1404,6 @@ it('saves an edited username and updates own-profile navigation after a conflict
   ).toBe('#profile/alice_new');
 });
 
-it('does not keep the empty invitation message or old cancellation status after successful mutations', async () => {
-  await mount(createElement(InvitationForm));
-  await reply(pending('/api/invitations?'), { items: [], next: null });
-  await act(async () => {
-    renderer.root
-      .findByProps({ id: 'invite-email' })
-      .props.onChange({ target: { value: 'friend@example.com' } });
-  });
-  await act(async () => {
-    renderer.root
-      .findByType('form')
-      .props.onSubmit({ preventDefault: vi.fn() });
-  });
-  await reply(pending('/api/invitations'), { ok: true });
-  expect(visibleText()).toContain('Invitation emailed to');
-  expect(visibleText()).toContain('Loading invitations…');
-  expect(visibleText()).not.toContain('No invitations yet.');
-  await reply(pending('/api/invitations?'), {
-    items: [
-      {
-        id: 'invite',
-        email: 'friend@example.com',
-        createdAt: 1,
-        accepted: false,
-        expired: false,
-        revokedAt: null,
-      },
-    ],
-    next: null,
-  });
-  await click('Cancel invitation');
-  await reply(pending('/api/invitations/invite'), { ok: true });
-  expect(visibleText()).toContain('Loading invitations…');
-  expect(visibleText()).not.toContain('Waiting to join');
-  expect(visibleText()).not.toContain('Invitation emailed to');
-});
-
 async function selectTab(label: string, modified = false) {
   const link = renderer.root
     .findAllByType('a')
@@ -1797,7 +1639,7 @@ it('paginates one activity timeline and resolves inline requests without leaving
   await reply(pending('/api/people/bob/accept'), { ok: true });
   expect(location.hash).toBe('#notifications');
   expect(pending('/api/notifications?').path).toBe(
-    '/api/notifications?cursor=&includeJoined=1',
+    '/api/notifications?cursor=&includeJoined=1&includeEvents=1',
   );
   await reply(pending('/api/notifications?'), { items: [], next: 'older' });
   await click('Older');
@@ -1808,7 +1650,7 @@ it('paginates one activity timeline and resolves inline requests without leaving
   expect(visibleText()).toContain('No activity on this page.');
   await click('Newer');
   expect(pending('/api/notifications?').path).toBe(
-    '/api/notifications?cursor=&includeJoined=1',
+    '/api/notifications?cursor=&includeJoined=1&includeEvents=1',
   );
   expect(
     requests.some(
@@ -2271,7 +2113,7 @@ it('supports profile tab keyboard navigation without a back link on your own pro
   });
   expect(
     shortcuts.findAllByType('a').map((a) => a.props['aria-label']),
-  ).toEqual(['Invite friends', 'Settings']);
+  ).toEqual(['Settings']);
   expect(
     renderer.root.findAllByProps({ className: 'back-control' }),
   ).toHaveLength(0);
@@ -2425,42 +2267,6 @@ it('shows flat comments with avatars, relative times, likes, and a modal likers 
       .props.onCancel({ preventDefault: vi.fn() });
   });
   expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
-});
-
-it('returns from the profile invite shortcut and exposes explicit retry for failed invitation email', async () => {
-  location.hash = '#profile/alice';
-  await mount(
-    createElement(MemberApp, {
-      initialProfile: ownProfile,
-      onSignOut: vi.fn(),
-      signingOut: false,
-    }),
-  );
-  await go('#invitations');
-  expect(
-    renderer.root.findByProps({ className: 'back-control' }).props.href,
-  ).toBe('#profile/alice');
-  await reply(pending('/api/invitations?'), {
-    items: [
-      {
-        id: 'invite',
-        email: 'friend@example.com',
-        createdAt: 1,
-        sentAt: null,
-        attemptedAt: 1,
-        accepted: false,
-        expired: false,
-        revokedAt: null,
-      },
-    ],
-    next: null,
-  });
-  expect(visibleText()).toContain('Email delivery unconfirmed');
-  expect(visibleText()).not.toContain('Copy invitation');
-  await click('Retry email');
-  expect(pending('/api/invitations/invite/send').options?.method).toBe('POST');
-  await reply(pending('/api/invitations/invite/send'), { ok: true });
-  expect(visibleText()).toContain('Loading invitations…');
 });
 
 it('resizes an original over 8 MB before posting and reuses the encoded photo on retry', async () => {
@@ -2660,182 +2466,6 @@ it.each([false, true])(
   },
 );
 
-it('offers one copy action before email invitations and preserves the request ID on retry', async () => {
-  await mount(createElement(InvitationForm));
-  await reply(pending('/api/invite-link'), { link: null });
-  await reply(pending('/api/invitations?'), { items: [], next: null });
-  expect(visibleText().indexOf('Share an invite link')).toBeLessThan(
-    visibleText().indexOf('Invite by email'),
-  );
-  expect(visibleText()).not.toContain('100 sign-ups');
-  expect(visibleText()).not.toContain('Your invite links');
-  expect(
-    renderer.root.findAllByProps({ 'aria-label': 'Link options' }),
-  ).toHaveLength(0);
-  expect(
-    requests.every(
-      (request) => !request.options?.method || request.options.method === 'GET',
-    ),
-  ).toBe(true);
-  await click('Copy invite link');
-  const first = pending('/api/invite-link/copy');
-  const body = JSON.parse(String(first.options?.body));
-  expect(body).toEqual({ id: expect.any(String) });
-  await reply(first, { error: 'Please retry' }, 503);
-  await reply(pending('/api/invite-link'), { link: null });
-  await click('Copy invite link');
-  expect(
-    JSON.parse(String(pending('/api/invite-link/copy').options?.body)),
-  ).toEqual(body);
-  await reply(pending('/api/invite-link/copy'), {
-    id: body.id,
-    expiresAt: Date.now() + 604800000,
-    url: 'https://slowmass.com/invite#synthetic',
-  });
-  expect(renderer.root.findByProps({ id: 'invite-link-url' }).props.value).toBe(
-    'https://slowmass.com/invite#synthetic',
-  );
-  expect(visibleText()).toContain('Select and copy the link below.');
-});
-
-it('keeps replacement in the overflow menu, confirms it, and retries the same version operation', async () => {
-  const expiresAt = Date.now() + 604800000;
-  await mount(createElement(InvitationForm));
-  await reply(pending('/api/invite-link'), {
-    link: { id: 'existing', expiresAt, available: true },
-  });
-  await reply(pending('/api/invitations?'), { items: [], next: null });
-  expect(renderer.root.findByType('time').props.dateTime).toBe(
-    new Date(expiresAt).toISOString(),
-  );
-  expect(visibleText()).not.toContain('Replace link');
-  await click('Link options');
-  expect(renderer.root.findByProps({ role: 'menuitem' }).children).toEqual([
-    'Replace link',
-  ]);
-  await click('Replace link');
-  expect(visibleText()).toContain('Your previous link will stop working');
-  expect(
-    requests.some((request) => request.path === '/api/invite-link/replace'),
-  ).toBe(false);
-  await confirmAction('Cancel');
-  expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
-  await click('Link options');
-  await click('Replace link');
-  await confirmAction('Replace link');
-  const first = pending('/api/invite-link/replace');
-  const body = JSON.parse(String(first.options?.body));
-  expect(body).toEqual({ id: expect.any(String), expectedId: 'existing' });
-  expect(renderer.root.findByType('dialog').props['aria-busy']).toBe(true);
-  expect(
-    renderer.root
-      .findByType('dialog')
-      .findAllByType('button')
-      .every((button) => button.props.disabled),
-  ).toBe(true);
-  await reply(first, { error: 'Please retry' }, 503);
-  await reply(pending('/api/invite-link'), {
-    link: { id: body.id, expiresAt, available: true },
-  });
-  expect(renderer.root.findAllByType('dialog')).toHaveLength(1);
-  await confirmAction('Replace link');
-  expect(
-    JSON.parse(String(pending('/api/invite-link/replace').options?.body)),
-  ).toEqual(body);
-  await reply(pending('/api/invite-link/replace'), {
-    id: body.id,
-    expiresAt,
-    url: 'https://slowmass.com/invite#replacement',
-  });
-  expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
-  expect(renderer.root.findByProps({ id: 'invite-link-url' }).props.value).toBe(
-    'https://slowmass.com/invite#replacement',
-  );
-  expect(visibleText()).toContain('Copy the new link to share it.');
-});
-
-it('copies the current link to the clipboard and displays its expiry', async () => {
-  const writeText = vi.fn().mockResolvedValue(undefined);
-  vi.stubGlobal('navigator', { clipboard: { writeText } });
-  const expiresAt = Date.now() + 604800000;
-  await mount(createElement(InvitationForm));
-  await reply(pending('/api/invite-link'), {
-    link: { id: 'existing', expiresAt, available: true },
-  });
-  await reply(pending('/api/invitations?'), { items: [], next: null });
-  await click('Copy invite link');
-  await reply(pending('/api/invite-link/copy'), {
-    id: 'existing',
-    expiresAt,
-    url: 'https://slowmass.com/invite#synthetic',
-  });
-  expect(writeText).toHaveBeenCalledWith(
-    'https://slowmass.com/invite#synthetic',
-  );
-  expect(visibleText()).toContain('Link copied.');
-  expect(renderer.root.findByType('time').props.dateTime).toBe(
-    new Date(expiresAt).toISOString(),
-  );
-});
-
-it('recovers a failed current-link read without creating credentials on load', async () => {
-  await mount(createElement(InvitationForm));
-  await reply(pending('/api/invite-link'), { error: 'Try later' }, 503);
-  await reply(pending('/api/invitations?'), { items: [], next: null });
-  expect(visibleText()).toContain('Try later');
-  expect(
-    renderer.root
-      .findAllByType('button')
-      .some((button) => button.children.join('') === 'Copy invite link'),
-  ).toBe(false);
-  await click('Retry');
-  await reply(pending('/api/invite-link'), {
-    link: { id: 'expired', expiresAt: 1, available: false },
-  });
-  expect(visibleText()).toContain('Copy to get a new seven-day link.');
-  expect(
-    requests.every(
-      (request) => !request.options?.method || request.options.method === 'GET',
-    ),
-  ).toBe(true);
-});
-
-it('previews shared invitations without consuming them and requests email verification only on submit', async () => {
-  location.pathname = '/invite';
-  location.hash = '#' + 'a'.repeat(48);
-  authMocks.magicLink.mockResolvedValue({ data: { status: true } });
-  await mount(createElement(Welcome));
-  expect(requests.map((request) => request.path)).toEqual([
-    '/api/auth/shared-invitation/preview',
-  ]);
-  expect(authMocks.magicLink).not.toHaveBeenCalled();
-  await reply(pending('/api/auth/shared-invitation/preview'), {
-    status: 'ready',
-    expiresAt: Date.now() + 100000,
-    inviter: { name: 'Alice', handle: 'alice' },
-    signedIn: false,
-  });
-  await act(async () =>
-    renderer.root
-      .findByProps({ id: 'shared-invite-email' })
-      .props.onChange({ target: { value: 'friend@example.com' } }),
-  );
-  await act(async () => {
-    await renderer.root
-      .findByType('form')
-      .props.onSubmit({ preventDefault: vi.fn() });
-  });
-  expect(authMocks.magicLink).toHaveBeenCalledWith(
-    expect.objectContaining({
-      email: 'friend@example.com',
-      metadata: { inviteLink: 'a'.repeat(48) },
-      callbackURL: '/',
-    }),
-  );
-  expect(visibleText()).toContain('Check your email');
-  expect(visibleText()).toContain('You can join when verification succeeds');
-});
-
 it('shows joined activity as a whole profile link with the private avatar', async () => {
   await mount(createElement(Notifications));
   await reply(pending('/api/notifications?'), {
@@ -2922,7 +2552,7 @@ it('uses authoritative like responses without a second post request and retains 
   expect(requests.every((r) => r.path.endsWith('/like'))).toBe(true);
 });
 
-it('opens the requested member page immediately after the required photo is saved', async () => {
+it('shows events, not the photo app, until a member adds a profile photo', async () => {
   Object.assign(navigator, { userAgent: 'iPhone', standalone: false });
   await mount(
     createElement(MemberApp, {
@@ -2931,21 +2561,15 @@ it('opens the requested member page immediately after the required photo is save
       signingOut: false,
     }),
   );
-  expect(visibleText()).toContain('Add a profile photo');
+  expect(pending('/api/events?when=upcoming')).toBeDefined();
   expect(
     renderer.root.findAllByProps({ 'aria-label': 'Main navigation' }),
   ).toHaveLength(0);
   expect(requests.some((item) => item.path.startsWith('/api/posts'))).toBe(
     false,
   );
-  await act(async () => renderer.root.findByType(AvatarForm).props.onChange());
-  expect(
-    renderer.root.findAllByProps({ 'aria-label': 'Main navigation' }),
-  ).toHaveLength(1);
-  expect(renderer.root.findAllByProps({ 'data-page': 'feed' })).toHaveLength(1);
-  expect(pending('/api/posts?').path).toContain('/api/posts');
+  expect(visibleText()).not.toContain('New event');
   expect(visibleText()).not.toContain('Set up this device');
-  expect(visibleText()).not.toContain('Install slowmass');
   expect(
     requests.some(
       (item) =>

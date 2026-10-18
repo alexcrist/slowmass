@@ -345,7 +345,9 @@ it('rejects malformed, unauthenticated and foreign-origin read receipts without 
     null,
     {},
     { items: [] },
-    { items: Array(21).fill(items[0]) },
+    {
+      items: Array(21).fill({ key: items[0].key, version: items[0].version }),
+    },
     { items: [{ key: 'bad', version: 1 }] },
     { items: [{ key: items[0].key, version: -1 }] },
     { items: [{ key: items[0].key, version: Number.MAX_SAFE_INTEGER + 1 }] },

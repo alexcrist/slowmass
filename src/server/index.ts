@@ -6,15 +6,10 @@ import { handleAuthRequest, AuthUnavailableError, cleanupAuth } from './auth';
 import { authConfigured } from './auth/options';
 import { cleanupAccounts } from './features/account';
 import { account, bootstrap } from './features/account/router';
-import { invitations, inviteLink } from './features/invitations/router';
 import { avatars, avatarMedia } from './features/avatars/router';
 import { cleanupAvatars } from './features/avatars';
 import { posts, postMedia } from './features/posts/router';
 import { cleanupPosts, backfillThumbnail } from './features/posts';
-import {
-  cleanupInvitationPayloads,
-  cleanupInviteLinks,
-} from './features/invitations';
 import { cleanupEmailBudgets } from './email';
 import { interactions } from './features/interactions/router';
 import { notifications } from './features/notifications/router';
@@ -22,6 +17,8 @@ import { people } from './features/people/router';
 import { push, pushAfterMutation } from './features/push/router';
 import { dispatchPush } from './features/push';
 import { deviceSetup } from './features/device-setup/router';
+import { events, eventMedia, eventLinks } from './features/events/router';
+import { cleanupEvents } from './features/events';
 import type { Env } from './env';
 import { measuredEnvironment, performanceMetrics } from './telemetry';
 
@@ -70,8 +67,8 @@ app.on(['GET', 'POST'], '/api/auth/*', async (c) => {
     response.status >= 400
   )
     return c.redirect(
-      c.req.query('errorCallbackURL') === '/?error=invite'
-        ? '/?error=invite'
+      c.req.query('errorCallbackURL') === '/?error=event'
+        ? '/?error=event'
         : '/?error=signin',
       303,
     );
@@ -89,10 +86,11 @@ app.route('/api/interactions', interactions);
 app.route('/api/notifications', notifications);
 app.route('/api/push', push);
 app.route('/api/device-setup', deviceSetup);
+app.route('/api/events', events);
+app.route('/api/event-link', eventLinks);
 app.route('/media/posts', postMedia);
 app.route('/media/avatar', avatarMedia);
-app.route('/api/invitations', invitations);
-app.route('/api/invite-link', inviteLink);
+app.route('/media/events', eventMedia);
 // No media route is public, even before media implementation exists.
 app.all('/media/*', (c) => c.json({ error: 'Not found.' }, 404));
 app.all('/api/*', (c) => c.json({ error: 'Not found.' }, 404));
@@ -124,8 +122,7 @@ export default {
     await cleanupAvatars(env.DB, env.PHOTOS);
     await cleanupPosts(env.DB, env.PHOTOS);
     await backfillThumbnail(env);
-    await cleanupInvitationPayloads(env.DB);
-    await cleanupInviteLinks(env.DB);
+    await cleanupEvents(env.DB, env.PHOTOS);
     await cleanupAuth(env.DB);
     await cleanupEmailBudgets(env.DB);
   },

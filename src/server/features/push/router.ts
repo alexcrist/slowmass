@@ -22,11 +22,7 @@ push.use('*', async (c, next) => {
     return c.json({ error: 'Sign-in is not available yet.' }, 503);
   const session = await getActiveSession(c.env, c.req.raw.headers);
   if (!session) return c.json({ error: 'Sign in to continue.' }, 401);
-  if (!session.hasProfilePhoto)
-    return c.json(
-      { error: 'Add a profile photo to finish setting up your account.' },
-      409,
-    );
+  // Members without a profile photo can still follow events they answered.
   c.set('userId', session.user.id);
   c.set('sessionId', session.sessionId);
   await next();

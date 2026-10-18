@@ -67,6 +67,7 @@ try {
     'push_delivery',
     'push_subscription',
     'invite_link_claim',
+    'event_claim',
   ]) {
     if (
       db
@@ -117,6 +118,28 @@ try {
         .get()
     )
       throw new Error('Shared invitation quarantine failed.');
+  }
+  // Event links are the only invitations and, like join links, do not depend
+  // on the auth secret. A new version also ends access granted by opening an
+  // old link; hosts replace the link once access is reconciled.
+  if (
+    db
+      .prepare(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='event'",
+      )
+      .get()
+  ) {
+    db.exec(
+      "UPDATE event SET link_id='quarantined:'||id,link_hash='quarantined:'||id,link_encrypted=NULL",
+    );
+    if (
+      db
+        .prepare(
+          "SELECT 1 FROM event WHERE link_encrypted IS NOT NULL OR link_hash NOT LIKE 'quarantined:%' LIMIT 1",
+        )
+        .get()
+    )
+      throw new Error('Event link quarantine failed.');
   }
   if (
     db

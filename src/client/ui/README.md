@@ -6,7 +6,7 @@
 
 `ImageViewer` composes the image dialog for profile photos and focused post photos. Callers supply an authorized media URL, dimensions, alt text, and title. It preserves aspect ratio within the viewport, hides incomplete images behind loading/error status, and allows retry. It mounts only when opened and is discarded on close or route changes; profile and post features own their respective open/availability rules.
 
-`OverflowMenu` owns the shared vertical three-dot trigger, keyboard navigation, outside dismissal, and focus restoration. Post owners supply Edit caption/Delete post actions; other profiles supply Unfollow for accepted follows and Block account. Invitations puts Replace link in this menu. Selecting an action restores trigger focus before opening a dialog.
+`OverflowMenu` owns the shared vertical three-dot trigger, keyboard navigation, outside dismissal, and focus restoration. Post owners supply Edit caption/Delete post actions; other profiles supply Unfollow for accepted follows and Block account. Event hosts put Edit event, Replace link, and Cancel event in this menu. Selecting an action restores trigger focus before opening a dialog.
 
 An open menu closes on outside pointer/focus events, page or enclosing-panel scrolling, window/visual-viewport changes, and hash navigation. Internal menu scrolling stays usable. Scroll/resize dismissal restores focus only when it was still inside the menu, using `preventScroll`; outside dismissal leaves the destination focus alone. Disabling the control or changing its action labels/order/danger state closes it immediately, without reopening on reenable. Equivalent rerenders retain the menu and use current callbacks.
 

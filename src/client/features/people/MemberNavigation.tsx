@@ -1,7 +1,10 @@
+import type { MouseEvent } from 'react';
 import { currentRoute, profileHref } from '../../navigation';
 import { SettingsIcon } from '../../navigation/SettingsIcon';
 import type { Profile } from './ProfileForm';
 
+const activityPath =
+  'M20 5c-3-3-6-1-8 1-2-2-5-4-8-1-4 4 1 9 8 15 7-6 12-11 8-15Z';
 const destinations = [
   { page: 'feed', label: 'Feed', path: 'M3 10 12 3l9 7v11h-6v-7H9v7H3Z' },
   {
@@ -11,10 +14,12 @@ const destinations = [
   },
   { page: 'compose', label: 'New post', path: 'M12 4v16M4 12h16' },
   {
-    page: 'notifications',
-    label: 'Activity',
-    path: 'M20 5c-3-3-6-1-8 1-2-2-5-4-8-1-4 4 1 9 8 15 7-6 12-11 8-15Z',
+    page: 'events',
+    label: 'Events',
+    path: 'M7 3v4M17 3v4M4 10h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z',
   },
+  // Phones reach Activity from the header; the desktop sidebar keeps it.
+  { page: 'notifications', label: 'Activity', path: activityPath },
   {
     page: 'profile',
     label: 'Profile',
@@ -73,7 +78,9 @@ export function MemberNavigation({
               : `#${item.page}`;
           const route = currentRoute();
           const canRefresh =
-            ['feed', 'notifications', 'profile'].includes(item.page) &&
+            ['feed', 'events', 'notifications', 'profile'].includes(
+              item.page,
+            ) &&
             (href === `#${route}` ||
               (item.page === 'profile' && route === 'profile'));
           const unread = item.page === 'notifications' ? unreadCount : null;
@@ -82,20 +89,15 @@ export function MemberNavigation({
             : '';
           return (
             <a
-              className="nav-link"
+              className={
+                item.page === 'notifications'
+                  ? 'nav-link nav-link-desktop'
+                  : 'nav-link'
+              }
               key={item.page}
               href={href}
               onClick={(event) => {
-                if (
-                  !canRefresh ||
-                  event.defaultPrevented ||
-                  event.button !== 0 ||
-                  event.metaKey ||
-                  event.ctrlKey ||
-                  event.shiftKey ||
-                  event.altKey
-                )
-                  return;
+                if (!canRefresh || !reselects(event)) return;
                 event.preventDefault();
                 onReselect();
               }}
@@ -148,6 +150,73 @@ export function MemberNavigation({
           </span>
         </a>
       </div>
+    </nav>
+  );
+}
+
+// Plain primary clicks on the current destination reload it in place.
+function reselects(event: MouseEvent<HTMLAnchorElement>) {
+  return !(
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
+  );
+}
+// Header controls on phones (and for members who only use events, on every
+// screen): Activity with its unread badge, plus Settings when there is no
+// profile tab to reach it from.
+export function HeaderActions({
+  page,
+  unreadCount,
+  settings,
+  onReselect,
+}: {
+  page: string;
+  unreadCount: number | null;
+  settings: boolean;
+  onReselect: () => void;
+}) {
+  const unread = unreadCount ?? 0;
+  return (
+    <nav className="header-actions" aria-label="Account">
+      <a
+        className="header-action"
+        href="#notifications"
+        aria-label="Activity"
+        aria-description={
+          unread
+            ? `${unread >= 100 ? 'More than 99' : unread} unread ${unread === 1 ? 'notification' : 'notifications'}.`
+            : undefined
+        }
+        aria-current={page === 'notifications' ? 'page' : undefined}
+        onClick={(event) => {
+          if (page !== 'notifications' || !reselects(event)) return;
+          event.preventDefault();
+          onReselect();
+        }}
+      >
+        <span className="nav-icon">
+          <Icon path={activityPath} />
+          {unread > 0 && (
+            <span className="nav-badge" aria-hidden="true">
+              {unread >= 100 ? '99+' : unread}
+            </span>
+          )}
+        </span>
+      </a>
+      {settings && (
+        <a
+          className="header-action"
+          href="#settings"
+          aria-label="Settings"
+          aria-current={page === 'settings' ? 'page' : undefined}
+        >
+          <SettingsIcon />
+        </a>
+      )}
     </nav>
   );
 }

@@ -543,3 +543,25 @@ Private image bytes remain uncached by the browser (`private, no-store`). A futu
 - [x] Widen post action-row spacing by 20%: 7.2px icon-to-count and 19.2px between the like and comment groups, shared by feed and focused posts through CSS variables; the like count's trailing hit area still fills the group gap.
 - [x] Pass the Node 24 gate: formatting, lint, types, boundaries, all 500 tests and the production build. No browser or visual testing.
 - [x] Deploy through [GitHub run 39083814194](https://github.com/alexcrist/slowmass/actions/runs/39083814194) with Worker `054057d5-c9bf-404f-9163-2fec682c3272`. No pending migrations; post-deploy asset, sign-in availability and private-boundary HTTP checks passed.
+
+## Sixty-day sessions and auth date comparisons — October 17, 2026
+
+- [x] Extend sessions to 60 days after their last renewal. Renew only through bootstrap, at most daily, and forward the reissued cookie; other private reads disable renewal. Previously every private route extended only the D1 row and dropped the reissued cookie, so browsers discarded the seven-day sign-in cookie a week after email sign-in regardless of use. A read-only aggregate production query on October 17 found no session created more than seven days earlier. Existing sessions extend at their next app start; no migration or sign-out.
+- [x] Compare session expiry in push delivery, live-subscription checks and auth cleanup against Better Auth's ISO text dates. Numeric comparisons treated every stored expiry as unexpired (all 17 production sessions store text), so expired sessions remained push-eligible and were never pruned. Fixtures now use the stored format; restoring the numeric comparison fails four push/cleanup tests.
+- [x] Add a bootstrap renewal regression: ordinary requests write nothing and set no cookie; bootstrap renews the row and sets a 60-day HTTP-only cookie; an immediate repeat writes nothing.
+- [x] Pass the Node 24 gate: formatting, lint, types, boundaries, all 501 tests and the production build. No browser or visual testing.
+- [ ] Deploy, then confirm that a session's cookie renews in production after a day of use.
+
+## Events — October 17, 2026
+
+- [x] Add migration 0030 (manual): events, hosts, answers, messages, and email claims; record the event on shared invitations; accept event claims in membership validation; rebuild Activity sources for `event_response` and `event_message` with every dependent trigger, fixing push enqueue's session-expiry comparison.
+- [x] Server feature: draft creation with a daily allowance, cover upload and replacement through trusted processing, link copy and retry-safe replacement, signed-out previews and credential-header media, answers with durable access, guest lists, a merged activity log, messages, edits that notify time and location changes, cancellation, upcoming/past lists, `hasEvents` bootstrap, cleanup, and account deletion.
+- [x] Event-link sign-up through magic links: email claims pin the link version, name, and answer; verification creates a shared invitation from the creator, membership, profile, and answer for new people and records the answer for members.
+- [x] Activity, read state, and push for event kinds behind `includeEvents=1`; Activity and push no longer require a profile photo.
+- [x] Client: Events tab, list, create/edit form, event page with answers, guests, and activity, `/event` link page with email confirmation, event Activity rows, phone header Activity control, and the event-only app.
+- [x] Pass the Node 24 gate: formatting, lint, types, boundaries, all 522 tests (11 event integration tests including migration preservation, 8 event UI tests, 2 time-zone tests) and the production build. No browser or visual testing.
+- [x] After owner review: Share link opens the share sheet (copy fallback) with the host's link preloaded; guests only ever give a name, so guest lists, event Activity, and the event-only Edit name form show and edit names, not generated usernames. 524 tests pass.
+- [x] After owner review: event URLs are the only invitations. Remove email invitations, invite links, `/invite`, `/join`, and the separate `/event` page (migration 0030 revokes outstanding credentials and keeps their records). Each event has one URL, `/#event/<link>`, shared from the page and shown in the address bar. Signed out it reveals only whether it works and asks for an email; signing in through it records an access row and, for new people, an invitation from the creator with the event and link version. Opening shows details; answering shows guests and activity. New members give only a name (server-generated username) and use the events-only app until they add a photo. Restore quarantine also quarantines event links. 465 tests pass (invitation suites removed; provenance, replaced-link, disabled-creator and revoked-invitation cases re-expressed with event links).
+- [ ] Owner review in local development.
+- [ ] Production rollout of manual migration 0030 per the operations runbook, then HTTP checks of the new private routes.
+- [ ] Co-hosts: add and remove hosts with their consent to showing their name and avatar to link holders.

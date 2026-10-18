@@ -13,3 +13,5 @@ Navigation remembers pagination cursors; returning from a post refetches the sam
 `Notifications` accepts an optional leading row, shown only on the newest page without a push focus. The member shell uses it for the [device-setup](../device-setup/README.md) suggestion, which is not a server activity item and is excluded from read receipts. `observeReadActivity` is exported for that row's badge.
 
 Joined-invitee activity renders the whole row as a native profile link with a 64px private avatar and current handle. It uses the existing visibility dwell acknowledgement and unread badge. List/count requests opt into this event type, keeping older open clients compatible during rollout.
+
+Event activity rows link the whole row to the event, with its 64px cover thumbnail: “Bob is going to Dinner.”, a host’s or guest’s message with its text, “Alice changed the time of Dinner.”, or “Alice cancelled Dinner.”. They use names rather than usernames because guests never choose one. List and count requests opt into event kinds with `includeEvents=1`, so older open clients never receive rows they cannot render.

@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { unstable_splitSqlQuery } from 'wrangler';
 import { testRuntime, seedProfilePhotos } from './support/runtime';
+import { deviceSetupPending } from '../src/server/features/device-setup';
 
 let runtime: Awaited<ReturnType<typeof testRuntime>>;
 beforeAll(async () => {
@@ -30,7 +31,14 @@ it('resumes new-member setup across sessions and completes idempotently without 
     .prepare(
       'INSERT INTO session(id,userId,token,expiresAt,createdAt,updatedAt) VALUES(?,?,?,?,?,?)',
     )
-    .bind('other', 'alice', 'other-token', Date.now() + 86400000, 1, 1)
+    .bind(
+      'other',
+      'alice',
+      'other-token',
+      new Date(Date.now() + 86400000).toISOString(),
+      1,
+      1,
+    )
     .run();
   expect(
     await (await runtime.request('other', '/api/bootstrap')).json(),
@@ -67,7 +75,9 @@ it('protects optional setup from anonymous, foreign-origin, expired and inactive
     ).status,
   ).toBe(403);
   await runtime.db
-    .prepare("UPDATE session SET expiresAt=0 WHERE id='other'")
+    .prepare(
+      "UPDATE session SET expiresAt='2020-01-01T00:00:00.000Z' WHERE id='other'",
+    )
     .run();
   expect(
     (await runtime.request('other', '/api/device-setup', 'DELETE')).status,
@@ -134,9 +144,10 @@ it('migrates existing subscriptions and leased deliveries atomically without enr
     expect(
       await old.db.prepare('SELECT COUNT(*) n FROM device_setup').first('n'),
     ).toBe(0);
+    // Bootstrap also reads later schema; check this migration's state directly.
     expect(
-      await (await old.request('alice', '/api/bootstrap')).json(),
-    ).toMatchObject({ deviceSetupPending: false });
+      await deviceSetupPending(old.db as unknown as D1Database, 'alice'),
+    ).toBe(false);
     await old.db
       .prepare(
         "UPDATE activity_read_state SET is_read=1 WHERE recipient_id='alice'",
@@ -181,7 +192,7 @@ it('reports whether the member has a live push subscription on any device', asyn
       'carol-phone',
       'carol',
       'carol-phone-token',
-      Date.now() + 86400000,
+      new Date(Date.now() + 86400000).toISOString(),
       1,
       1,
     )
@@ -193,7 +204,9 @@ it('reports whether the member has a live push subscription on any device', asyn
     .run();
   expect(await subscribed()).toBe(true);
   await runtime.db
-    .prepare("UPDATE session SET expiresAt=0 WHERE id='carol-phone'")
+    .prepare(
+      "UPDATE session SET expiresAt='2020-01-01T00:00:00.000Z' WHERE id='carol-phone'",
+    )
     .run();
   expect(await subscribed()).toBe(false);
   expect(

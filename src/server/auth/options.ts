@@ -2,15 +2,16 @@ import type { BetterAuthOptions } from 'better-auth';
 import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { magicLink } from 'better-auth/plugins';
 import type { Env } from '../env';
-import { canJoin, ensureMembership, activeMember } from '../membership';
-import { emailConfigured, sendLoginEmail } from '../email';
 import {
-  bindSharedVerification,
-  sharedClaim,
-  hasSharedClaim,
-  acceptSharedVerification,
+  canJoin,
+  ensureMembership,
+  activeMember,
+  bindEventVerification,
+  eventClaim,
+  hasEventClaim,
+  acceptEventVerification,
 } from '../membership';
-import { invitationAuth } from './invitation';
+import { emailConfigured, sendLoginEmail } from '../email';
 import { sessionStage } from '../telemetry';
 
 export function authConfigured(env: Env): boolean {
@@ -19,19 +20,25 @@ export function authConfigured(env: Env): boolean {
   );
 }
 
+function forbidden(): never {
+  throw new APIError('FORBIDDEN', {
+    message: 'An event link from an active member is required.',
+  });
+}
 export function authOptions(env: Env): BetterAuthOptions {
-  const sharedVerifications = new WeakSet<Request>();
-  async function isSharedVerification(
+  const eventVerifications = new WeakSet<Request>();
+  // Whether an event-link claim is bound to this email token.
+  async function isEventVerification(
     token: string | null,
     request: Request | undefined,
   ) {
     if (!token || !request) return false;
-    if (sharedVerifications.has(request)) return true;
-    const shared = await hasSharedClaim(env.DB, token);
+    if (eventVerifications.has(request)) return true;
+    const event = await hasEventClaim(env.DB, token);
     // Keep the source from before token consumption through session issuance.
-    // Cleanup can remove the claim in between; it must fail, not switch inviters.
-    if (shared) sharedVerifications.add(request);
-    return shared;
+    // Cleanup can remove the claim in between; it must fail, not fall back.
+    if (event) eventVerifications.add(request);
+    return event;
   }
   return {
     appName: 'slowmass',
@@ -72,7 +79,7 @@ export function authOptions(env: Env): BetterAuthOptions {
         },
       },
       {
-        ...invitationAuth(env),
+        id: 'event-link-verification',
         hooks: {
           before: [
             {
@@ -80,7 +87,7 @@ export function authOptions(env: Env): BetterAuthOptions {
               handler: createAuthMiddleware(async (ctx) => {
                 const token =
                   typeof ctx.query?.token === 'string' ? ctx.query.token : null;
-                await isSharedVerification(token, ctx.request);
+                await isEventVerification(token, ctx.request);
               }),
             },
           ],
@@ -97,23 +104,29 @@ export function authOptions(env: Env): BetterAuthOptions {
             .bind(email.trim().toLowerCase())
             .first<{ id: string }>();
           const existing = user && (await activeMember(env.DB, user.id));
-          const shared = metadata?.inviteLink;
+          // Signing in through an event link records the link for members too.
           const eligible =
-            existing ||
-            (shared !== undefined
-              ? await bindSharedVerification(env.DB, shared, email, token)
-              : await canJoin(env.DB, email, env.BOOTSTRAP_EMAIL));
+            metadata?.eventLink !== undefined
+              ? await bindEventVerification(
+                  env.DB,
+                  metadata.eventLink,
+                  email,
+                  token,
+                  Boolean(existing),
+                )
+              : existing || (await canJoin(env.DB, email, env.BOOTSTRAP_EMAIL));
           if (!eligible)
             throw new APIError('FORBIDDEN', {
               code: 'INVITATION_REQUIRED',
-              message: 'You need an invitation from a slowmass member to join.',
+              message: 'Ask a slowmass member to text you an event link.',
             });
           await sendLoginEmail(env, email, url);
         },
       }),
     ],
     account: { accountLinking: { enabled: false } },
-    session: { cookieCache: { enabled: false } },
+    // Sliding sixty-day sessions; only bootstrap renews them (see index.ts).
+    session: { cookieCache: { enabled: false }, expiresIn: 60 * 86400 },
     advanced: {
       // Migrations and an explicit CI check validate the schema. A request-owned
       // runtime schema promise can otherwise stall every session in an isolate.
@@ -130,17 +143,14 @@ export function authOptions(env: Env): BetterAuthOptions {
               typeof ctx.query?.token === 'string'
                 ? ctx.query.token
                 : null;
-            const shared = await isSharedVerification(token, ctx?.request);
+            const event = await isEventVerification(token, ctx?.request);
             if (
               !user.emailVerified ||
-              !(shared && token
-                ? await sharedClaim(env.DB, token, user.email)
+              !(event && token
+                ? await eventClaim(env.DB, token, user.email)
                 : await canJoin(env.DB, user.email, env.BOOTSTRAP_EMAIL))
-            ) {
-              throw new APIError('FORBIDDEN', {
-                message: 'An invitation from an active member is required.',
-              });
-            }
+            )
+              forbidden();
             return {
               data: {
                 ...user,
@@ -159,22 +169,24 @@ export function authOptions(env: Env): BetterAuthOptions {
               typeof ctx.query?.token === 'string'
                 ? ctx.query.token
                 : null;
-            const shared = await isSharedVerification(token, ctx?.request);
-            if (await activeMember(env.DB, session.userId))
-              return { data: session };
+            // Signing in through an event link records the link, joining new
+            // people first.
+            if (token && (await isEventVerification(token, ctx?.request)))
+              return (await acceptEventVerification(
+                env.DB,
+                session.userId,
+                token,
+              ))
+                ? { data: session }
+                : forbidden();
             if (
-              !(shared && token
-                ? await acceptSharedVerification(env.DB, session.userId, token)
-                : await ensureMembership(
-                    env.DB,
-                    session.userId,
-                    env.BOOTSTRAP_EMAIL,
-                  ))
-            ) {
-              throw new APIError('FORBIDDEN', {
-                message: 'An invitation from an active member is required.',
-              });
-            }
+              !(await ensureMembership(
+                env.DB,
+                session.userId,
+                env.BOOTSTRAP_EMAIL,
+              ))
+            )
+              forbidden();
             return { data: session };
           },
         },

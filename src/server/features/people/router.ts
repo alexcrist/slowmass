@@ -52,7 +52,10 @@ people.put('/self', async (c) => {
   if (!(await saveProfile(c.env.DB, c.get('userId'), input)))
     return c.json(
       {
-        error: 'That username is unavailable. Choose another.',
+        error:
+          input.handle === null
+            ? 'Your name could not be saved. Try again.'
+            : 'That username is unavailable. Choose another.',
       },
       409,
     );

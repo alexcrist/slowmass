@@ -2,7 +2,7 @@ import { startupPhase } from '../../telemetry';
 import { bodyLimit } from 'hono/body-limit';
 import { deleteAccount } from './index';
 import { Hono } from 'hono';
-import { getActiveUser } from '../../auth';
+import { getActiveUser, renewActiveUser } from '../../auth';
 import { authConfigured } from '../../auth/options';
 import type { Env } from '../../env';
 import { ownProfile } from '../people';
@@ -12,9 +12,11 @@ import { hasPushSubscription } from '../push';
 export const bootstrap = new Hono<{ Bindings: Env }>();
 bootstrap.get('/', async (c) => {
   const signInAvailable = authConfigured(c.env);
-  const user = signInAvailable
-    ? await getActiveUser(c.env, c.req.raw.headers)
-    : null;
+  const { user, cookies } = signInAvailable
+    ? await renewActiveUser(c.env, c.req.raw.headers)
+    : { user: null, cookies: [] };
+  for (const cookie of cookies)
+    c.header('Set-Cookie', cookie, { append: true });
   startupPhase('profile');
   const [profile, pending, pushSubscribed] = user
     ? await Promise.all([

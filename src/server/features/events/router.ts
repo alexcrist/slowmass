@@ -1,0 +1,305 @@
+import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
+import type { Env } from '../../env';
+import { getActiveSession } from '../../auth';
+import { authConfigured } from '../../auth/options';
+import { PhotoError, privatePhoto } from '../../photos';
+import {
+  cancelEvent,
+  checkLink,
+  createEvent,
+  deleteMessage,
+  eventLog,
+  eventMediaKey,
+  findEvent,
+  listEvents,
+  listGuests,
+  parseCursor,
+  parseDetails,
+  parseMessage,
+  parseStatus,
+  postMessage,
+  openEvent,
+  replaceEventLink,
+  respond,
+  saveEventPhoto,
+  updateEvent,
+  validId,
+  validLinkToken,
+} from './index';
+
+type Variables = { userId: string; complete: boolean };
+export const events = new Hono<{ Bindings: Env; Variables: Variables }>();
+export const eventLinks = new Hono<{ Bindings: Env }>();
+export const eventMedia = new Hono<{ Bindings: Env }>();
+
+const notFound = { error: 'Event not found.' };
+
+// Members without a profile photo can take part in events they opened or
+// answered; creating and hosting require a finished profile.
+events.use('*', async (c, next) => {
+  if (!authConfigured(c.env))
+    return c.json({ error: 'Sign-in is not available yet.' }, 503);
+  const session = await getActiveSession(c.env, c.req.raw.headers);
+  if (!session) return c.json({ error: 'Sign in to continue.' }, 401);
+  c.set('userId', session.user.id);
+  c.set('complete', session.hasProfilePhoto);
+  await next();
+});
+const jsonLimit = bodyLimit({ maxSize: 12000 });
+function requireComplete(complete: boolean) {
+  return complete
+    ? null
+    : { error: 'Add a profile photo to finish setting up your account.' };
+}
+async function json(c: { req: { json: () => Promise<unknown> } }) {
+  return c.req.json().catch(() => null);
+}
+const detailsError = {
+  error:
+    'Give the event a title up to 120 characters, a start time, an end time after it (within 30 days), a description up to 4,000 characters and a location up to 300 characters.',
+};
+
+events.get('/', async (c) => {
+  const when = c.req.query('when') ?? 'upcoming';
+  if (when !== 'upcoming' && when !== 'past')
+    return c.json({ error: 'Invalid page.' }, 400);
+  try {
+    return c.json(
+      await listEvents(
+        c.env.DB,
+        c.get('userId'),
+        when,
+        parseCursor(c.req.query('cursor')),
+      ),
+    );
+  } catch {
+    return c.json({ error: 'Invalid page.' }, 400);
+  }
+});
+events.post('/', jsonLimit, async (c) => {
+  const incomplete = requireComplete(c.get('complete'));
+  if (incomplete) return c.json(incomplete, 409);
+  const body = (await json(c)) as Record<string, unknown> | null;
+  const details = parseDetails(body);
+  if (!details || !validId(body?.id)) return c.json(detailsError, 400);
+  const state = await createEvent(c.env, c.get('userId'), body.id, details);
+  if (state === 'limit')
+    return c.json({ error: 'You can create up to 10 events a day.' }, 429);
+  if (state === 'conflict')
+    return c.json(
+      { error: 'This event could not be saved. Start a new event instead.' },
+      409,
+    );
+  return c.json({ id: body.id, state });
+});
+events.get('/:id', async (c) => {
+  const event = await findEvent(c.env, c.get('userId'), c.req.param('id'));
+  return event ? c.json({ event }) : c.json(notFound, 404);
+});
+events.patch('/:id', jsonLimit, async (c) => {
+  const body = (await json(c)) as Record<string, unknown> | null;
+  const details = parseDetails(body);
+  if (!details || !validId(body?.messageId)) return c.json(detailsError, 400);
+  return (await updateEvent(
+    c.env.DB,
+    c.get('userId'),
+    c.req.param('id'),
+    details,
+    body.messageId,
+  ))
+    ? c.json({ ok: true })
+    : c.json(
+        {
+          error:
+            'This event could not be updated. It may have changed or been cancelled; reload it and try again.',
+        },
+        409,
+      );
+});
+events.post('/:id/cancel', jsonLimit, async (c) => {
+  const body = (await json(c)) as Record<string, unknown> | null;
+  if (!validId(body?.messageId))
+    return c.json({ error: 'A cancellation ID is required.' }, 400);
+  return (await cancelEvent(
+    c.env.DB,
+    c.get('userId'),
+    c.req.param('id'),
+    body.messageId,
+  ))
+    ? c.json({ ok: true })
+    : c.json(notFound, 404);
+});
+events.put('/:id/photo', async (c) => {
+  const upload = c.req.header('Idempotency-Key') ?? '';
+  if (!validId(upload))
+    return c.json({ error: 'A valid upload ID is required.' }, 400);
+  if (!c.env.IMAGES)
+    return c.json({ error: 'Photo processing is unavailable.' }, 503);
+  try {
+    const state = await saveEventPhoto(
+      c.env,
+      c.get('userId'),
+      c.req.param('id'),
+      upload,
+      c.req.raw,
+    );
+    if (state === 'done') return c.json({ ok: true });
+    if (state === 'missing') return c.json(notFound, 404);
+    if (state === 'quota')
+      return c.json(
+        { error: 'Photo upload limit reached. Try again later.' },
+        429,
+      );
+    return c.json(
+      {
+        error:
+          'This upload is in progress or failed. Wait before retrying, or choose the photo again.',
+      },
+      409,
+    );
+  } catch (error) {
+    if (error instanceof PhotoError)
+      return c.json({ error: error.message }, error.status);
+    throw error;
+  }
+});
+// Opening an event link while signed in records it and returns the event.
+events.post('/open', bodyLimit({ maxSize: 1024 }), async (c) => {
+  const body = (await json(c)) as Record<string, unknown> | null;
+  const id = validLinkToken(body?.token)
+    ? await openEvent(c.env.DB, c.get('userId'), body.token)
+    : null;
+  return id
+    ? c.json({ id })
+    : c.json(
+        {
+          error:
+            'This event link isn’t available. The host may have replaced it; ask them for the current link.',
+        },
+        404,
+      );
+});
+events.post('/:id/response', bodyLimit({ maxSize: 1024 }), async (c) => {
+  const body = (await json(c)) as Record<string, unknown> | null;
+  const status = parseStatus(body?.status);
+  if (!status)
+    return c.json({ error: 'Choose Going, Maybe or Can’t go.' }, 400);
+  return (await respond(c.env.DB, c.get('userId'), c.req.param('id'), status))
+    ? c.json({ status })
+    : c.json(
+        {
+          error:
+            'Answers are closed for this event, or its link was replaced. Open the current link to answer.',
+        },
+        409,
+      );
+});
+events.get('/:id/guests', async (c) => {
+  const status = parseStatus(c.req.query('status'));
+  if (!status) return c.json({ error: 'Invalid guest list.' }, 400);
+  try {
+    const cursor = parseCursor(c.req.query('cursor'));
+    return c.json(
+      await listGuests(
+        c.env.DB,
+        c.get('userId'),
+        c.req.param('id'),
+        status,
+        cursor,
+      ),
+    );
+  } catch {
+    return c.json({ error: 'Invalid page.' }, 400);
+  }
+});
+events.get('/:id/activity', async (c) => {
+  try {
+    const cursor = parseCursor(c.req.query('cursor'));
+    return c.json(
+      await eventLog(c.env.DB, c.get('userId'), c.req.param('id'), cursor),
+    );
+  } catch {
+    return c.json({ error: 'Invalid page.' }, 400);
+  }
+});
+events.post('/:id/messages', bodyLimit({ maxSize: 12000 }), async (c) => {
+  const message = parseMessage(await json(c));
+  if (!message)
+    return c.json({ error: 'Write a message up to 2,000 characters.' }, 400);
+  return (await postMessage(
+    c.env.DB,
+    c.get('userId'),
+    c.req.param('id'),
+    message.id,
+    message.body,
+  ))
+    ? c.json({ id: message.id })
+    : c.json(
+        {
+          error:
+            'The message could not be posted. You can post up to 100 messages a day.',
+        },
+        409,
+      );
+});
+events.delete('/:id/messages/:message', async (c) =>
+  validId(c.req.param('message')) &&
+  (await deleteMessage(
+    c.env.DB,
+    c.get('userId'),
+    c.req.param('id'),
+    c.req.param('message'),
+  ))
+    ? c.json({ ok: true })
+    : c.json({ error: 'Message not found.' }, 404),
+);
+events.post('/:id/link', jsonLimit, async (c) => {
+  const body = (await json(c)) as Record<string, unknown> | null;
+  if (!validId(body?.id) || !validId(body?.expectedId))
+    return c.json({ error: 'Link IDs are required.' }, 400);
+  const link = await replaceEventLink(
+    c.env,
+    c.get('userId'),
+    c.req.param('id'),
+    body.id,
+    body.expectedId,
+  );
+  return link
+    ? c.json({ link })
+    : c.json(
+        {
+          error:
+            'The link could not be replaced. Reload the event to see the current link.',
+        },
+        409,
+      );
+});
+
+// Signed-out visitors learn only whether a link works before signing in.
+eventLinks.post('/', bodyLimit({ maxSize: 1024 }), async (c) => {
+  const body = (await json(c)) as Record<string, unknown> | null;
+  return c.json({
+    event: validLinkToken(body?.token)
+      ? await checkLink(c.env.DB, body.token)
+      : null,
+  });
+});
+
+// Covers load with the session; no credential or public URL is involved.
+eventMedia.get('/:id', async (c) => {
+  const size = c.req.query('size');
+  if ((size !== undefined && size !== 'thumb') || !authConfigured(c.env))
+    return c.notFound();
+  const session = await getActiveSession(c.env, c.req.raw.headers);
+  const id = c.req.param('id');
+  if (!session || !validId(id)) return c.notFound();
+  const key = await eventMediaKey(
+    c.env.DB,
+    session.user.id,
+    id,
+    size === 'thumb' ? 'thumb' : 'full',
+  );
+  const response = key ? await privatePhoto(c.env, key, c.executionCtx) : null;
+  return response ?? c.notFound();
+});

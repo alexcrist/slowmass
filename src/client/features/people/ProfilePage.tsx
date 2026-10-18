@@ -91,24 +91,6 @@ export function ProfilePage({
                 <div className="profile-shortcuts">
                   <a
                     className="icon-button"
-                    href="#invitations"
-                    aria-label="Invite friends"
-                  >
-                    <svg
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={1.8}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      <rect x="3" y="5" width="18" height="14" rx="2" />
-                      <path d="m3 7 9 6 9-6" />
-                    </svg>
-                  </a>
-                  <a
-                    className="icon-button"
                     href="#settings"
                     aria-label="Settings"
                   >

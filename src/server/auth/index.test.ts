@@ -13,7 +13,10 @@ vi.mock('./options', () => ({
   authOptions: () => ({}),
   authConfigured: () => true,
 }));
-vi.mock('../membership', () => ({ memberAccess: mocks.memberAccess }));
+vi.mock('../membership', () => ({
+  memberAccess: mocks.memberAccess,
+  EVENT_OVER_AFTER: 43_200_000,
+}));
 function deferred() {
   let resolve!: () => void;
   const promise = new Promise<void>((done) => {
@@ -26,8 +29,11 @@ function library(context: Promise<void> = Promise.resolve()) {
     $context: context,
     api: {
       getSession: vi.fn(async () => ({
-        user: { id: 'alice', name: 'Alice', emailVerified: true },
-        session: { id: 'test-session' },
+        headers: new Headers(),
+        response: {
+          user: { id: 'alice', name: 'Alice', emailVerified: true },
+          session: { id: 'test-session' },
+        },
       })),
     },
     handler: vi.fn(async () => new Response('ok')),

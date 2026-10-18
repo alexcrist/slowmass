@@ -41,7 +41,10 @@ it('joins auth reads and checks current membership/completion without caching re
       },
     });
     const old = emptyMetrics();
-    await requestMetrics.run(old, () => legacy.api.getSession({ headers }));
+    // Compare reads only; ordinary requests no longer renew sessions.
+    await requestMetrics.run(old, () =>
+      legacy.api.getSession({ headers, query: { disableRefresh: true } }),
+    );
     expect(old.queries).toBe(2);
     const joined = emptyMetrics();
     const session = await requestMetrics.run(joined, () =>
@@ -77,7 +80,9 @@ it('joins auth reads and checks current membership/completion without caching re
       .prepare("UPDATE membership SET status='active' WHERE user_id='alice'")
       .run();
     await runtime.db
-      .prepare("UPDATE session SET expiresAt=0 WHERE userId='alice'")
+      .prepare(
+        "UPDATE session SET expiresAt='2020-01-01T00:00:00.000Z' WHERE userId='alice'",
+      )
       .run();
     expect(await getActiveSession(env, headers)).toBeNull();
   } finally {

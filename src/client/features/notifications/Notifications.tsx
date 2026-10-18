@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { api } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
 import { postHref, profileHref } from '../../navigation';
+import { changedText, eventHref } from '../events';
 import { usePageHistory } from '../../navigation/PageHistory';
 import { useReadActivity } from './useReadActivity';
 type Item = {
@@ -15,7 +16,39 @@ type Item = {
   | { kind: 'joined'; handle: string }
   | { kind: 'likes'; postId: string; count: number; more: boolean }
   | { kind: 'comment'; postId: string; handle: string; body: string }
+  | {
+      kind: 'event_response';
+      eventId: string;
+      eventTitle: string;
+      displayName: string;
+      response: 'going' | 'maybe' | 'declined';
+    }
+  | {
+      kind: 'event_message';
+      eventId: string;
+      eventTitle: string;
+      displayName: string;
+      messageKind: 'message' | 'changed' | 'cancelled';
+      body: string;
+    }
 );
+// Guests never choose a username, so event activity uses names.
+function eventText(item: Item) {
+  if (item.kind === 'event_response')
+    return `${item.displayName} ${
+      item.response === 'going'
+        ? 'is going to'
+        : item.response === 'maybe'
+          ? 'might go to'
+          : 'can’t go to'
+    } ${item.eventTitle}.`;
+  if (item.kind !== 'event_message') return '';
+  return item.messageKind === 'cancelled'
+    ? `${item.displayName} cancelled ${item.eventTitle}.`
+    : item.messageKind === 'changed'
+      ? `${item.displayName} changed ${changedText(item.body)} of ${item.eventTitle}.`
+      : `${item.displayName} posted in ${item.eventTitle}.`;
+}
 type Page = { items: Item[]; next: string | null; focusFound?: boolean };
 export function Notifications({
   onChange,
@@ -40,7 +73,7 @@ export function Notifications({
     reload,
     refresh,
   } = useApiResource<Page>(
-    `/api/notifications?cursor=${encodeURIComponent(cursor)}${focus ? `&focus=${encodeURIComponent(focus)}` : ''}&includeJoined=1`,
+    `/api/notifications?cursor=${encodeURIComponent(cursor)}${focus ? `&focus=${encodeURIComponent(focus)}` : ''}&includeJoined=1&includeEvents=1`,
   );
   const { list, readError } = useReadActivity(page?.items, onChange);
   async function act(handle: string, action: 'accept' | 'deny' | 'request') {
@@ -107,7 +140,29 @@ export function Notifications({
         {!focus && history.length === 1 && leading}
         {page?.items.map((item) => (
           <li key={item.key}>
-            {item.kind === 'joined' ? (
+            {item.kind === 'event_response' || item.kind === 'event_message' ? (
+              <a className="notification-post" href={eventHref(item.eventId)}>
+                <img
+                  className="notification-thumbnail"
+                  src={`/media/events/${encodeURIComponent(item.eventId)}?size=thumb`}
+                  width={64}
+                  height={64}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                />
+                <div className="notification-content">
+                  <p data-notification-key={item.key}>{eventText(item)}</p>
+                  {item.kind === 'event_message' &&
+                    item.messageKind === 'message' && (
+                      <p className="bio">{item.body}</p>
+                    )}
+                  <time dateTime={new Date(item.createdAt).toISOString()}>
+                    {new Date(item.createdAt).toLocaleString()}
+                  </time>
+                </div>
+              </a>
+            ) : item.kind === 'joined' ? (
               <a
                 className="notification-post notification-joined"
                 href={profileHref(item.handle)}

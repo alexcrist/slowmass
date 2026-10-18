@@ -67,7 +67,7 @@ beforeEach(async () => {
     runtime.db.prepare("UPDATE membership SET status='active'"),
     runtime.db
       .prepare('UPDATE session SET expiresAt=?')
-      .bind(Date.now() + 86400000),
+      .bind(new Date(Date.now() + 86400000).toISOString()),
   ]);
 });
 async function enable(actor = 'alice', endpoint = subscription.endpoint) {
@@ -107,7 +107,14 @@ it('keeps hourly delivery separate from maintenance and ignores obsolete schedul
     .prepare(
       'INSERT INTO session(id,userId,token,expiresAt,createdAt,updatedAt) VALUES(?,?,?,?,?,?)',
     )
-    .bind('maintenance-probe', 'carol', 'maintenance-probe-token', 0, 0, 0)
+    .bind(
+      'maintenance-probe',
+      'carol',
+      'maintenance-probe-token',
+      '2020-01-01T00:00:00.000Z',
+      0,
+      0,
+    )
     .run();
   const worker = await runtime.worker.getWorker();
   expect((await worker.scheduled({ cron: '* * * * *' })).outcome).toBe('ok');
@@ -295,7 +302,9 @@ it.each(['removed', 'block', 'inactive', 'expired', 'incomplete'])(
         .run();
     if (reason === 'expired')
       await runtime.db
-        .prepare("UPDATE session SET expiresAt=0 WHERE id='alice'")
+        .prepare(
+          "UPDATE session SET expiresAt='2020-01-01T00:00:00.000Z' WHERE id='alice'",
+        )
         .run();
     if (reason === 'incomplete')
       await runtime.db.prepare("DELETE FROM avatar WHERE user_id='bob'").run();
@@ -573,7 +582,9 @@ it('atomically enforces the per-member cap across installations without preventi
   expect(await count('push_delivery')).toBe(10);
   // All copies of this login are revoked together; session ownership is unchanged.
   await runtime.db
-    .prepare("UPDATE session SET expiresAt=0 WHERE id='alice'")
+    .prepare(
+      "UPDATE session SET expiresAt='2020-01-01T00:00:00.000Z' WHERE id='alice'",
+    )
     .run();
   expect((await runtime.request('alice', '/api/push/device')).status).toBe(401);
   await tick();
@@ -582,7 +593,14 @@ it('atomically enforces the per-member cap across installations without preventi
     .prepare(
       'INSERT INTO session(id,userId,token,expiresAt,createdAt,updatedAt) VALUES(?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET expiresAt=excluded.expiresAt',
     )
-    .bind('alice', 'alice', 'alice-token', Date.now() + 86400000, 1, 1)
+    .bind(
+      'alice',
+      'alice',
+      'alice-token',
+      new Date(Date.now() + 86400000).toISOString(),
+      1,
+      1,
+    )
     .run();
 });
 
@@ -591,7 +609,14 @@ it('revokes every installation sharing a cookie through library sign-out while p
     .prepare(
       'INSERT INTO session(id,userId,token,expiresAt,createdAt,updatedAt) VALUES(?,?,?,?,?,?)',
     )
-    .bind('copied', 'alice', 'copied-token', Date.now() + 86400000, 1, 1)
+    .bind(
+      'copied',
+      'alice',
+      'copied-token',
+      new Date(Date.now() + 86400000).toISOString(),
+      1,
+      1,
+    )
     .run();
   await enable();
   expect(
@@ -675,7 +700,9 @@ it.each([
       .run();
   if (reason === 'expired')
     await runtime.db
-      .prepare("UPDATE session SET expiresAt=0 WHERE id='alice'")
+      .prepare(
+        "UPDATE session SET expiresAt='2020-01-01T00:00:00.000Z' WHERE id='alice'",
+      )
       .run();
   if (reason === 'disable')
     await runtime.request('alice', '/api/push/device', 'DELETE', undefined, {

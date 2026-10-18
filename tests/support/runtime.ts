@@ -114,7 +114,14 @@ export async function testRuntime(
       .prepare(
         'INSERT INTO session (id,userId,token,expiresAt,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
       )
-      .bind(id, id, `${id}-token`, now + 86400000, now, now)
+      .bind(
+        id,
+        id,
+        `${id}-token`,
+        new Date(now + 86400000).toISOString(),
+        now,
+        now,
+      )
       .run();
   }
   // These four base fixtures represent existing members, not new join events.

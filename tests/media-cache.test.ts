@@ -22,7 +22,14 @@ async function restoreSession(id: string) {
     .prepare(
       'INSERT OR REPLACE INTO session(id,userId,token,expiresAt,createdAt,updatedAt) VALUES(?,?,?,?,?,?)',
     )
-    .bind(id, id, `${id}-token`, now + 86400000, now, now)
+    .bind(
+      id,
+      id,
+      `${id}-token`,
+      new Date(now + 86400000).toISOString(),
+      now,
+      now,
+    )
     .run();
 }
 beforeAll(async () => {
@@ -48,7 +55,7 @@ beforeEach(async () => {
       'DELETE FROM follow',
       'DELETE FROM block',
       "UPDATE membership SET status='active'",
-      `UPDATE session SET expiresAt=${Date.now() + 86400000}`,
+      `UPDATE session SET expiresAt='${new Date(Date.now() + 86400000).toISOString()}'`,
     ].map((sql) => runtime.db.prepare(sql)),
   );
   postId = crypto.randomUUID();
@@ -142,7 +149,9 @@ it('checks signed-out, expired, pending, removed, blocked and inactive access be
   ).toBe(200);
   await denied('carol', variants().slice(0, 2));
   await runtime.db
-    .prepare("UPDATE session SET expiresAt=0 WHERE userId='alice'")
+    .prepare(
+      "UPDATE session SET expiresAt='2020-01-01T00:00:00.000Z' WHERE userId='alice'",
+    )
     .run();
   await denied('alice');
   await restoreSession('alice');

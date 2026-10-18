@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { profileHref, useRoute } from '../../navigation';
 import { BackControl } from '../../navigation/BackControl';
 import { PageHistoryProvider } from '../../navigation/PageHistory';
@@ -6,13 +7,19 @@ import { DeleteAccount } from '../account';
 import { Notifications, useNotificationCount } from '../notifications';
 import { Compose, PostDetail, PostList } from '../posts';
 import { AvatarForm } from '../avatars';
-import { InvitationForm } from '../invitations';
 import { InstallApp, InstallProvider } from '../install';
 import { ProfileForm, type Profile } from './ProfileForm';
 import { ProfilePage } from './ProfilePage';
 import { Discover } from './Discover';
 import { Connections, type Kind } from './Connections';
-import { MemberNavigation } from './MemberNavigation';
+import { HeaderActions, MemberNavigation } from './MemberNavigation';
+import {
+  EditEvent,
+  EventForm,
+  EventRoute,
+  EventsPage,
+  eventHref,
+} from '../events';
 import { PushSettings } from '../push';
 import { DeviceSetupItem, useDeviceSetup } from '../device-setup';
 
@@ -21,11 +28,14 @@ const titles: Record<string, string> = {
   people: 'Find people',
   compose: 'New post',
   notifications: 'Activity',
+  events: 'Events',
+  'new-event': 'New event',
+  event: 'Event',
+  photo: 'Add a profile photo',
   profile: 'Profile',
   post: 'Post',
   settings: 'Settings',
   edit: 'Edit profile',
-  invitations: 'Invite friends',
   following: 'Following',
   followers: 'Followers',
   blocked: 'Blocked accounts',
@@ -35,12 +45,14 @@ const noDeviceSetup: DeviceSetupState = {
   pending: false,
   pushSubscribed: false,
 };
-export function MemberApp(props: {
+type MemberProps = {
   initialProfile: Profile | null;
   deviceSetup?: DeviceSetupState;
+  headerSlot?: HTMLElement | null;
   onSignOut: () => void;
   signingOut: boolean;
-}) {
+};
+export function MemberApp(props: MemberProps) {
   return (
     <InstallProvider>
       <MemberPages {...props} />
@@ -50,14 +62,10 @@ export function MemberApp(props: {
 function MemberPages({
   initialProfile,
   deviceSetup: initialDeviceSetup = noDeviceSetup,
+  headerSlot = null,
   onSignOut,
   signingOut,
-}: {
-  initialProfile: Profile | null;
-  deviceSetup?: DeviceSetupState;
-  onSignOut: () => void;
-  signingOut: boolean;
-}) {
+}: MemberProps) {
   const { route, backRoute } = useRoute();
   const [page, handle, profileTab] = route.split('/');
   const pageKey =
@@ -66,13 +74,17 @@ function MemberPages({
   const [avatarVersion, setAvatarVersion] = useState(0);
   const [pageVersion, setPageVersion] = useState(0);
   const ready = Boolean(profile?.hasAvatar);
+  // Everyone joins through an event. Until they add a profile photo, members
+  // use only events, Activity and Settings.
+  const eventOnly = Boolean(profile && !ready);
+  const active = ready || eventOnly;
   const heading = useRef<HTMLHeadingElement>(null);
   const wasReady = useRef(ready);
   useEffect(() => {
     if (ready && !wasReady.current) heading.current?.focus();
     wasReady.current = ready;
   }, [ready]);
-  const notifications = useNotificationCount(ready);
+  const notifications = useNotificationCount(active);
   const deviceSetup = useDeviceSetup(initialDeviceSetup, ready);
   // The device-setup row counts once per step until seen on this device.
   const unreadCount =
@@ -80,49 +92,138 @@ function MemberPages({
       ? null
       : notifications.count + (deviceSetup.unseen ? 1 : 0);
   const profileRoute = profile ? profileHref(profile.handle) : '#profile';
-  const back =
-    page === 'settings' || page === 'following' || page === 'followers'
-      ? { href: profileRoute, label: 'Back to profile' }
-      : page === 'invitations' && backRoute.startsWith('profile')
-        ? { href: `#${backRoute}`, label: 'Back to profile' }
-        : ['edit', 'invitations', 'blocked'].includes(page)
-          ? { href: '#settings', label: 'Back to settings' }
-          : page === 'post' ||
-              (page === 'profile' && handle && handle !== profile?.handle)
-            ? {
-                href: `#${backRoute}`,
-                label: `Back to ${(titles[backRoute.split('/')[0]] || 'Feed').toLowerCase()}`,
-              }
-            : null;
+  function backLink() {
+    const toList = (route: string) => ({
+      href: `#${route}`,
+      label: `Back to ${(titles[route.split('/')[0]] || 'Feed').toLowerCase()}`,
+    });
+    if (eventOnly) {
+      if (page === 'photo' || page === 'edit')
+        return { href: '#settings', label: 'Back to settings' };
+      // The event-only app has no feed; its lists start at Events.
+      if (page === 'event')
+        return toList(backRoute.startsWith('feed') ? 'events' : backRoute);
+      return null;
+    }
+    if (page === 'new-event')
+      return { href: '#events', label: 'Back to events' };
+    if (page === 'event')
+      return profileTab === 'edit'
+        ? { href: eventHref(handle ?? ''), label: 'Back to event' }
+        : toList(backRoute);
+    if (page === 'settings' || page === 'following' || page === 'followers')
+      return { href: profileRoute, label: 'Back to profile' };
+    if (['edit', 'blocked'].includes(page))
+      return { href: '#settings', label: 'Back to settings' };
+    if (
+      page === 'post' ||
+      (page === 'profile' && handle && handle !== profile?.handle)
+    )
+      return toList(backRoute);
+    return null;
+  }
+  const back = backLink();
   function saved(value: Profile) {
+    const created = profile === null;
     setProfile(value);
-    location.hash = profileHref(value.handle);
+    // A new member's name keeps them on the event that brought them here.
+    if (!created)
+      location.hash = eventOnly ? '#settings' : profileHref(value.handle);
   }
   function photoSaved() {
     setProfile((current) => (current ? { ...current, hasAvatar: 1 } : current));
     setAvatarVersion((version) => version + 1);
+    // Adding a photo from the event-only app opens the full app.
+    if (eventOnly) location.hash = '#feed';
+  }
+  function eventPage() {
+    return handle ? (
+      <EventRoute param={handle} linkProfiles={ready} />
+    ) : (
+      <p>Event not found.</p>
+    );
+  }
+  function eventOnlyScreen() {
+    switch (page) {
+      case 'feed':
+      case 'events':
+        return (
+          <EventsPage
+            when={handle === 'past' ? 'past' : 'upcoming'}
+            canCreate={false}
+          />
+        );
+      case 'event':
+        return eventPage();
+      case 'notifications':
+        return (
+          <Notifications onChange={notifications.refresh} focus={handle} />
+        );
+      case 'photo':
+        return (
+          <>
+            <p className="onboarding-intro">
+              Add a profile photo to share photos and follow friends on
+              slowmass.
+            </p>
+            <AvatarForm
+              handle={profile!.handle}
+              onChange={photoSaved}
+              onboarding
+            />
+          </>
+        );
+      case 'edit':
+        return <ProfileForm profile={profile} onSave={saved} nameOnly />;
+      case 'settings':
+        return (
+          <>
+            <nav className="settings-links" aria-label="Settings">
+              <a className="settings-row" href="#photo">
+                Add a profile photo
+              </a>
+              <a className="settings-row" href="#edit">
+                Edit name
+              </a>
+            </nav>
+            <InstallApp />
+            <PushSettings />
+            <button
+              type="button"
+              className="settings-row"
+              onClick={onSignOut}
+              disabled={signingOut}
+            >
+              {signingOut ? 'Signing out…' : 'Sign out'}
+            </button>
+            <details className="settings-disclosure">
+              <summary className="settings-row settings-danger">
+                Delete account
+              </summary>
+              <div className="settings-details">
+                <DeleteAccount />
+              </div>
+            </details>
+          </>
+        );
+      default:
+        return (
+          <>
+            <p>Page not found.</p>
+            <a href="#events">Return to events</a>
+          </>
+        );
+    }
   }
   function screen() {
+    if (eventOnly) return eventOnlyScreen();
     if (!profile)
       return (
         <>
           <p className="onboarding-intro">
-            Choose a username and name, then add a profile photo.
+            Hosts and other guests see this name. It doesn’t need to be unique.
           </p>
-          <ProfileForm profile={null} onSave={saved} />
-        </>
-      );
-    if (!profile.hasAvatar)
-      return (
-        <>
-          <p className="onboarding-intro">
-            Choose a photo, then crop it to fit. You can change it later.
-          </p>
-          <AvatarForm
-            handle={profile.handle}
-            onChange={photoSaved}
-            onboarding
-          />
+          <ProfileForm profile={null} onSave={saved} nameOnly />
         </>
       );
     switch (page) {
@@ -144,6 +245,32 @@ function MemberPages({
             }}
           />
         );
+      case 'events':
+        return (
+          <EventsPage
+            when={handle === 'past' ? 'past' : 'upcoming'}
+            canCreate
+          />
+        );
+      case 'new-event':
+        return (
+          <EventForm
+            onSaved={(id) => {
+              location.hash = eventHref(id);
+            }}
+          />
+        );
+      case 'event':
+        return handle && profileTab === 'edit' ? (
+          <EditEvent
+            id={handle}
+            onSaved={(id) => {
+              location.hash = eventHref(id);
+            }}
+          />
+        ) : (
+          eventPage()
+        );
       case 'notifications':
         return (
           <Notifications
@@ -159,8 +286,6 @@ function MemberPages({
             <ProfileForm profile={profile} onSave={saved} />
           </>
         );
-      case 'invitations':
-        return <InvitationForm />;
       case 'following':
       case 'followers':
       case 'blocked':
@@ -171,9 +296,6 @@ function MemberPages({
             <nav className="settings-links" aria-label="Settings">
               <a className="settings-row" href="#edit">
                 Edit profile
-              </a>
-              <a className="settings-row" href="#invitations">
-                Invite friends
               </a>
               <a className="settings-row" href="#blocked">
                 Blocked accounts
@@ -216,43 +338,63 @@ function MemberPages({
         );
     }
   }
+  function reselect() {
+    notifications.refresh();
+    setPageVersion((version) => version + 1);
+    window.scrollTo(0, 0);
+  }
   return (
     <>
+      {active &&
+        headerSlot &&
+        createPortal(
+          <HeaderActions
+            page={page}
+            unreadCount={unreadCount}
+            settings={eventOnly}
+            onReselect={reselect}
+          />,
+          headerSlot,
+        )}
       {ready && profile && (
         <MemberNavigation
           page={page}
           profile={profile}
           avatarVersion={avatarVersion}
           unreadCount={unreadCount}
-          onReselect={() => {
-            notifications.refresh();
-            setPageVersion((version) => version + 1);
-            window.scrollTo(0, 0);
-          }}
+          onReselect={reselect}
         />
       )}
       <PageHistoryProvider key={pageVersion}>
         <section
-          key={ready ? `${pageKey}:${pageVersion}` : 'onboarding'}
-          data-page={ready ? page : 'onboarding'}
-          className={`member-content ${!ready ? 'onboarding' : ['feed', 'profile', 'post'].includes(page) ? 'photo-screen' : ''}`}
+          key={active ? `${pageKey}:${pageVersion}` : 'onboarding'}
+          data-page={active ? page : 'onboarding'}
+          className={`member-content ${!active ? 'onboarding' : ['feed', 'profile', 'post'].includes(page) || (page === 'event' && profileTab !== 'edit') ? 'photo-screen' : ''}${eventOnly ? ' event-only' : ''}`}
           aria-labelledby="screen-title"
         >
-          {ready && back && <BackControl {...back} />}
+          {active && back && <BackControl {...back} />}
           <h1
             id="screen-title"
             ref={heading}
             tabIndex={-1}
-            className={ready ? 'visually-hidden' : undefined}
+            className={
+              active && !(eventOnly && page === 'photo')
+                ? 'visually-hidden'
+                : undefined
+            }
           >
             {profile === null
-              ? 'Create your profile'
-              : !ready
+              ? 'What’s your name?'
+              : !active
                 ? 'Add a profile photo'
-                : titles[page] || 'slowmass'}
+                : eventOnly && page === 'feed'
+                  ? 'Events'
+                  : eventOnly && page === 'edit'
+                    ? 'Edit name'
+                    : titles[page] || 'slowmass'}
           </h1>
           {screen()}
-          {!ready && (
+          {!active && (
             <button
               type="button"
               className="text-button onboarding-switch"

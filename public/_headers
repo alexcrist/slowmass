@@ -10,10 +10,6 @@
 /branding/
   Cache-Control: public, max-age=0, must-revalidate, no-transform
 
-/join
-  Cache-Control: private, no-store, no-transform
-  Referrer-Policy: no-referrer
-
 /*.html
   Cache-Control: public, max-age=0, must-revalidate, no-transform
 
@@ -22,7 +18,3 @@
 
 /startup.js
   Cache-Control: no-cache, max-age=0, must-revalidate
-
-/invite
-  Cache-Control: private, no-store, no-transform
-  Referrer-Policy: no-referrer

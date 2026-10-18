@@ -1,43 +1,43 @@
-import { JoinSharedInvitation } from './JoinSharedInvitation';
 import { useEffect, useLayoutEffect, useState, type FormEvent } from 'react';
 import { createAuthClient } from 'better-auth/react';
 import { magicLinkClient } from 'better-auth/client/plugins';
 import { PasteLoginLink } from './PasteLoginLink';
 import { MemberApp } from '../people';
-import { JoinInvitation } from './JoinInvitation';
-import { onUnauthorized } from '../../api';
+import { api, jsonRequest, onUnauthorized } from '../../api';
 import { clearLocalPush } from '../push';
 import { loadStartup, type Bootstrap } from './startup';
 
 const auth = createAuthClient({ plugins: [magicLinkClient()] });
 type State = 'loading' | 'ready' | 'unavailable' | 'error';
 
-export function Welcome() {
-  return location.pathname === '/invite' ? (
-    <JoinSharedInvitation />
-  ) : location.pathname === '/join' ? (
-    <JoinInvitation />
-  ) : (
-    <AccountWelcome />
-  );
-}
+// An event's URL is the only invitation. Signed out, it reveals only whether it
+// works; signing in through it shows the event and admits new people.
+type LinkEvent = { id: string; open: boolean } | null;
 
-function AccountWelcome() {
+export function Welcome() {
   const [state, setState] = useState<State>('loading');
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [message, setMessage] = useState(() =>
-    new URLSearchParams(location.search).get('error') === 'invite'
-      ? 'This invitation could not be used. It may have expired, been replaced, or been revoked before verification. Ask your friend for a new invite link, or sign in if you already joined.'
+    new URLSearchParams(location.search).get('error') === 'event'
+      ? 'That sign-in link could not be used for this event. The host may have replaced the event link, or the event may be over or cancelled. Ask the host for the current link.'
       : new URLSearchParams(location.search).has('error')
-        ? 'That sign-in link could not be used. It may have expired, been used already, or your invitation may no longer be active. Request a new link below.'
+        ? 'That sign-in link could not be used. It may have expired or been used already. Request a new link below.'
         : '',
   );
+  const [eventToken] = useState(
+    () => /^#event\/([a-zA-Z0-9]{48})$/.exec(location.hash)?.[1] ?? null,
+  );
+  const [linkEvent, setLinkEvent] = useState<LinkEvent | undefined>();
+  const [linkAttempt, setLinkAttempt] = useState(0);
+  const [linkError, setLinkError] = useState(false);
   const [checking, setChecking] = useState(false);
   const [loginStatus, setLoginStatus] = useState('');
   const [member, setMember] = useState<Bootstrap | null>(null);
+  // Member screens place their header controls here.
+  const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
   const name = member?.user?.name ?? null;
   const memberId = member?.user?.id;
 
@@ -117,20 +117,43 @@ function AccountWelcome() {
       setChecking(false);
     }
   }
-  async function signIn(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  const signedOut = state === 'ready' && member === null;
+  useEffect(() => {
+    if (!signedOut || !eventToken) return;
+    const controller = new AbortController();
+    api<{ event: LinkEvent }>('/api/event-link', {
+      ...jsonRequest('POST', { token: eventToken }),
+      signal: controller.signal,
+    })
+      .then((result) => setLinkEvent(result.event))
+      .catch(() => {
+        if (!controller.signal.aborted) setLinkError(true);
+      });
+    return () => controller.abort();
+  }, [signedOut, eventToken, linkAttempt]);
+  // A working event link signs in through that event; otherwise sign in normally.
+  const event = eventToken && linkEvent ? linkEvent : null;
+  async function signIn(submit: FormEvent<HTMLFormElement>) {
+    submit.preventDefault();
     if (busy) return;
     setBusy(true);
     setMessage('');
     try {
       const result = await auth.signIn.magicLink({
         email: email.trim().toLowerCase(),
-        callbackURL: '/',
-        errorCallbackURL: '/?error=signin',
+        ...(event
+          ? {
+              callbackURL: `/#event/${event.id}`,
+              errorCallbackURL: '/?error=event',
+              metadata: { eventLink: eventToken },
+            }
+          : { callbackURL: '/', errorCallbackURL: '/?error=signin' }),
       });
       if (result.error?.code === 'INVITATION_REQUIRED') {
         setMessage(
-          'You need an invitation from a slowmass member to join. Ask them to invite this email address, then try again.',
+          event
+            ? 'This event isn’t taking new people. If you already use slowmass, use that email; otherwise ask the host for the current link.'
+            : 'There’s no slowmass account for this email. To join, ask a member to text you an event link.',
         );
         return;
       }
@@ -168,6 +191,7 @@ function AccountWelcome() {
         <a className="site-name" href="/" aria-label="slowmass home">
           slowmass
         </a>
+        <div className="masthead-actions" ref={setHeaderSlot} />
       </header>
       <section
         className="account-section"
@@ -179,14 +203,27 @@ function AccountWelcome() {
               : 'Sign in'
         }
       >
-        {state === 'ready' && name === null && (
-          <>
-            <h1>Welcome to slowmass</h1>
-            <p className="status-copy">
-              Sign in or join with the email address your friend invited.
-            </p>
-          </>
-        )}
+        {state === 'ready' &&
+          name === null &&
+          (eventToken && linkEvent !== null ? (
+            <>
+              <h1>You’re invited to an event</h1>
+              <p className="status-copy">
+                {linkEvent?.open === false
+                  ? 'This event is over or was cancelled. If you already use slowmass, sign in to see it.'
+                  : 'Enter your email to see it. We’ll send a sign-in link; if you’re new, this creates your slowmass account.'}
+              </p>
+            </>
+          ) : (
+            <>
+              <h1>Welcome to slowmass</h1>
+              <p className="status-copy">
+                {eventToken
+                  ? 'This event link isn’t available. The host may have replaced it; ask them for the current link.'
+                  : 'Sign in with your email. New here? Ask a member to text you an event link.'}
+              </p>
+            </>
+          ))}
         <div className="sign-in-area">
           {state === 'loading' ? (
             <p role="status">Loading slowmass…</p>
@@ -207,6 +244,7 @@ function AccountWelcome() {
                 pending: member.deviceSetupPending === true,
                 pushSubscribed: member.pushSubscribed === true,
               }}
+              headerSlot={headerSlot}
               onSignOut={() => void signOut()}
               signingOut={busy}
             />
@@ -230,8 +268,24 @@ function AccountWelcome() {
                 Use another email or try again
               </button>
             </div>
+          ) : eventToken && linkEvent === undefined ? (
+            linkError ? (
+              <div>
+                <p role="alert">Could not check this event link.</p>
+                <button
+                  onClick={() => {
+                    setLinkError(false);
+                    setLinkAttempt((value) => value + 1);
+                  }}
+                >
+                  Try again
+                </button>
+              </div>
+            ) : (
+              <p role="status">Checking this event link…</p>
+            )
           ) : (
-            <form onSubmit={(event) => void signIn(event)}>
+            <form onSubmit={(submit) => void signIn(submit)}>
               <label className="field-label" htmlFor="email">
                 Your email
               </label>
@@ -249,9 +303,7 @@ function AccountWelcome() {
               <button className="primary-button" type="submit" disabled={busy}>
                 {busy ? 'Requesting your link…' : 'Send sign-in link'}
               </button>
-              <p className="status-copy">
-                New here? Ask a member to invite you. No password is needed.
-              </p>
+              <p className="status-copy">No password is needed.</p>
             </form>
           )}
           {name === null && state === 'ready' && <PasteLoginLink />}

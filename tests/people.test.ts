@@ -458,7 +458,7 @@ it('keeps requests and blocks owner-only and rejects invalid pages and expired s
   ).toBe(404);
   await runtime.db
     .prepare(
-      "INSERT INTO session(id,userId,token,expiresAt,createdAt,updatedAt) VALUES('expired','alice','expired-token',0,0,0)",
+      "INSERT INTO session(id,userId,token,expiresAt,createdAt,updatedAt) VALUES('expired','alice','expired-token','2020-01-01T00:00:00.000Z',0,0)",
     )
     .run();
   expect(

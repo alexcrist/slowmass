@@ -12,9 +12,12 @@ export function useNotificationCount(enabled: boolean) {
     const controller = new AbortController();
     active.current = controller;
     const timeout = setTimeout(() => controller.abort(), 15_000);
-    api<{ count: number }>('/api/notifications/unread-count?includeJoined=1', {
-      signal: controller.signal,
-    })
+    api<{ count: number }>(
+      '/api/notifications/unread-count?includeJoined=1&includeEvents=1',
+      {
+        signal: controller.signal,
+      },
+    )
       .then((data) => {
         if (!controller.signal.aborted) setCount(data.count);
       })

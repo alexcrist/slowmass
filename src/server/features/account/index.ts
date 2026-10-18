@@ -24,6 +24,11 @@ export async function deleteAccount(db: D1Database, id: string) {
         'DELETE FROM invite_link_claim WHERE email=(SELECT lower(email) FROM user WHERE id=?)',
       )
       .bind(id),
+    db
+      .prepare(
+        'DELETE FROM event_claim WHERE email=(SELECT lower(email) FROM user WHERE id=?)',
+      )
+      .bind(id),
     db.prepare('DELETE FROM session WHERE userId=?').bind(id),
     db.prepare('DELETE FROM account WHERE userId=?').bind(id),
     db
@@ -59,6 +64,16 @@ export async function cleanupAccounts(db: D1Database) {
         object_key: string | null;
         thumbnail_key: string | null;
       }>();
+    const events = await db
+      .prepare(
+        "SELECT id,object_key,thumbnail_key FROM event WHERE creator_id=? AND state!='deleted' LIMIT 5",
+      )
+      .bind(id)
+      .all<{
+        id: string;
+        object_key: string | null;
+        thumbnail_key: string | null;
+      }>();
     const statements: D1PreparedStatement[] = [
       db
         .prepare(
@@ -66,6 +81,26 @@ export async function cleanupAccounts(db: D1Database) {
         )
         .bind(Date.now(), id),
     ];
+    // A creator's events end with the account; their answers and messages go too.
+    for (const event of events.results) {
+      for (const key of new Set([event.object_key, event.thumbnail_key])) {
+        if (key)
+          statements.push(
+            db
+              .prepare(
+                'INSERT INTO photo_cleanup(object_key,not_before) VALUES(?,?) ON CONFLICT DO NOTHING',
+              )
+              .bind(key, Date.now()),
+          );
+      }
+      statements.push(
+        db
+          .prepare(
+            "UPDATE event SET state='deleted',title='Deleted event',description='',location='',object_key=NULL,thumbnail_key=NULL,link_encrypted=NULL WHERE id=?",
+          )
+          .bind(event.id),
+      );
+    }
     for (const post of posts.results) {
       for (const key of new Set([post.object_key, post.thumbnail_key])) {
         if (key)
@@ -129,6 +164,26 @@ export async function cleanupAccounts(db: D1Database) {
         .bind(id),
       db
         .prepare(
+          'DELETE FROM event_host WHERE rowid IN(SELECT rowid FROM event_host WHERE user_id=? LIMIT 100)',
+        )
+        .bind(id),
+      db
+        .prepare(
+          'DELETE FROM event_response WHERE rowid IN(SELECT rowid FROM event_response WHERE user_id=? LIMIT 100)',
+        )
+        .bind(id),
+      db
+        .prepare(
+          'DELETE FROM event_access WHERE rowid IN(SELECT rowid FROM event_access WHERE user_id=? LIMIT 100)',
+        )
+        .bind(id),
+      db
+        .prepare(
+          "UPDATE event_message SET body='',deleted_at=? WHERE id IN(SELECT id FROM event_message WHERE user_id=? AND deleted_at IS NULL LIMIT 100)",
+        )
+        .bind(Date.now(), id),
+      db
+        .prepare(
           "UPDATE invitation SET recipient_email='deleted:'||?,revoked_at=COALESCE(revoked_at,?),email_payload=NULL WHERE id IN(SELECT i.id FROM invitation i JOIN account_deletion d ON d.email_to_redact=i.recipient_email WHERE d.user_id=? LIMIT 100)",
         )
         .bind(id, Date.now(), id),
@@ -142,6 +197,11 @@ export async function cleanupAccounts(db: D1Database) {
   AND NOT EXISTS(SELECT 1 FROM follow WHERE follower_id=? OR target_id=?)
   AND NOT EXISTS(SELECT 1 FROM block WHERE blocker_id=? OR target_id=?)
   AND NOT EXISTS(SELECT 1 FROM notification_read WHERE user_id=?)
+  AND NOT EXISTS(SELECT 1 FROM event WHERE creator_id=account_deletion.user_id AND state!='deleted')
+  AND NOT EXISTS(SELECT 1 FROM event_host WHERE user_id=account_deletion.user_id)
+  AND NOT EXISTS(SELECT 1 FROM event_response WHERE user_id=account_deletion.user_id)
+  AND NOT EXISTS(SELECT 1 FROM event_access WHERE user_id=account_deletion.user_id)
+  AND NOT EXISTS(SELECT 1 FROM event_message WHERE user_id=account_deletion.user_id AND deleted_at IS NULL)
   AND NOT EXISTS(SELECT 1 FROM invitation WHERE recipient_email=account_deletion.email_to_redact)
   AND NOT EXISTS(SELECT 1 FROM invite_link WHERE inviter_id=account_deletion.user_id AND (token_encrypted IS NOT NULL OR revoked_at IS NULL))`,
         )

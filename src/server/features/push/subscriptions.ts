@@ -1,3 +1,4 @@
+import { authDate } from '../../auth';
 import type { Env } from '../../env';
 
 export function pushConfigured(env: Env) {
@@ -117,7 +118,7 @@ export async function saveSubscription(
       Date.now(),
       session,
       user,
-      Date.now(),
+      authDate(),
       user,
       user,
       session,
@@ -147,7 +148,7 @@ export async function hasPushSubscription(db: D1Database, user: string) {
         `SELECT 1 FROM push_subscription s JOIN session a ON a.id=s.session_id
     WHERE s.user_id=? AND a.expiresAt>? LIMIT 1`,
       )
-      .bind(user, Date.now())
+      .bind(user, authDate())
       .first(),
   );
 }
