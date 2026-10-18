@@ -526,7 +526,7 @@ Private image bytes remain uncached by the browser (`private, no-store`). A futu
 - [x] Add a development-only preview of every device permutation and row state at `/previews/device-setup.html` (`npm run dev:ui`); the production build excludes it.
 - [x] After owner review, move iPhone/iPad Home Screen steps into the shared modal dialog with numbered steps; Settings uses the same numbered instructions.
 - [x] Pass the Node 24 gate: formatting, lint, types, boundaries, all 500 tests and the production build. Apply migrations locally. No browser or visual testing.
-- [ ] Owner review of the preview, then deploy through `main` and record the release.
+- [x] Owner reviewed the preview; deploy through [GitHub run 39083355281](https://github.com/alexcrist/slowmass/actions/runs/39083355281) with automatic migrations 0028–0029 and Worker `01d7455c-fa91-4d5c-90ad-fd1e33adf2c1`. Post-deploy HTTP checks passed; no browser/visual testing.
 - [ ] Confirm on real devices: iPhone browser → Home Screen app → notifications, and Android notifications → install. Automated tests simulate browser APIs only.
 
 ## Timeline-ordered like groups without push — October 17, 2026
@@ -534,4 +534,12 @@ Private image bytes remain uncached by the browser (`private, no-store`). A futu
 - [x] Stop Web Push for likes in the delivery trigger, drop queued like deliveries, and skip opportunistic dispatch on post/comment like routes. Requests, followers, joins and comments still alert.
 - [x] Assign each new like to the recipient's newest group only when that is a like on the same post, so other activity splits groups; later groups on a post read “N more people like your photo.” Keep existing groups' keys and read state; read receipts and the badge count each group separately.
 - [x] Classify migration 0029 as automatic: it replaces triggers and removes queued like alerts without changing sources or receipts, and earlier code reads the new keys unchanged. Test grouping, receipts, unlikes, blocks, timestamp/identity updates, and migration preservation in isolated D1.
-- [ ] Deploy through `main` and confirm on a real device that likes no longer alert while comments still do.
+- [x] Deploy through `main` in the same release (migration 0029 applied).
+- [ ] Confirm on a real device that likes no longer alert while comments still do.
+
+## Likers dialog and post action spacing — October 17, 2026
+
+- [x] Remove the likers dialog's extra whitespace before the first and after the last person (default list margins plus per-row padding); keep spacing between rows and above pagination when present.
+- [x] Widen post action-row spacing by 20%: 7.2px icon-to-count and 19.2px between the like and comment groups, shared by feed and focused posts through CSS variables; the like count's trailing hit area still fills the group gap.
+- [x] Pass the Node 24 gate: formatting, lint, types, boundaries, all 500 tests and the production build. No browser or visual testing.
+- [ ] Deploy through `main`.

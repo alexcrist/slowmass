@@ -924,9 +924,12 @@ summary.settings-row::after {
   display: block;
 }
 .post-interactions {
+  /* Shared icon-to-count and between-group spacing for the post action row. */
+  --reaction-count-gap: 7.2px;
+  --reaction-group-gap: 19.2px;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--reaction-group-gap);
   margin: 0 0 12px;
   font-size: 14px;
   line-height: 20px;
@@ -1052,13 +1055,13 @@ summary.settings-row::after {
   justify-content: flex-start;
   /* Let the trailing hit area fill the row gap without adding visual space. */
   min-width: 24px;
-  padding: 0 16px 0 6px;
-  margin-inline-end: -16px;
+  padding: 0 var(--reaction-group-gap) 0 var(--reaction-count-gap);
+  margin-inline-end: calc(-1 * var(--reaction-group-gap));
 }
 .comment-toggle {
   flex: none;
   justify-content: flex-start;
-  gap: 6px;
+  gap: var(--reaction-count-gap);
   padding-inline: 0;
   font-weight: 600;
 }
@@ -1233,11 +1236,22 @@ summary.settings-row::after {
   margin: 0;
   overflow-wrap: anywhere;
 }
+/* Whitespace goes only between rows, not before the first or after the last. */
+.likers-list {
+  margin: 12px 0 0;
+}
 .likers-list > li {
   display: flex;
 }
+.likers-list > li:first-child {
+  padding-top: 0;
+}
 .likers-list > li:last-child {
+  padding-bottom: 0;
   border-bottom: 0;
+}
+.likers-list ~ .actions:not(:empty) {
+  margin-top: 16px;
 }
 .dialog-actions {
   display: flex;
