@@ -542,4 +542,4 @@ Private image bytes remain uncached by the browser (`private, no-store`). A futu
 - [x] Remove the likers dialog's extra whitespace before the first and after the last person (default list margins plus per-row padding); keep spacing between rows and above pagination when present.
 - [x] Widen post action-row spacing by 20%: 7.2px icon-to-count and 19.2px between the like and comment groups, shared by feed and focused posts through CSS variables; the like count's trailing hit area still fills the group gap.
 - [x] Pass the Node 24 gate: formatting, lint, types, boundaries, all 500 tests and the production build. No browser or visual testing.
-- [ ] Deploy through `main`.
+- [x] Deploy through [GitHub run 39083814194](https://github.com/alexcrist/slowmass/actions/runs/39083814194) with Worker `054057d5-c9bf-404f-9163-2fec682c3272`. No pending migrations; post-deploy asset, sign-in availability and private-boundary HTTP checks passed.
