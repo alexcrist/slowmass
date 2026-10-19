@@ -79,6 +79,7 @@ export function EventForm({
   const [description, setDescription] = useState(event?.description ?? '');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState('');
+  const photoPreview = preview || event?.photoUrl;
   const [source, setSource] = useState<{ file: File; crop: Rectangle } | null>(
     null,
   );
@@ -212,22 +213,28 @@ export function EventForm({
           }}
         />
         <p className="field-help">One still JPEG, PNG, or WebP.</p>
+        {photoPreview && (
+          <img
+            className="photo-preview"
+            src={photoPreview}
+            alt={
+              preview
+                ? 'Selected cover photo preview'
+                : 'Current event cover photo'
+            }
+            width={preview ? undefined : event?.width}
+            height={preview ? undefined : event?.height}
+          />
+        )}
         {file && preview && (
-          <>
-            <img
-              className="photo-preview"
-              src={preview}
-              alt="Selected cover photo preview"
-            />
-            <button
-              type="button"
-              className="text-button"
-              disabled={busy}
-              onClick={() => setEditing(source)}
-            >
-              Adjust crop
-            </button>
-          </>
+          <button
+            type="button"
+            className="text-button"
+            disabled={busy}
+            onClick={() => setEditing(source)}
+          >
+            Adjust crop
+          </button>
         )}
         {event && (
           <fieldset

@@ -613,6 +613,36 @@ it('opens an event from its URL, then shows guests only after answering', async 
     }),
   });
   expect(button('Going').props['aria-pressed']).toBe(true);
+  expect(button('Going').props['aria-expanded']).toBe(false);
+  expect(button('Maybe').props.disabled).toBe(true);
+  const mutations = requests.filter((request) =>
+    request.path.endsWith('/response'),
+  ).length;
+  await click('Going');
+  expect(button('Going').props['aria-pressed']).toBe(true);
+  expect(button('Going').props['aria-expanded']).toBe(true);
+  expect(button('Maybe').props.disabled).toBe(false);
+  expect(
+    requests.filter((request) => request.path.endsWith('/response')),
+  ).toHaveLength(mutations);
+  await click('Maybe');
+  const changed = pending(`/api/events/${id}/response`);
+  expect(JSON.parse(String(changed.options?.body))).toEqual({
+    status: 'maybe',
+  });
+  await reply(
+    changed,
+    { error: 'Could not save your answer. Try again.' },
+    503,
+  );
+  expect(button('Going').props['aria-pressed']).toBe(true);
+  expect(button('Going').props['aria-expanded']).toBe(true);
+  expect(button('Maybe').props.disabled).toBe(false);
+  await click('Maybe');
+  await reply(pending(`/api/events/${id}/response`), { status: 'maybe' });
+  expect(button('Maybe').props['aria-pressed']).toBe(true);
+  expect(button('Maybe').props['aria-expanded']).toBe(false);
+  expect(button('Going').props.disabled).toBe(true);
   expect(visibleText()).toContain('Guests');
   expect(
     renderer.root.findAllByProps({ 'aria-label': 'Share event link' }),
@@ -774,6 +804,10 @@ it('edits details silently in the event time zone', async () => {
   await reply(pending(`/api/events/${id}`), {
     event: view({ viewer: host }),
   });
+  const cover = renderer.root.findByProps({ alt: 'Current event cover photo' });
+  expect(cover.props.src).toBe(details.photoUrl);
+  expect(cover.props.width).toBe(details.width);
+  expect(cover.props.height).toBe(details.height);
   expect(renderer.root.findByProps({ id: 'event-date' }).props.value).toBe(
     '2030-01-04',
   );

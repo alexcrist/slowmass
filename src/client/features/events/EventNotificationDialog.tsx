@@ -64,7 +64,7 @@ export function EventNotificationDialog({
           }}
         />
         {error && <p role="alert">{error}</p>}
-        <div className="actions">
+        <div className="dialog-actions">
           <button type="button" disabled={busy} onClick={onClose}>
             Cancel
           </button>

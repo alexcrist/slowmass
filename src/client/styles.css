@@ -1817,9 +1817,40 @@ a.profile-tab {
 }
 .event-answers {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
   margin: 0 0 16px;
+  transition:
+    grid-template-columns 220ms ease,
+    gap 220ms ease;
+}
+.event-answers[data-expanded='false'] {
+  gap: 0;
+}
+.event-answers[data-expanded='false'][data-answer='going'] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0fr) minmax(0, 0fr);
+}
+.event-answers[data-expanded='false'][data-answer='maybe'] {
+  grid-template-columns: minmax(0, 0fr) minmax(0, 1fr) minmax(0, 0fr);
+}
+.event-answers[data-expanded='false'][data-answer='declined'] {
+  grid-template-columns: minmax(0, 0fr) minmax(0, 0fr) minmax(0, 1fr);
+}
+.event-answer-slot {
+  min-width: 0;
+  overflow: hidden;
+  opacity: 1;
+  transition:
+    opacity 180ms ease,
+    visibility 0s;
+}
+.event-answer-slot[aria-hidden='true'] {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 180ms ease,
+    visibility 0s 180ms;
 }
 .event-answer {
   display: inline-flex;
@@ -1827,6 +1858,7 @@ a.profile-tab {
   align-items: center;
   justify-content: center;
   gap: 4px;
+  width: 100%;
   min-height: 64px;
   padding: 8px;
   border: 1px solid var(--control-line);
@@ -1834,6 +1866,10 @@ a.profile-tab {
   background: var(--paper);
   color: var(--ink);
   font-weight: 600;
+  white-space: nowrap;
+}
+.event-answer:focus-visible {
+  outline-offset: -4px;
 }
 .event-answer:enabled:hover {
   background: var(--hover);
@@ -1845,6 +1881,13 @@ a.profile-tab {
 .event-answer-emoji {
   font-size: 24px;
   line-height: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .event-answers,
+  .event-answer-slot,
+  .event-answer-slot[aria-hidden='true'] {
+    transition: none;
+  }
 }
 .event section > h2 {
   margin-top: 36px;

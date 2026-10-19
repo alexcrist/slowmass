@@ -678,3 +678,10 @@ The combined tree passed formatting, lint, TypeScript, boundary checks, all 558 
 - [x] Define palette-specific input surfaces alongside structural dividers and stronger control outlines, including native file controls and upload progress. Leave room for the desktop wordmark’s script overhang and remove the extra Add hosts guidance.
 - [x] Pass the Node 24 check gate: formatting, lint, types, boundary checks, all 585 tests across 63 files, and the production build. Focused component tests cover separate saves, font samples, cancel, duplicate submission, conflict/reload with preserved detail drafts, editor authorization, unmount/late responses, and navigation theme restoration; palette checks include input-surface contrast. No browser or visual testing.
 - [ ] Production release. No additional migration is required beyond the existing appearance migration 0033.
+
+## Collapsible event answers and editor polish — October 18, 2026
+
+- [x] Animate saved RSVP choices into one full-width selected button. Tapping the selected answer reveals/hides alternatives without mutation; successful changes collapse again, while failures retain the existing selection and open choices. Exclude hidden choices from interaction and respect reduced motion.
+- [x] Use the shared horizontal action row for Cancel and Send notification, and show the current authorized cover photo on Edit event until a cropped replacement preview is ready.
+- [x] Pass the Node 24 check gate: formatting, lint, types, boundary checks, all 589 tests across 64 files, and the production build. Component tests cover all saved answer choices, expansion without mutation, hidden-option accessibility, pending/failed/successful changes, API retry behavior, and the authorized current cover image. No browser or visual testing.
+- [ ] Production release. No migration is required.

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { profileHref } from '../../navigation';
 import { ImageViewer } from '../../ui/ImageViewer';
 import { eventWhen } from './time';
@@ -196,23 +196,65 @@ export function EventAnswers({
   busy: boolean;
   onAnswer: (answer: Answer) => void;
 }) {
+  const id = useId();
+  const [options, setOptions] = useState({ value, expanded: value === null });
+  // Only a confirmed answer change collapses the choices. A failed save keeps
+  // the current answer and expanded options, without a second mutation.
+  if (options.value !== value) setOptions({ value, expanded: value === null });
+  const expanded = options.value === value ? options.expanded : value === null;
   return (
-    <div className="event-answers" role="group" aria-label="Your answer">
-      {answers.map((answer) => (
-        <button
-          key={answer.value}
-          type="button"
-          className="event-answer"
-          aria-pressed={value === answer.value}
-          disabled={busy}
-          onClick={() => onAnswer(answer.value)}
-        >
-          <span className="event-answer-emoji" aria-hidden="true">
-            {answerEmoji[answer.value]}
-          </span>
-          {answer.label}
-        </button>
-      ))}
+    <div
+      className="event-answers"
+      role="group"
+      aria-label="Your answer"
+      data-answer={value ?? undefined}
+      data-expanded={expanded}
+    >
+      <span id={`${id}-hint`} className="visually-hidden">
+        {expanded
+          ? 'Activate to hide the other answer options.'
+          : 'Activate to show all answer options.'}
+      </span>
+      {answers.map((answer) => {
+        const selected = value === answer.value;
+        const hidden = !expanded && !selected;
+        return (
+          <div
+            key={answer.value}
+            id={`${id}-${answer.value}`}
+            className="event-answer-slot"
+            aria-hidden={hidden || undefined}
+          >
+            <button
+              type="button"
+              className="event-answer"
+              aria-pressed={selected}
+              aria-expanded={selected ? expanded : undefined}
+              aria-controls={
+                selected
+                  ? answers
+                      .filter((other) => other.value !== value)
+                      .map((other) => `${id}-${other.value}`)
+                      .join(' ')
+                  : undefined
+              }
+              aria-describedby={selected ? `${id}-hint` : undefined}
+              disabled={busy || hidden}
+              tabIndex={hidden ? -1 : undefined}
+              onClick={() => {
+                if (busy || hidden) return;
+                if (selected) setOptions({ value, expanded: !expanded });
+                else onAnswer(answer.value);
+              }}
+            >
+              <span className="event-answer-emoji" aria-hidden="true">
+                {answerEmoji[answer.value]}
+              </span>
+              {answer.label}
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }
