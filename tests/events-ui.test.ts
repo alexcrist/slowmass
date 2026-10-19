@@ -400,7 +400,7 @@ it('shows a limited event preview and ties email sign-in to its link', async () 
     errorCallbackURL: '/?error=event',
     metadata: { eventLink: token },
   });
-  expect(visibleText()).toContain('Check your email');
+  expect(visibleText()).toContain('Open the sign-in link in your email.');
 });
 
 it('falls back to normal sign-in for a link that no longer works', async () => {

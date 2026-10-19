@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState, type FormEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createAuthClient } from 'better-auth/react';
 import { magicLinkClient } from 'better-auth/client/plugins';
 import { PasteLoginLink } from './PasteLoginLink';
@@ -60,7 +60,11 @@ export function Welcome() {
   const [linkAttempt, setLinkAttempt] = useState(0);
   const [linkError, setLinkError] = useState(false);
   const [checking, setChecking] = useState(false);
-  const [loginStatus, setLoginStatus] = useState('');
+  const [loginError, setLoginError] = useState(false);
+  const [loginAttempt, setLoginAttempt] = useState(0);
+  const [resendStatus, setResendStatus] = useState('');
+  const confirmationHeading = useRef<HTMLHeadingElement>(null);
+  const requestingLink = useRef(false);
   const [member, setMember] = useState<Bootstrap | null>(null);
   // Member screens place their header controls here.
   const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
@@ -102,48 +106,45 @@ export function Welcome() {
   }
 
   useEffect(() => {
+    if (sent) confirmationHeading.current?.focus();
+  }, [sent]);
+
+  useEffect(() => {
     if (!sent || name !== null) return;
     const controller = new AbortController();
-    const check = () => {
-      if (document.visibilityState === 'hidden') return;
-      fetch('/api/bootstrap', { signal: controller.signal })
-        .then(async (response) => {
-          if (response.ok) {
-            const data = (await response.json()) as Bootstrap;
-            if (!controller.signal.aborted && data.user)
-              setMember(signedIn(data));
-          }
-        })
-        .catch(() => {});
+    let inFlight = false;
+    const check = async () => {
+      if (document.visibilityState === 'hidden' || inFlight) return;
+      inFlight = true;
+      setChecking(true);
+      setLoginError(false);
+      try {
+        // Reuse startup's validated, bounded read and transient-failure retry.
+        const data = await loadStartup(controller.signal);
+        if (controller.signal.aborted) return;
+        if (!data.signInAvailable) throw new Error('Sign-in unavailable');
+        if (data.user) setMember(signedIn(data));
+      } catch {
+        if (!controller.signal.aborted) setLoginError(true);
+      } finally {
+        inFlight = false;
+        if (!controller.signal.aborted) setChecking(false);
+      }
     };
-    window.addEventListener('focus', check);
-    document.addEventListener('visibilitychange', check);
+    const resume = () => void check();
+    window.addEventListener('focus', resume);
+    window.addEventListener('pageshow', resume);
+    window.addEventListener('online', resume);
+    document.addEventListener('visibilitychange', resume);
+    if (loginAttempt > 0) resume();
     return () => {
       controller.abort();
-      window.removeEventListener('focus', check);
-      document.removeEventListener('visibilitychange', check);
+      window.removeEventListener('focus', resume);
+      window.removeEventListener('pageshow', resume);
+      window.removeEventListener('online', resume);
+      document.removeEventListener('visibilitychange', resume);
     };
-  }, [sent, name]);
-  async function checkLogin() {
-    setChecking(true);
-    setLoginStatus('');
-    try {
-      const response = await fetch('/api/bootstrap');
-      if (response.ok) {
-        const data = (await response.json()) as Bootstrap;
-        if (!data.signInAvailable) throw new Error();
-        if (data.user) setMember(signedIn(data));
-        else
-          setLoginStatus(
-            'No sign-in found in this window yet. Open your email link, then return here.',
-          );
-      } else throw new Error();
-    } catch {
-      setLoginStatus('Could not check sign-in. Please try again.');
-    } finally {
-      setChecking(false);
-    }
-  }
+  }, [sent, name, loginAttempt]);
   const signedOut = state === 'ready' && member === null;
   useEffect(() => {
     if (!signedOut || !link) return;
@@ -181,11 +182,12 @@ export function Welcome() {
   }, [signedOut, link, linkAttempt]);
   // A working link signs in through it; otherwise sign in normally.
   const working = link && checked ? { ...link, ...checked } : null;
-  async function signIn(submit: FormEvent<HTMLFormElement>) {
-    submit.preventDefault();
-    if (busy) return;
+  async function requestSignIn() {
+    if (requestingLink.current) return;
+    requestingLink.current = true;
     setBusy(true);
     setMessage('');
+    setResendStatus('');
     try {
       const result = await auth.signIn.magicLink({
         email: email.trim().toLowerCase(),
@@ -214,12 +216,21 @@ export function Welcome() {
         return;
       }
       if (result.error) throw new Error('Sign-in failed');
+      if (sent)
+        setResendStatus(
+          'New link requested. Copy it from your email without opening it.',
+        );
+      else {
+        setLoginError(false);
+        setLoginAttempt(0);
+      }
       setSent(true);
     } catch {
       setMessage(
         'We couldn’t request a sign-in link. Wait a minute and try again.',
       );
     } finally {
+      requestingLink.current = false;
       setBusy(false);
     }
   }
@@ -272,34 +283,40 @@ export function Welcome() {
               ) : (
                 <h1>You’re invited to an event</h1>
               )}
-              <div className="event-preview-intro">
-                <p className="status-copy">
-                  {checked?.open === false
-                    ? 'This event isn’t taking new members. If you already use slowmass, sign in to see the details.'
-                    : 'Enter your email to see details and RSVP.'}
-                </p>
-                {checked?.open && (
-                  <p className="status-copy">We’ll send a sign-in link.</p>
-                )}
-              </div>
+              {!sent && (
+                <div className="event-preview-intro">
+                  <p className="status-copy">
+                    {checked?.open === false
+                      ? 'This event isn’t taking new members. If you already use slowmass, sign in to see the details.'
+                      : 'Enter your email to see details and RSVP.'}
+                  </p>
+                  {checked?.open && (
+                    <p className="status-copy">We’ll send a sign-in link.</p>
+                  )}
+                </div>
+              )}
             </>
           ) : link?.kind === 'invite' && checked !== null ? (
             <>
               <h1>You’re invited to slowmass</h1>
-              <p className="status-copy">
-                Enter your email to join. We’ll send a sign-in link.
-              </p>
+              {!sent && (
+                <p className="status-copy">
+                  Enter your email to join. We’ll send a sign-in link.
+                </p>
+              )}
             </>
           ) : (
             <>
               <h1>Welcome to slowmass</h1>
-              <p className="status-copy">
-                {link?.kind === 'event'
-                  ? 'This event link isn’t available. The event may have ended, or the link may no longer work.'
-                  : link
-                    ? 'This invite link isn’t available. It may have expired; ask your friend for a new one. Members can sign in below.'
-                    : 'Sign in with your email. New here? Ask a member to text you an invite link.'}
-              </p>
+              {!sent && (
+                <p className="status-copy">
+                  {link?.kind === 'event'
+                    ? 'This event link isn’t available. The event may have ended, or the link may no longer work.'
+                    : link
+                      ? 'This invite link isn’t available. It may have expired; ask your friend for a new one. Members can sign in below.'
+                      : 'Sign in with your email. New here? Ask a member to text you an invite link.'}
+                </p>
+              )}
             </>
           ))}
         <div className="sign-in-area">
@@ -328,20 +345,27 @@ export function Welcome() {
             />
           ) : sent ? (
             <div>
-              <h2>Check your email</h2>
+              <h2 ref={confirmationHeading} tabIndex={-1}>
+                Open the sign-in link in your email.
+              </h2>
               <p className="status-copy">
-                We’ve requested a sign-in link for {email.trim().toLowerCase()}.
-                Check your inbox and spam folder. The link works once and
-                expires in 10 minutes.
+                Check <strong>{email.trim().toLowerCase()}</strong>, including
+                spam. The link works once and expires in 10 minutes.
               </p>
-              <button
-                className="primary-button"
-                onClick={() => void checkLogin()}
-                disabled={checking}
-              >
-                {checking ? 'Checking…' : 'I’ve opened the email link'}
-              </button>
-              {loginStatus && <p role="status">{loginStatus}</p>}
+              {checking && <p role="status">Checking sign-in…</p>}
+              {loginError && (
+                <div>
+                  <p className="error-message" role="alert">
+                    Couldn’t check sign-in. Please try again.
+                  </p>
+                  <button
+                    className="text-button"
+                    onClick={() => setLoginAttempt((value) => value + 1)}
+                  >
+                    Try again
+                  </button>
+                </div>
+              )}
             </div>
           ) : link && checked === undefined ? (
             linkError ? (
@@ -360,7 +384,13 @@ export function Welcome() {
               <p role="status">{`Checking this ${link.kind} link…`}</p>
             )
           ) : (
-            <form onSubmit={(submit) => void signIn(submit)} aria-busy={busy}>
+            <form
+              onSubmit={(submit) => {
+                submit.preventDefault();
+                void requestSignIn();
+              }}
+              aria-busy={busy}
+            >
               <label className="field-label" htmlFor="email">
                 Your email
               </label>
@@ -388,7 +418,13 @@ export function Welcome() {
               )}
             </form>
           )}
-          {name === null && state === 'ready' && <PasteLoginLink />}
+          {name === null && state === 'ready' && (
+            <PasteLoginLink
+              onResend={sent ? () => void requestSignIn() : undefined}
+              resending={busy}
+              resendStatus={resendStatus}
+            />
+          )}
           {state === 'ready' && message && (
             <p className="error-message" role="alert">
               {message}

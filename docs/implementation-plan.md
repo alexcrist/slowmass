@@ -625,3 +625,18 @@ The same release also replaces the invitation calendar date with “This link wo
 - [x] Show the event invite icon and dialog only to creators and accepted co-hosts; preserve the shareable address-bar URL for all authorized viewers. Balance the dialog description’s spacing above and below while retaining the close button’s touch target.
 - [x] Pass formatting, lint, types, 33 event component/boundary tests, and the production build on Node 24. Coverage includes guests before/after RSVP, pending host acceptance, creators/co-hosts, and clipboard success/failure. No browser or visual testing.
 - [ ] Production release. No migration is required.
+
+## Simpler email confirmation and installed-app recovery — October 18, 2026
+
+- [x] Replace the routine “I’ve opened the email link” button with a shared, action-first instruction and short supporting details across regular, invite, and event sign-in. Remove stale email-entry instructions after sending.
+- [x] Recheck on focus, visibility return, restored pages, and reconnect, without polling; coalesce simultaneous checks, bound reads with the existing startup recovery, ignore late responses, and show retry only after failure.
+- [x] Keep installed-app recovery under “Trouble signing in?” with the masked unused-link field and same-email resend, preserving invitation metadata, suppressing duplicate requests, and retaining server eligibility/rate limits. Account switching remains removed. No migration or auth-protocol change.
+- [x] Run formatting, lint, types, boundaries, component/integration tests, and the production build. All static checks and the build pass; 522 of 523 tests pass, including all 124 focused UI checks. The unchanged migration CLI test exceeds its 60-second limit in both full and isolated runs; diagnostic timing shows individual local Wrangler operations taking 10–16 seconds. No assertions, timeouts, or CI gates were changed. No browser or visual testing.
+
+Release uses the existing `main` automatic deployment, gated by the full CI checks. Per owner direction, CI and production deployment are not monitored or verified in this workstream.
+
+## Main branch reconciliation — October 18, 2026
+
+Merged the local upload recovery, event push/backup, and dialog changes (`5cb0179`) with the sign-in recovery changes already on `origin/main` (`408c224`). Both sets of progress notes are preserved; the only textual conflict was their addition at the same point in this plan. The combined product/design documentation and shared component tests retain both changes.
+
+The combined tree passed formatting, lint, TypeScript, boundary checks, all 558 tests across 61 files (`npm test -- --maxWorkers=2`), and the production build on Node 24. The migration CLI test passed with its existing timeout. No browser or visual testing was performed. This records local verification; production deployment is not verified here.

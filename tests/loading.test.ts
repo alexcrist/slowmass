@@ -601,7 +601,7 @@ it('keeps uninvited addresses on the welcome form and allows a successful retry'
     });
   });
   expect(visibleText()).toContain('There’s no slowmass account for this email');
-  expect(visibleText()).not.toContain('Check your email');
+  expect(visibleText()).not.toContain('Open the sign-in link in your email.');
   expect(renderer.root.findByProps({ id: 'email' }).props.value).toBe(
     'Uninvited@Example.com',
   );
@@ -620,7 +620,7 @@ it('keeps uninvited addresses on the welcome form and allows a successful retry'
       preventDefault: vi.fn(),
     });
   });
-  expect(visibleText()).toContain('Check your email');
+  expect(visibleText()).toContain('Open the sign-in link in your email.');
   expect(visibleText()).toContain('uninvited@example.com');
   expect(visibleText()).not.toContain('no slowmass account');
 });
@@ -671,7 +671,7 @@ it('asks signed-out invite link holders only for an email, tied to the link', as
       preventDefault: vi.fn(),
     });
   });
-  expect(visibleText()).toContain('Check your email');
+  expect(visibleText()).toContain('Open the sign-in link in your email.');
 });
 
 it('falls back to normal sign-in for an invite link that no longer works', async () => {
@@ -842,7 +842,7 @@ it.each([403, 429, 500])(
     });
     expect(visibleText()).toContain('Wait a minute and try again');
     expect(visibleText()).not.toContain('no slowmass account');
-    expect(visibleText()).not.toContain('Check your email');
+    expect(visibleText()).not.toContain('Open the sign-in link in your email.');
   },
 );
 
