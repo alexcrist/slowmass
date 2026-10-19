@@ -127,11 +127,11 @@ export function EventHosts({
           disabled={busy || full}
           onChange={(change) => setEmail(change.target.value)}
         />
-        <p className="field-help">
-          {full
-            ? `An event can have up to ${maxHosts} hosts, including pending ones.`
-            : 'Send them the event link too. They can accept when they open it signed in with this email and a profile photo.'}
-        </p>
+        {full && (
+          <p className="field-help">
+            An event can have up to {maxHosts} hosts, including pending ones.
+          </p>
+        )}
         <button className="primary-button" disabled={busy || full}>
           {busy ? 'Saving…' : 'Add host'}
         </button>

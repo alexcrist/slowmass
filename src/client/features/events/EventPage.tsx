@@ -1,10 +1,5 @@
 import { useEffect, useState } from 'react';
-import {
-  originalAppearance,
-  type EventAppearance,
-} from '../../../shared/event-appearance';
 import { useEventAppearance } from './useEventAppearance';
-import { EventAppearanceDialog } from './EventAppearanceDialog';
 import { api, jsonRequest } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
@@ -88,20 +83,12 @@ export function EventPage({
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState('');
   const [dialog, setDialog] = useState<
-    'link' | 'hosts' | 'notification' | 'appearance' | 'cancel' | null
+    'link' | 'hosts' | 'notification' | 'cancel' | null
   >(null);
   const [messageId] = useState(() => crypto.randomUUID());
   const [notificationSent, setNotificationSent] = useState(0);
   const event = data?.event;
-  const [appearancePreview, setAppearancePreview] =
-    useState<EventAppearance | null>(null);
-  useEventAppearance(
-    event
-      ? dialog === 'appearance' && event.viewer.isHost && !event.cancelled
-        ? (appearancePreview ?? event.appearance)
-        : event.appearance
-      : undefined,
-  );
+  useEventAppearance(event?.appearance);
   const url = event?.url;
   // Show the shareable URL in the address bar, so copying it works too.
   useEffect(() => {
@@ -150,7 +137,6 @@ export function EventPage({
   }
   function closeDialog() {
     setDialog(null);
-    setAppearancePreview(null);
     setFailure('');
   }
   if (error)
@@ -193,10 +179,6 @@ export function EventPage({
                       onSelect: () => {
                         location.hash = eventHref(id, 'edit');
                       },
-                    },
-                    {
-                      label: 'Appearance',
-                      onSelect: () => setDialog('appearance'),
                     },
                     {
                       label: 'Edit hosts',
@@ -297,22 +279,6 @@ export function EventPage({
       </div>
       {dialog === 'link' && sharing && url && (
         <EventLinkDialog url={url} onClose={closeDialog} />
-      )}
-      {dialog === 'appearance' && managing && (
-        <EventAppearanceDialog
-          id={id}
-          appearance={event.appearance ?? originalAppearance}
-          onPreview={setAppearancePreview}
-          onClose={closeDialog}
-          onReload={() => {
-            closeDialog();
-            reload();
-          }}
-          onSaved={(appearance) => {
-            refresh((page) => ({ event: { ...page.event, appearance } }));
-            closeDialog();
-          }}
-        />
       )}
       {dialog === 'notification' && managing && (
         <EventNotificationDialog

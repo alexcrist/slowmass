@@ -7,25 +7,29 @@ import {
 import { api, jsonRequest } from '../../api';
 import { Dialog } from '../../ui/Dialog';
 import { palettes, pairings } from './appearance';
+import type { EventView } from './types';
 
 export function EventAppearanceDialog({
   id,
+  kind,
   appearance,
   onPreview,
   onClose,
-  onReload,
+  onReloaded,
   onSaved,
 }: {
   id: string;
+  kind: 'color' | 'fonts';
   appearance: EventAppearance;
   onPreview: (appearance: EventAppearance) => void;
   onClose: () => void;
-  onReload: () => void;
+  onReloaded: (appearance: EventAppearance) => void;
   onSaved: (appearance: EventAppearance) => void;
 }) {
-  const [expected] = useState(appearance);
+  const [expected, setExpected] = useState(appearance);
   const [draft, setDraft] = useState(appearance);
-  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<'save' | 'reload' | null>(null);
+  const busy = pending !== null;
   const [error, setError] = useState('');
   const request = useRef<AbortController | null>(null);
   useEffect(() => () => request.current?.abort(), []);
@@ -39,7 +43,7 @@ export function EventAppearanceDialog({
     if (request.current) return;
     const controller = new AbortController();
     request.current = controller;
-    setBusy(true);
+    setPending('save');
     setError('');
     try {
       const result = await api<{ appearance: EventAppearance }>(
@@ -61,75 +65,131 @@ export function EventAppearanceDialog({
     } finally {
       if (!controller.signal.aborted) {
         request.current = null;
-        setBusy(false);
+        setPending(null);
+      }
+    }
+  }
+  async function reload() {
+    if (request.current) return;
+    const controller = new AbortController();
+    request.current = controller;
+    setPending('reload');
+    setError('');
+    try {
+      const result = await api<{ event: EventView }>(`/api/events/${id}`, {
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
+      if (!result.event.viewer.isHost || result.event.cancelled)
+        throw new Error(
+          'Only hosts can edit an event that hasn’t been cancelled.',
+        );
+      // Reload only appearance, keeping unsaved event details in the form.
+      setExpected(result.event.appearance);
+      preview(result.event.appearance);
+      onReloaded(result.event.appearance);
+    } catch (failure) {
+      if (!controller.signal.aborted)
+        setError(
+          failure instanceof Error
+            ? failure.message
+            : 'Appearance could not be loaded. Try again.',
+        );
+    } finally {
+      if (!controller.signal.aborted) {
+        request.current = null;
+        setPending(null);
       }
     }
   }
   return (
-    <Dialog title="Appearance" onClose={onClose} busy={busy}>
+    <Dialog
+      title={kind === 'color' ? 'Color theme' : 'Fonts'}
+      onClose={onClose}
+      busy={busy}
+    >
       <form onSubmit={(event) => void save(event)}>
         <p className="status-copy">
-          Preview colors and fonts. Save to apply them for everyone viewing this
-          event.
+          Preview {kind === 'color' ? 'colors' : 'fonts'}. Save to apply them to
+          this event.
         </p>
-        <fieldset className="appearance-fieldset" disabled={busy}>
-          <legend>Colors</legend>
-          <div className="appearance-colors">
-            {colorThemes.map((id) => {
-              const palette = palettes[id];
-              return (
-                <label key={id} className="appearance-color">
+        {kind === 'color' ? (
+          <fieldset className="appearance-fieldset" disabled={busy}>
+            <legend className="visually-hidden">Color theme</legend>
+            <div className="appearance-colors">
+              {colorThemes.map((id) => {
+                const palette = palettes[id];
+                return (
+                  <label key={id} className="appearance-color">
+                    <input
+                      type="radio"
+                      name="event-color"
+                      value={id}
+                      checked={draft.colorTheme === id}
+                      onChange={() => preview({ ...draft, colorTheme: id })}
+                    />
+                    <span
+                      className="appearance-swatch"
+                      aria-hidden="true"
+                      style={{
+                        background: palette.paper,
+                        color: palette.detail,
+                        borderColor: palette.controlLine,
+                      }}
+                    >
+                      Aa
+                    </span>
+                    <span>{palette.name}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+        ) : (
+          <fieldset className="appearance-fieldset" disabled={busy}>
+            <legend className="visually-hidden">Fonts</legend>
+            <div className="appearance-fonts">
+              {fontPairings.map((id) => (
+                <label key={id} className="appearance-font">
                   <input
                     type="radio"
-                    name="event-color"
+                    name="event-font"
                     value={id}
-                    checked={draft.colorTheme === id}
-                    onChange={() => preview({ ...draft, colorTheme: id })}
+                    checked={draft.fontPairing === id}
+                    onChange={() => preview({ ...draft, fontPairing: id })}
                   />
-                  <span
-                    className="appearance-swatch"
-                    aria-hidden="true"
-                    style={{
-                      background: palette.paper,
-                      color: palette.detail,
-                      borderColor: palette.controlLine,
-                    }}
-                  >
-                    Aa
+                  <span className="appearance-font-copy">
+                    <strong
+                      style={{
+                        fontFamily: pairings[id].heading,
+                        fontWeight: id === 'original' ? 600 : 700,
+                      }}
+                    >
+                      {pairings[id].name}
+                    </strong>
+                    <small style={{ fontFamily: pairings[id].body }}>
+                      {pairings[id].description}
+                    </small>
                   </span>
-                  <span>{palette.name}</span>
+                  <span
+                    className="appearance-font-wordmark"
+                    aria-hidden="true"
+                    style={{ fontFamily: pairings[id].wordmark }}
+                  >
+                    slowmass
+                  </span>
                 </label>
-              );
-            })}
-          </div>
-        </fieldset>
-        <fieldset className="appearance-fieldset" disabled={busy}>
-          <legend>Fonts</legend>
-          <div className="appearance-fonts">
-            {fontPairings.map((id) => (
-              <label key={id} className="appearance-font">
-                <input
-                  type="radio"
-                  name="event-font"
-                  value={id}
-                  checked={draft.fontPairing === id}
-                  onChange={() => preview({ ...draft, fontPairing: id })}
-                />
-                <span>
-                  {pairings[id].name}
-                  <small>{pairings[id].description}</small>
-                </span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
+              ))}
+            </div>
+          </fieldset>
+        )}
         {error && (
           <div>
             <p role="alert" className="error-message">
               {error}
             </p>
-            <button type="button" onClick={onReload} disabled={busy}>
-              Reload event
+            <button type="button" onClick={() => void reload()} disabled={busy}>
+              Reload appearance
             </button>
           </div>
         )}
@@ -138,7 +198,13 @@ export function EventAppearanceDialog({
             Cancel
           </button>
           <button className="primary-button" disabled={busy}>
-            {busy ? 'Saving…' : 'Save appearance'}
+            {pending === 'save'
+              ? 'Saving…'
+              : pending === 'reload'
+                ? 'Loading…'
+                : kind === 'color'
+                  ? 'Save color theme'
+                  : 'Save fonts'}
           </button>
         </div>
       </form>

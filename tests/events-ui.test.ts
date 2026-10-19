@@ -15,7 +15,11 @@ import { EditEvent } from '../src/client/features/events/EventForm';
 import { fromZoned } from '../src/client/features/events/time';
 import { AvatarForm } from '../src/client/features/avatars/AvatarForm';
 import { EventPreview } from '../src/client/features/events/EventPreview';
-import { originalAppearance } from '../src/shared/event-appearance';
+import {
+  originalAppearance,
+  fontPairings,
+} from '../src/shared/event-appearance';
+import { pairings, palettes } from '../src/client/features/events/appearance';
 import { appearanceDocument } from './support/appearance-document';
 
 const authMocks = vi.hoisted(() => ({ magicLink: vi.fn() }));
@@ -208,64 +212,103 @@ async function chooseAppearance(name: string, value: string) {
 const rootStyle = (name: string) =>
   document.documentElement.style.getPropertyValue(name);
 
-it('previews host appearance across the root, cancels it, and saves only the selected IDs', async () => {
-  await mount(createElement(EventPage, { id, linkProfiles: true }));
+it('edits colors and fonts in separate dialogs without losing event details', async () => {
+  await mount(createElement(EditEvent, { id, onSaved: vi.fn() }));
   await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
-  await reply(pending(`/api/events/${id}/guests`), { items: [], next: null });
-  await reply(pending(`/api/events/${id}/activity`), { items: [], next: null });
-  await click('Event options');
-  await click('Appearance');
+  await type('event-title', 'Unsaved dinner title');
+  await type('event-location', 'Unsaved location');
+  await click('Color theme');
+  expect(renderer.root.findAllByProps({ name: 'event-font' })).toHaveLength(0);
   await chooseAppearance('event-color', 'wine');
-  await chooseAppearance('event-font', 'classic');
-  expect(rootStyle('--paper')).toBe('#351d2b');
-  expect(rootStyle('--wordmark-font')).toContain('Fraunces');
+  expect(rootStyle('--paper')).toBe(palettes.wine.paper);
+  expect(rootStyle('--surface')).toBe(palettes.wine.surface);
+  expect(rootStyle('--line')).toBe(palettes.wine.line);
+  expect(rootStyle('--control-line')).toBe(palettes.wine.controlLine);
   expect(rootStyle('--body-font')).toContain('Source Sans 3');
   expect(requests.some((request) => request.path.endsWith('/appearance'))).toBe(
     false,
   );
   await click('Cancel');
   expect(rootStyle('--paper')).toBe('#ffffff');
+  await click('Fonts');
+  expect(renderer.root.findAllByProps({ name: 'event-color' })).toHaveLength(0);
+  const previews = renderer.root.findAllByProps({
+    className: 'appearance-font',
+  });
+  for (const [index, pairing] of fontPairings.entries()) {
+    expect(previews[index].findByType('strong').props.style.fontFamily).toBe(
+      pairings[pairing].heading,
+    );
+    expect(previews[index].findByType('small').props.style.fontFamily).toBe(
+      pairings[pairing].body,
+    );
+    expect(
+      previews[index].findByProps({ className: 'appearance-font-wordmark' })
+        .props.style.fontFamily,
+    ).toBe(pairings[pairing].wordmark);
+  }
+  await chooseAppearance('event-font', 'classic');
+  expect(rootStyle('--wordmark-font')).toContain('Fraunces');
+  await click('Cancel');
   expect(rootStyle('--wordmark-font')).toContain('Caveat');
-  await click('Event options');
-  await click('Appearance');
+  await click('Color theme');
   await chooseAppearance('event-color', 'evergreen');
-  await chooseAppearance('event-font', 'rounded');
   await submit();
   await submit();
   const save = pending(`/api/events/${id}/appearance`);
-  const appearance = { colorTheme: 'evergreen', fontPairing: 'rounded' };
+  const color = { colorTheme: 'evergreen', fontPairing: 'original' };
   expect(JSON.parse(String(save.options?.body))).toEqual({
-    appearance,
+    appearance: color,
     expected: originalAppearance,
   });
   expect(
     requests.filter((request) => request.path.endsWith('/appearance')),
   ).toHaveLength(1);
   expect(button('Saving…').props.disabled).toBe(true);
-  await reply(save, { appearance });
-  expect(rootStyle('--paper')).toBe('#162e28');
-  expect(rootStyle('--body-font')).toContain('Nunito Sans');
+  await reply(save, { appearance: color });
+  expect(rootStyle('--paper')).toBe(palettes.evergreen.paper);
   expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
-  await reply(pending(`/api/events/${id}`), {
-    event: view({ viewer: host, appearance }),
+  await click('Fonts');
+  await chooseAppearance('event-font', 'rounded');
+  await submit();
+  const fonts = pending(`/api/events/${id}/appearance`);
+  const appearance = { colorTheme: 'evergreen', fontPairing: 'rounded' };
+  expect(JSON.parse(String(fonts.options?.body))).toEqual({
+    appearance,
+    expected: color,
   });
+  await reply(fonts, { appearance });
+  expect(rootStyle('--body-font')).toContain('Nunito Sans');
+  expect(renderer.root.findByProps({ id: 'event-title' }).props.value).toBe(
+    'Unsaved dinner title',
+  );
+  expect(renderer.root.findByProps({ id: 'event-location' }).props.value).toBe(
+    'Unsaved location',
+  );
+  expect(
+    requests.filter(
+      (request) =>
+        request.path === `/api/events/${id}` &&
+        request.options?.method === 'PATCH',
+    ),
+  ).toHaveLength(0);
   await act(async () => renderer.unmount());
   expect(rootStyle('--paper')).toBe('');
+  expect(rootStyle('--surface')).toBe('');
   expect(rootStyle('--body-font')).toBe('');
 });
 
-it('keeps failed appearance edits retryable and aborts saves when the event unmounts', async () => {
-  await mount(createElement(EventPage, { id, linkProfiles: true }));
+it('keeps failed appearance edits retryable and aborts saves when editing unmounts', async () => {
+  await mount(createElement(EditEvent, { id, onSaved: vi.fn() }));
   await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
-  await click('Event options');
-  await click('Appearance');
+  await click('Color theme');
   await chooseAppearance('event-color', 'after-hours');
   await submit();
   const first = pending(`/api/events/${id}/appearance`);
   await reply(first, { error: 'The event changed. Reload it.' }, 409);
   expect(visibleText()).toContain('The event changed. Reload it.');
   expect(rootStyle('--paper')).toBe('#202544');
-  expect(button('Save appearance').props.disabled).toBe(false);
+  expect(button('Save color theme').props.disabled).toBe(false);
   await submit();
   const retry = pending(`/api/events/${id}/appearance`);
   expect(retry.options?.body).toBe(first.options?.body);
@@ -276,6 +319,91 @@ it('keeps failed appearance edits retryable and aborts saves when the event unmo
     appearance: { colorTheme: 'after-hours', fontPairing: 'original' },
   });
   expect(rootStyle('--paper')).toBe('');
+});
+
+it('reloads conflicting appearance without dropping the event draft and uses the new save guard', async () => {
+  await mount(createElement(EditEvent, { id, onSaved: vi.fn() }));
+  await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
+  await type('event-description', 'Keep this unfinished description');
+  await click('Fonts');
+  await chooseAppearance('event-font', 'classic');
+  await submit();
+  await reply(
+    pending(`/api/events/${id}/appearance`),
+    { error: 'The event changed. Reload it.' },
+    409,
+  );
+  await click('Reload appearance');
+  expect(button('Loading…').props.disabled).toBe(true);
+  const current = { colorTheme: 'pool', fontPairing: 'poster' };
+  await reply(pending(`/api/events/${id}`), {
+    event: view({ viewer: host, appearance: current }),
+  });
+  expect(rootStyle('--paper')).toBe(palettes.pool.paper);
+  expect(rootStyle('--body-font')).toBe(pairings.poster.body);
+  await chooseAppearance('event-font', 'rounded');
+  await submit();
+  const save = pending(`/api/events/${id}/appearance`);
+  const appearance = { colorTheme: 'pool', fontPairing: 'rounded' };
+  expect(JSON.parse(String(save.options?.body))).toEqual({
+    appearance,
+    expected: current,
+  });
+  await reply(save, { appearance });
+  expect(
+    renderer.root.findByProps({ id: 'event-description' }).props.value,
+  ).toBe('Keep this unfinished description');
+});
+
+it.each([
+  { viewer: { ...host, isHost: false } },
+  { viewer: host, cancelled: true },
+])(
+  'keeps appearance editing unavailable for an ineligible editor: %j',
+  async (event) => {
+    await mount(createElement(EditEvent, { id, onSaved: vi.fn() }));
+    await reply(pending(`/api/events/${id}`), { event: view(event) });
+    expect(renderer.root.findAllByType('form')).toHaveLength(0);
+    expect(rootStyle('--paper')).toBe('');
+  },
+);
+
+it('moves appearance out of the event menu and themes the edit page until navigation away', async () => {
+  location.hash = `#event/${id}`;
+  await mount(
+    createElement(MemberApp, {
+      initialProfile: {
+        handle: 'alice',
+        displayName: 'Alice',
+        bio: '',
+        hasAvatar: 1,
+      },
+      onSignOut: vi.fn(),
+      signingOut: false,
+    }),
+  );
+  const event = view({
+    viewer: host,
+    appearance: { colorTheme: 'cherry', fontPairing: 'handwritten' },
+  });
+  await reply(pending(`/api/events/${id}`), { event });
+  await reply(pending(`/api/events/${id}/guests`), { items: [], next: null });
+  await reply(pending(`/api/events/${id}/activity`), { items: [], next: null });
+  await click('Event options');
+  expect(visibleText()).not.toContain('Appearance');
+  await click('Edit event');
+  await act(async () => window.dispatchEvent(new Event('hashchange')));
+  await reply(pending(`/api/events/${id}`), { event });
+  expect(button('Color theme')).toBeDefined();
+  expect(button('Fonts')).toBeDefined();
+  expect(rootStyle('--paper')).toBe(palettes.cherry.paper);
+  expect(rootStyle('--heading-font')).toBe(pairings.handwritten.heading);
+  await act(async () => {
+    location.hash = '#events';
+    window.dispatchEvent(new Event('hashchange'));
+  });
+  expect(rootStyle('--paper')).toBe('');
+  expect(rootStyle('--surface')).toBe('');
 });
 
 it('restores ordinary app styling on navigation and uses the next event’s own pairing', async () => {
@@ -666,7 +794,7 @@ it('edits details silently in the event time zone', async () => {
     timeZone: 'America/Los_Angeles',
   });
   expect(body.messageId).toBeUndefined();
-  expect(visibleText()).toContain('Edits don’t notify guests.');
+  expect(visibleText()).not.toMatch(/notif(?:y|ies|ication)/i);
   await reply(patch, { ok: true });
   expect(saved).toHaveBeenCalledWith(id);
 });

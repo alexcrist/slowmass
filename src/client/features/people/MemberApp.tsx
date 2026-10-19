@@ -8,6 +8,7 @@ import { Notifications, useNotificationCount } from '../notifications';
 import { Compose, PostDetail, PostList } from '../posts';
 import { AvatarForm } from '../avatars';
 import { InstallApp, InstallProvider } from '../install';
+import { InviteLinkDialog } from '../invite-links';
 import { ProfileForm, type Profile } from './ProfileForm';
 import { ProfilePage } from './ProfilePage';
 import { Discover } from './Discover';
@@ -345,6 +346,7 @@ function MemberPages({
                 Blocked accounts
               </a>
             </nav>
+            <InviteSettingsRow disabled={signingOut} />
             <InstallApp />
             <PushSettings />
             <button
@@ -439,6 +441,24 @@ function MemberPages({
           {screen()}
         </section>
       </PageHistoryProvider>
+    </>
+  );
+}
+
+function InviteSettingsRow({ disabled }: { disabled: boolean }) {
+  const [inviting, setInviting] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        className="settings-row"
+        aria-haspopup="dialog"
+        onClick={() => setInviting(true)}
+        disabled={disabled}
+      >
+        Invite to slowmass
+      </button>
+      {inviting && <InviteLinkDialog onClose={() => setInviting(false)} />}
     </>
   );
 }

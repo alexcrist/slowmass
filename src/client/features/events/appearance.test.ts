@@ -32,7 +32,7 @@ function contrast(a: string, b: string) {
 }
 it('keeps readable text, action labels and focus indicators across light and evening palettes', () => {
   for (const [name, p] of Object.entries(palettes)) {
-    for (const background of [p.paper, p.hover]) {
+    for (const background of [p.paper, p.surface, p.hover]) {
       for (const foreground of [p.ink, p.detail, p.danger])
         expect(
           contrast(foreground, background),
@@ -60,7 +60,7 @@ it('keeps readable text, action labels and focus indicators across light and eve
     );
     if (name !== 'original')
       expect(
-        contrast(p.controlLine, p.paper),
+        contrast(p.controlLine, p.surface),
         `${name} input outline`,
       ).toBeGreaterThanOrEqual(3);
   }
@@ -157,8 +157,8 @@ it('ships local content-addressed fonts without preloading unselected faces', ()
     );
     expect(bytes.byteLength).toBeLessThan(40_000);
   }
-  // All extra-family references live in face declarations or the event catalog;
-  // normal global styles and the picker never select every family to preview it.
+  // Normal app styles never select extra faces. Opening the Fonts dialog
+  // references the catalog for previews; there is still no global preload.
   const global = readFileSync('src/client/styles.css', 'utf8');
   const html = readFileSync('index.html', 'utf8');
   expect(html).not.toMatch(/rel=["']preload["']/);
@@ -171,10 +171,4 @@ it('ships local content-addressed fonts without preloading unselected faces', ()
     'DM Sans',
   ])
     expect(global).not.toContain(name);
-  expect(
-    readFileSync(
-      'src/client/features/events/EventAppearanceDialog.tsx',
-      'utf8',
-    ),
-  ).not.toContain('fontFamily:');
 });

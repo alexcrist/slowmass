@@ -8,6 +8,12 @@ import { useApiResource } from '../../api/useApiResource';
 import { PostCropEditor, fullPhoto, type Rectangle } from '../posts';
 import { currentTimeZone, fromZoned, zonedInput } from './time';
 import type { EventView } from './types';
+import {
+  originalAppearance,
+  type EventAppearance,
+} from '../../../shared/event-appearance';
+import { EventAppearanceDialog } from './EventAppearanceDialog';
+import { useEventAppearance } from './useEventAppearance';
 
 function nextDay(date: string) {
   const [year, month, day] = date.split('-').map(Number);
@@ -36,7 +42,7 @@ export function EditEvent({
   if (!data) return <p role="status">Loading event…</p>;
   if (!data.event.viewer.isHost || data.event.cancelled)
     return <p>Only hosts can edit an event that hasn’t been cancelled.</p>;
-  return <EventForm event={data.event} onSaved={onSaved} />;
+  return <EventForm key={data.event.id} event={data.event} onSaved={onSaved} />;
 }
 
 // New events need a cover photo; hosts can replace it when editing. Times are
@@ -48,6 +54,19 @@ export function EventForm({
   event?: EventView;
   onSaved: (id: string) => void;
 }) {
+  const [appearance, setAppearance] = useState(
+    event?.appearance ?? originalAppearance,
+  );
+  const [appearancePreview, setAppearancePreview] =
+    useState<EventAppearance | null>(null);
+  const [appearanceDialog, setAppearanceDialog] = useState<
+    'color' | 'fonts' | null
+  >(null);
+  useEventAppearance(event ? (appearancePreview ?? appearance) : undefined);
+  function closeAppearance() {
+    setAppearanceDialog(null);
+    setAppearancePreview(null);
+  }
   const timeZone = event?.timeZone ?? currentTimeZone();
   const start = event ? zonedInput(event.startsAt, timeZone) : null;
   const [title, setTitle] = useState(event?.title ?? '');
@@ -210,6 +229,30 @@ export function EventForm({
             </button>
           </>
         )}
+        {event && (
+          <fieldset
+            className="event-appearance-controls"
+            disabled={busy || Boolean(editing)}
+          >
+            <legend>Appearance</legend>
+            <div className="actions">
+              <button
+                type="button"
+                aria-haspopup="dialog"
+                onClick={() => setAppearanceDialog('color')}
+              >
+                Color theme
+              </button>
+              <button
+                type="button"
+                aria-haspopup="dialog"
+                onClick={() => setAppearanceDialog('fonts')}
+              >
+                Fonts
+              </button>
+            </div>
+          </fieldset>
+        )}
         <label htmlFor="event-title" className="field-label">
           Title
         </label>
@@ -284,12 +327,6 @@ export function EventForm({
           disabled={busy}
           onChange={(change) => changed(setDescription)(change.target.value)}
         />
-        {event && (
-          <p className="field-help">
-            Edits don’t notify guests. Use Send notification from the event menu
-            to share an update.
-          </p>
-        )}
         {busy && <PhotoProgress progress={progress} />}
         <button className="primary-button" disabled={busy}>
           {busy ? 'Saving…' : event ? 'Save changes' : 'Create event'}
@@ -300,6 +337,20 @@ export function EventForm({
           </p>
         )}
       </form>
+      {event && appearanceDialog && (
+        <EventAppearanceDialog
+          id={event.id}
+          kind={appearanceDialog}
+          appearance={appearance}
+          onPreview={setAppearancePreview}
+          onClose={closeAppearance}
+          onReloaded={setAppearance}
+          onSaved={(saved) => {
+            setAppearance(saved);
+            closeAppearance();
+          }}
+        />
+      )}
       {editing && (
         <PostCropEditor
           file={editing.file}

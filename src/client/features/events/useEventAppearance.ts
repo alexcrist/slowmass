@@ -2,7 +2,7 @@ import { useLayoutEffect } from 'react';
 import type { EventAppearance } from '../../../shared/event-appearance';
 import { palettes, pairings } from './appearance';
 
-// The mounted event page/preview is the sole owner, including its dialogs.
+// The mounted event page, editor or preview is the sole owner, including its dialogs.
 // Root variables cover navigation portals, the document canvas and safe areas.
 // Cleanup runs before the next paint, with no stored preference or late fetch
 // callback that could recolor the next route.
@@ -16,6 +16,7 @@ export function useEventAppearance(appearance?: EventAppearance) {
     const fonts = pairings[fontPairing];
     const properties: Record<string, string> = {
       '--paper': palette.paper,
+      '--surface': palette.surface,
       '--ink': palette.ink,
       '--muted': palette.muted,
       '--line': palette.line,

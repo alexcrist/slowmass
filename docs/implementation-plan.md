@@ -662,3 +662,19 @@ The combined tree passed formatting, lint, TypeScript, boundary checks, all 558 
 - [x] Self-host selected Latin-subset WOFF2 files and licenses, with content-hashed names, immutable caching, and no font catalog preloading or third-party runtime requests.
 - [x] Pass formatting, lint, TypeScript, boundary checks, all 581 tests across 63 files (`npm test -- --maxWorkers=2`), and the production build on Node 24. Coverage includes palette contrast, local font assets and loading scope, preview/cancel/save/unmount behavior, navigation restoration, host authorization, concurrent saves/retries, constrained storage, private previews, and migration compatibility. No browser or visual testing.
 - [ ] Production rollout: apply 0033 through the normal reviewed migration/deployment workflow and verify HTTP boundaries.
+
+## Settings invite, event-list spacing, and edit copy — October 18, 2026
+
+- [x] Add Invite to slowmass as a standard Settings row for members with a profile photo, opening the existing invite-link dialog. Keep dialog state local to the row so navigation closes it.
+- [x] Give event-list titles and metadata matching text metrics and one uniform gap, retaining bold titles and muted metadata.
+- [x] Remove notification helper text from Edit event. The server already keeps all detail edits silent; existing integration tests verify no new change activity or queued/sent push, and suppression of historical change alerts.
+- [x] Pass the Node 24 check gate: formatting, lint, types, boundary checks, all 581 tests, and the production build. After the final edit-copy change, rerun formatting, lint, types, all 34 event component tests, and the production build successfully. No browser or visual testing.
+- [ ] Production release. No migration is required.
+
+## Appearance controls on Edit event — October 18, 2026
+
+- [x] Move appearance editing from the event menu to separate Color theme and Fonts dialogs on Edit event. Theme the editor and shell, and render font samples in their own heading/body/wordmark faces.
+- [x] Keep unfinished event details when appearance is saved or reloaded after a conflict; retain preview/cancel, guarded writes, retries, and abort-on-unmount behavior.
+- [x] Define palette-specific input surfaces alongside structural dividers and stronger control outlines, including native file controls and upload progress. Leave room for the desktop wordmark’s script overhang and remove the extra Add hosts guidance.
+- [x] Pass the Node 24 check gate: formatting, lint, types, boundary checks, all 585 tests across 63 files, and the production build. Focused component tests cover separate saves, font samples, cancel, duplicate submission, conflict/reload with preserved detail drafts, editor authorization, unmount/late responses, and navigation theme restoration; palette checks include input-surface contrast. No browser or visual testing.
+- [ ] Production release. No additional migration is required beyond the existing appearance migration 0033.

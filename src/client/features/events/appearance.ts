@@ -4,6 +4,9 @@ type Palette = {
   name: string;
   scheme: 'light' | 'dark';
   paper: string;
+  // Replace neutral input surfaces, dividers and control outlines with tones
+  // from the palette; outlines stay stronger than structural separators.
+  surface: string;
   ink: string;
   muted: string;
   line: string;
@@ -25,6 +28,7 @@ export const palettes: Record<ColorTheme, Palette> = {
     name: 'Original',
     scheme: 'light',
     paper: '#ffffff',
+    surface: '#ffffff',
     ink: '#171717',
     muted: '#737373',
     line: '#e5e5e5',
@@ -44,6 +48,7 @@ export const palettes: Record<ColorTheme, Palette> = {
     name: 'Pool',
     scheme: 'light',
     paper: '#e5f3ff',
+    surface: '#f1f8ff',
     ink: '#182d4b',
     muted: '#435b76',
     line: '#b5cce4',
@@ -63,6 +68,7 @@ export const palettes: Record<ColorTheme, Palette> = {
     name: 'Lilac',
     scheme: 'light',
     paper: '#efe7fa',
+    surface: '#f7f2fc',
     ink: '#352340',
     muted: '#675270',
     line: '#cebcdd',
@@ -82,6 +88,7 @@ export const palettes: Record<ColorTheme, Palette> = {
     name: 'Citrus',
     scheme: 'light',
     paper: '#fff4bc',
+    surface: '#fff9df',
     ink: '#303515',
     muted: '#616336',
     line: '#d5cd96',
@@ -101,6 +108,7 @@ export const palettes: Record<ColorTheme, Palette> = {
     name: 'Cherry',
     scheme: 'light',
     paper: '#ffe6ea',
+    surface: '#fff3f5',
     ink: '#482332',
     muted: '#79505d',
     line: '#e4bcc6',
@@ -120,6 +128,7 @@ export const palettes: Record<ColorTheme, Palette> = {
     name: 'After hours',
     scheme: 'dark',
     paper: '#202544',
+    surface: '#292f50',
     ink: '#f4f4ff',
     muted: '#bac0da',
     line: '#444b70',
@@ -139,6 +148,7 @@ export const palettes: Record<ColorTheme, Palette> = {
     name: 'Wine',
     scheme: 'dark',
     paper: '#351d2b',
+    surface: '#432635',
     ink: '#fff0f5',
     muted: '#d9b7c6',
     line: '#624051',
@@ -158,6 +168,7 @@ export const palettes: Record<ColorTheme, Palette> = {
     name: 'Evergreen',
     scheme: 'dark',
     paper: '#162e28',
+    surface: '#203b32',
     ink: '#f1f7ed',
     muted: '#b5cbbf',
     line: '#3e5a4f',
@@ -177,6 +188,7 @@ export const palettes: Record<ColorTheme, Palette> = {
     name: 'Candlelight',
     scheme: 'dark',
     paper: '#33211e',
+    surface: '#422c26',
     ink: '#fff2e8',
     muted: '#d4bcb0',
     line: '#624a40',

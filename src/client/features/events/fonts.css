@@ -1,5 +1,6 @@
 /* Local, Latin-subset faces. Declaring a face does not preload it: only the
-   active event pairing references these families. Never preload this catalog. */
+   active event pairing or open Fonts dialog references these families. Never
+   preload this catalog. */
 @font-face {
   font-family: 'Fraunces';
   font-style: normal;
