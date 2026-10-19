@@ -9,13 +9,13 @@ export type Profile = {
 export function ProfileForm({
   profile,
   onSave,
-  nameOnly = false,
+  mode = 'profile',
 }: {
   profile: Profile | null;
   onSave: (profile: Profile) => void;
-  // Event-only members just name themselves; their generated username and
-  // empty bio are saved unchanged.
-  nameOnly?: boolean;
+  // Name-only event joining keeps a generated username. Photo-app setup asks
+  // the member to choose or explicitly confirm it before adding a photo.
+  mode?: 'profile' | 'name' | 'username';
 }) {
   const [handle, setHandle] = useState(profile?.handle ?? '');
   const [displayName, setDisplayName] = useState(profile?.displayName ?? '');
@@ -34,7 +34,7 @@ export function ProfileForm({
         '/api/people/self',
         jsonRequest(
           'PUT',
-          nameOnly ? { displayName, bio } : { handle, displayName, bio },
+          mode === 'name' ? { displayName, bio } : { handle, displayName, bio },
         ),
       );
       onSave(result.profile);
@@ -49,13 +49,13 @@ export function ProfileForm({
   }
   return (
     <form onSubmit={(event) => void save(event)}>
-      {!profile && !nameOnly && (
+      {!profile && mode === 'profile' && (
         <p className="status-copy">
           Your username, name, and profile photo are visible to other members.
           Your bio is visible only to accepted followers.
         </p>
       )}
-      {!nameOnly && (
+      {mode !== 'name' && (
         <>
           <label className="field-label" htmlFor="handle">
             Username
@@ -76,23 +76,28 @@ export function ProfileForm({
           <p id="handle-help" className="field-help">
             3–30 letters, numbers, or underscores.
             {profile &&
+              mode === 'profile' &&
               ' Changing it releases your old username and changes your profile link.'}
           </p>
         </>
       )}
-      <label className="field-label" htmlFor="display-name">
-        {nameOnly ? 'Your name' : 'Profile name'}
-      </label>
-      <input
-        id="display-name"
-        value={displayName}
-        onChange={(event) => setDisplayName(event.target.value)}
-        required
-        maxLength={60}
-        disabled={busy}
-        autoComplete="name"
-      />
-      {!nameOnly && (
+      {mode !== 'username' && (
+        <>
+          <label className="field-label" htmlFor="display-name">
+            {mode === 'name' ? 'Your name' : 'Profile name'}
+          </label>
+          <input
+            id="display-name"
+            value={displayName}
+            onChange={(event) => setDisplayName(event.target.value)}
+            required
+            maxLength={60}
+            disabled={busy}
+            autoComplete="name"
+          />
+        </>
+      )}
+      {mode === 'profile' && (
         <>
           <label className="field-label" htmlFor="bio">
             Bio
@@ -110,9 +115,9 @@ export function ProfileForm({
       <button className="primary-button" disabled={busy}>
         {busy
           ? 'Saving…'
-          : !profile
+          : !profile || mode === 'username'
             ? 'Continue'
-            : nameOnly
+            : mode === 'name'
               ? 'Save name'
               : 'Save profile'}
       </button>

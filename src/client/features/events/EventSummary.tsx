@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { profileHref } from '../../navigation';
+import { ImageViewer } from '../../ui/ImageViewer';
 import { eventWhen } from './time';
 import {
   answerEmoji,
@@ -64,11 +65,17 @@ export function EventSummary({
   actions?: ReactNode;
 }) {
   const when = eventWhen(event);
+  const [photoOpen, setPhotoOpen] = useState(false);
   return (
     <div className="event-summary">
-      <div
-        className="event-photo"
+      <button
+        type="button"
+        className="event-photo event-photo-button"
         style={{ aspectRatio: `${event.width} / ${event.height}` }}
+        aria-label="Enlarge event photo"
+        aria-haspopup="dialog"
+        aria-expanded={photoOpen}
+        onClick={() => setPhotoOpen(true)}
       >
         <img
           src={event.photoUrl}
@@ -77,7 +84,17 @@ export function EventSummary({
           alt={`Cover photo for ${event.title}`}
           fetchPriority="high"
         />
-      </div>
+      </button>
+      {photoOpen && (
+        <ImageViewer
+          title="Event photo"
+          src={event.photoUrl}
+          alt={`Cover photo for ${event.title}`}
+          width={event.width}
+          height={event.height}
+          onClose={() => setPhotoOpen(false)}
+        />
+      )}
       <div className="event-details">
         {event.cancelled ? (
           <p className="event-notice">This event was cancelled.</p>

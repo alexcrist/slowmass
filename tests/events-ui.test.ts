@@ -236,7 +236,7 @@ it('links available event avatars to profile setup for viewers without a photo',
     location.hash = profileLinks[0].props.href;
     window.dispatchEvent(new Event('hashchange'));
   });
-  expect(visibleText()).toContain('Share photos and follow friends');
+  expect(visibleText()).toContain('Choose your username');
   expect(
     requests.some((request) => request.path.startsWith('/api/people/alice')),
   ).toBe(false);
@@ -669,7 +669,7 @@ it.each(['feed', 'people', 'compose', 'profile/erin'])(
       event: view({ counts: null }),
     });
     const nav = renderer.root.findByProps({ 'aria-label': 'Main navigation' });
-    expect(nav.findAllByProps({ className: 'nav-lock' })).toHaveLength(4);
+    expect(nav.findAllByProps({ className: 'nav-lock' })).toHaveLength(0);
     expect(nav.findAllByType('img')).toHaveLength(0);
     const target = nav
       .findAllByType('a')
@@ -678,30 +678,53 @@ it.each(['feed', 'people', 'compose', 'profile/erin'])(
           link.props.href === `#${destination}` &&
           link.props.className === 'nav-link',
       )!;
-    expect(target.props['aria-description']).toContain('Add a profile photo');
+    expect(target.props['aria-description']).toContain('Set up your username');
     const before = requests.length;
     await act(async () => {
       location.hash = `#${destination}`;
       window.dispatchEvent(new Event('hashchange'));
     });
-    expect(visibleText()).toContain('Share photos and follow friends');
+    expect(visibleText()).toContain('Choose your username');
     expect(visibleText()).toContain('follow requests need your approval');
-    expect(button('Add profile photo')).toBeDefined();
+    expect(renderer.root.findAllByType(AvatarForm)).toHaveLength(0);
     const back = renderer.root.findByProps({
       className: 'text-button setup-return',
     });
     expect(back.props.href).toBe(`#event/${id}`);
     expect(requests.slice(before)).toEqual([]);
+    await type('handle', 'erin_photos');
+    await submit();
+    const username = pending('/api/people/self');
+    expect(JSON.parse(String(username.options?.body))).toEqual({
+      handle: 'erin_photos',
+      displayName: 'Erin',
+      bio: '',
+    });
+    await reply(username, {
+      profile: {
+        handle: 'erin_photos',
+        displayName: 'Erin',
+        bio: '',
+        hasAvatar: 0,
+      },
+    });
+    await act(async () => window.dispatchEvent(new Event('hashchange')));
+    expect(visibleText()).toContain('Add a profile photo');
+    expect(button('Add profile photo')).toBeDefined();
     // AvatarForm's callback fires only after its upload succeeds.
     await act(async () =>
       renderer.root.findByType(AvatarForm).props.onChange(),
     );
-    expect(location.hash).toBe(`#${destination}`);
+    expect(location.hash).toBe(
+      destination.startsWith('profile/')
+        ? '#profile/erin_photos'
+        : `#${destination}`,
+    );
     expect(
       renderer.root.findAllByProps({ className: 'nav-lock' }),
     ).toHaveLength(0);
     expect(renderer.root.findAllByType(AvatarForm)).toHaveLength(0);
-    expect(visibleText()).not.toContain('Share photos and follow friends');
+    expect(visibleText()).not.toContain('Choose your username');
   },
 );
 
@@ -734,7 +757,7 @@ it('lets members leave setup for their event without changing access', async () 
   await reply(pending(`/api/events/${id}`), { event: view({ counts: null }) });
   expect(visibleText()).toContain('RSVP to see who’s going');
   expect(renderer.root.findAllByProps({ className: 'nav-lock' })).toHaveLength(
-    4,
+    0,
   );
 });
 
@@ -811,4 +834,69 @@ it('links available avatars in host, guest, activity, and host-dialog sections',
   expect(
     avatarLinks().filter((link) => link.props.href === '#profile/alice'),
   ).toHaveLength(2);
+});
+
+it('opens the authorized event cover in the shared photo modal and closes it', async () => {
+  await mount(createElement(EventPage, { id, linkProfiles: true }));
+  await reply(pending(`/api/events/${id}`), { event: view({ counts: null }) });
+  expect(
+    renderer.root.findAllByProps({ className: 'image-viewer' }),
+  ).toHaveLength(0);
+  expect(button('Enlarge event photo').props['aria-haspopup']).toBe('dialog');
+  await click('Enlarge event photo');
+  expect(button('Enlarge event photo').props['aria-expanded']).toBe(true);
+  const photo = renderer.root.findByProps({ className: 'image-viewer-photo' });
+  expect(photo.props.src).toBe(`/media/events/${id}`);
+  expect(photo.props.alt).toBe('Cover photo for Dinner');
+  expect(photo.props.width).toBe(4);
+  expect(photo.props.height).toBe(3);
+  expect(visibleText()).toContain('Loading event photo');
+  await act(async () => photo.props.onLoad());
+  expect(visibleText()).not.toContain('Loading event photo');
+  await click('Close event photo');
+  expect(
+    renderer.root.findAllByProps({ className: 'image-viewer' }),
+  ).toHaveLength(0);
+  expect(button('Enlarge event photo').props['aria-expanded']).toBe(false);
+});
+
+it('keeps username conflicts in setup and preserves another member’s destination', async () => {
+  location.hash = '#profile/alice';
+  await mount(
+    createElement(MemberApp, {
+      initialProfile: {
+        handle: 'erin',
+        displayName: 'Erin',
+        bio: '',
+        hasAvatar: 0,
+      },
+      onSignOut: vi.fn(),
+      signingOut: false,
+    }),
+  );
+  expect(visibleText()).toContain('Choose your username');
+  await type('handle', 'alice');
+  await submit();
+  await reply(
+    pending('/api/people/self'),
+    { error: 'That username is unavailable. Choose another.' },
+    409,
+  );
+  expect(visibleText()).toContain('That username is unavailable');
+  expect(renderer.root.findByProps({ id: 'handle' }).props.value).toBe('alice');
+  expect(renderer.root.findAllByType(AvatarForm)).toHaveLength(0);
+  await type('handle', 'erin_photos');
+  await submit();
+  await reply(pending('/api/people/self'), {
+    profile: {
+      handle: 'erin_photos',
+      displayName: 'Erin',
+      bio: '',
+      hasAvatar: 0,
+    },
+  });
+  expect(location.hash).toBe('#profile/alice');
+  await act(async () => renderer.root.findByType(AvatarForm).props.onChange());
+  expect(location.hash).toBe('#profile/alice');
+  expect(pending('/api/people/alice')).toBeDefined();
 });

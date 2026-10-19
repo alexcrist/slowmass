@@ -142,20 +142,6 @@ p {
   line-height: 18px;
   text-align: center;
 }
-.nav-lock {
-  position: absolute;
-  right: -7px;
-  bottom: -5px;
-  display: flex;
-  padding: 2px;
-  border-radius: 50%;
-  background: var(--paper);
-}
-.nav-link .nav-lock svg {
-  width: 12px;
-  height: 12px;
-  stroke-width: 1.8;
-}
 .app-navigation {
   position: fixed;
   z-index: 10;
@@ -1680,6 +1666,11 @@ a.profile-tab {
   height: 100%;
   object-fit: contain;
   background: var(--paper);
+}
+.event-photo-button {
+  display: block;
+  padding: 0;
+  cursor: zoom-in;
 }
 .event-details > p {
   margin: 0 0 12px;

@@ -595,4 +595,11 @@ The same release also replaces the invitation calendar date with “This link wo
 - [x] Remove the event activity composer’s extra top margin; link host, guest, activity, and host-dialog avatars only when the person has a profile. Event-only viewers reach the existing profile setup gate.
 - [x] Join inputs and icon-only submit controls across regular, invitation, event, and installed-app link sign-in. Remove account-creation/password reassurance, duplicate name help and uniqueness copy, plus account-switch/retry-email options throughout sign-in and onboarding.
 - [x] Pass formatting, lint, types, boundary checks, all 509 tests, and the production build on Node 24. Component checks cover avatar destinations, unavailable profiles, and the setup gate. No browser or visual testing.
+- [x] Deploy commit `76adf6e` through [GitHub run 39179702210](https://github.com/alexcrist/slowmass/actions/runs/39179702210) as Worker `cb0edea2-5e13-486d-bcd7-d0aa700b2263`. No pending migrations; production asset, sign-in and private-boundary HTTP checks passed.
+
+## Event photo modal and explicit username setup — October 18, 2026
+
+- [x] Make the signed-in event cover open the shared large-photo modal on phones and desktop, retaining authorized media delivery and the existing close/focus behavior.
+- [x] Remove navigation lock badges for event-only members. Before entering photo features, explicitly ask them to choose or confirm their username, then add a profile photo. Keep conflicts retryable, preserve the selected destination, update an own-profile destination on rename, and retain a return to the event. The existing profile endpoint validates usernames; no migration is needed.
+- [ ] Pass formatting, lint, types, boundary checks, component/integration tests, and the production build. No browser or visual testing.
 - [ ] Deploy and verify production assets and access boundaries by direct HTTP.

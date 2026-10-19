@@ -1,7 +1,6 @@
 import type { MouseEvent } from 'react';
 import { currentRoute, profileHref } from '../../navigation';
 import { SettingsIcon } from '../../navigation/SettingsIcon';
-import { LockIcon } from '../../ui/LockIcon';
 import type { Profile } from './ProfileForm';
 
 const activityPath =
@@ -73,7 +72,7 @@ export function MemberNavigation({
       </a>
       <div className="primary-nav">
         {destinations.map((item) => {
-          const locked =
+          const needsSetup =
             eventOnly && !['events', 'notifications'].includes(item.page);
           const href =
             item.page === 'profile'
@@ -81,7 +80,7 @@ export function MemberNavigation({
               : `#${item.page}`;
           const route = currentRoute();
           const canRefresh =
-            !locked &&
+            !needsSetup &&
             ['feed', 'events', 'notifications', 'profile'].includes(
               item.page,
             ) &&
@@ -109,7 +108,9 @@ export function MemberNavigation({
               aria-description={
                 [
                   unreadDescription,
-                  locked ? 'Add a profile photo to use this feature.' : '',
+                  needsSetup
+                    ? 'Set up your username and profile photo to use this feature.'
+                    : '',
                   canRefresh ? 'Select again to load the latest updates.' : '',
                 ]
                   .filter(Boolean)
@@ -141,11 +142,6 @@ export function MemberNavigation({
                       </span>
                     )}
                   </>
-                )}
-                {locked && (
-                  <span className="nav-lock">
-                    <LockIcon />
-                  </span>
                 )}
               </span>
               <span className="nav-label" aria-hidden="true">

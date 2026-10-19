@@ -71,6 +71,7 @@ function MemberPages({
   const pageKey =
     page === 'profile' ? route.split('/').slice(0, 2).join('/') : route;
   const [profile, setProfile] = useState(initialProfile);
+  const [usernameConfirmed, setUsernameConfirmed] = useState(false);
   const [avatarVersion, setAvatarVersion] = useState(0);
   const [pageVersion, setPageVersion] = useState(0);
   const ready = Boolean(profile?.hasAvatar);
@@ -98,6 +99,9 @@ function MemberPages({
     if (ready && !wasReady.current) heading.current?.focus();
     wasReady.current = ready;
   }, [ready]);
+  useEffect(() => {
+    if (usernameConfirmed) heading.current?.focus();
+  }, [usernameConfirmed]);
   const notifications = useNotificationCount(active);
   const deviceSetup = useDeviceSetup(initialDeviceSetup, ready);
   // The device-setup row counts once per step until seen on this device.
@@ -138,7 +142,7 @@ function MemberPages({
     const created = profile === null;
     setProfile(value);
     // A new member's name keeps them on the event that brought them here;
-    // anyone else adds a profile photo next.
+    // anyone else chooses a username and adds a profile photo next.
     if (created) {
       if (page !== 'event') location.hash = '#photo';
     } else location.hash = eventOnly ? '#settings' : profileHref(value.handle);
@@ -149,6 +153,15 @@ function MemberPages({
     // Keep gated destinations in the address, so finishing opens the page
     // originally selected. Standalone photo setup from Settings opens Feed.
     if (eventOnly && page === 'photo') location.hash = '#feed';
+  }
+  function usernameSaved(value: Profile) {
+    const ownDestination =
+      page === 'profile' && (!handle || handle === profile?.handle);
+    setProfile(value);
+    setUsernameConfirmed(true);
+    // Renaming must not leave an own-profile destination pointing at the
+    // released username. Other members' destinations stay unchanged.
+    if (ownDestination) location.hash = profileHref(value.handle, profileTab);
   }
   function eventPage() {
     return handle ? (
@@ -162,14 +175,24 @@ function MemberPages({
       return (
         <>
           <p className="onboarding-intro">
-            Add a profile photo to use the rest of slowmass. Your profile is
-            private, and follow requests need your approval.
+            {usernameConfirmed
+              ? 'Add a profile photo to share photos and follow friends.'
+              : 'Choose a username, then add a profile photo to share photos and follow friends.'}{' '}
+            Your profile is private, and follow requests need your approval.
           </p>
-          <AvatarForm
-            handle={profile!.handle}
-            onChange={photoSaved}
-            onboarding
-          />
+          {usernameConfirmed ? (
+            <AvatarForm
+              handle={profile!.handle}
+              onChange={photoSaved}
+              onboarding
+            />
+          ) : (
+            <ProfileForm
+              profile={profile}
+              onSave={usernameSaved}
+              mode="username"
+            />
+          )}
           <a
             className="text-button setup-return"
             href={eventRoute ? `#${eventRoute}` : '#events'}
@@ -193,13 +216,13 @@ function MemberPages({
           <Notifications onChange={notifications.refresh} focus={handle} />
         );
       case 'edit':
-        return <ProfileForm profile={profile} onSave={saved} nameOnly />;
+        return <ProfileForm profile={profile} onSave={saved} mode="name" />;
       case 'settings':
         return (
           <>
             <nav className="settings-links" aria-label="Settings">
               <a className="settings-row" href="#photo">
-                Add a profile photo
+                Set up profile
               </a>
               <a className="settings-row" href="#edit">
                 Edit name
@@ -242,9 +265,9 @@ function MemberPages({
           <p className="onboarding-intro">
             {page === 'event'
               ? 'Hosts and other guests see this name.'
-              : 'Next, you’ll add a profile photo.'}
+              : 'Next, you’ll choose a username and add a profile photo.'}
           </p>
-          <ProfileForm profile={null} onSave={saved} nameOnly />
+          <ProfileForm profile={null} onSave={saved} mode="name" />
         </>
       );
     switch (page) {
@@ -406,7 +429,9 @@ function MemberPages({
               : !active
                 ? 'Add a profile photo'
                 : needsPhoto
-                  ? 'Share photos and follow friends'
+                  ? usernameConfirmed
+                    ? 'Add a profile photo'
+                    : 'Choose your username'
                   : eventOnly && page === 'edit'
                     ? 'Edit name'
                     : titles[page] || 'slowmass'}

@@ -735,11 +735,13 @@ it('drops an invite link from the address when a member is already signed in', a
   ).toBe(false);
 });
 
-it('sends members who named themselves outside an event on to add a profile photo', async () => {
+it('sends members who named themselves outside an event on to username and photo setup', async () => {
   location.hash = '';
   await mount(createElement(Welcome));
   await reply(pending('/api/bootstrap'), { ...signedIn, profile: null });
-  expect(visibleText()).toContain('Next, you’ll add a profile photo.');
+  expect(visibleText()).toContain(
+    'Next, you’ll choose a username and add a profile photo.',
+  );
   await act(async () => {
     renderer.root.findByProps({ id: 'display-name' }).props.onChange({
       target: { value: 'Erin' },
@@ -951,7 +953,7 @@ it.each([null, { ...ownProfile, hasAvatar: 0 }])(
     await mount(createElement(Welcome));
     await reply(pending('/api/bootstrap'), { ...signedIn, profile });
     expect(visibleText()).toContain(
-      profile ? 'Share photos and follow friends' : 'What’s your name?',
+      profile ? 'Choose your username' : 'What’s your name?',
     );
     expect(
       renderer.root.findAllByProps({ 'aria-label': 'Main navigation' }),
@@ -1039,6 +1041,15 @@ it.each([false, true])(
       false,
     );
     await go('#photo');
+    expect(visibleText()).toContain('Choose your username');
+    await act(async () =>
+      renderer.root
+        .findByType('form')
+        .props.onSubmit({ preventDefault: vi.fn() }),
+    );
+    await reply(pending('/api/people/self'), {
+      profile: { ...ownProfile, hasAvatar: 0 },
+    });
     expect(renderer.root.findByType(AvatarForm).props.onboarding).toBe(true);
     await act(async () =>
       renderer.root.findByType(AvatarForm).props.onChange(),
