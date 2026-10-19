@@ -1642,3 +1642,104 @@ it('keeps unpublished and deleted events out of previews and closes admission wi
   await runtime.db.prepare("DELETE FROM avatar WHERE user_id='alice'").run();
   expect(await check(token)).toMatchObject({ open: false });
 });
+
+it('exports a private calendar copy for hosts and event-only viewers without RSVP or invitation credentials', async () => {
+  const startsAt = Date.UTC(2030, 2, 10, 9, 30);
+  const { id, token, url } = await event(
+    details({ startsAt, endsAt: startsAt + 7200000 }),
+  );
+  const path = `/api/events/${id}/calendar.ics`;
+  expect((await runtime.request(null, path)).status).toBe(401);
+  expect((await runtime.request('bob', path)).status).toBe(404);
+  expect((await runtime.request('david', path)).status).toBe(404);
+  await open('david', token);
+  for (const actor of ['alice', 'david']) {
+    const response = await runtime.request(actor, path);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toBe(
+      'text/calendar; charset=utf-8',
+    );
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(response.headers.get('Content-Disposition')).toBe(
+      'attachment; filename="slowmass-event.ics"',
+    );
+    const file = (await response.text()).replace(/\r\n /g, '');
+    expect(file).toContain(`UID:${id}@localhost\r\n`);
+    expect(file).toContain('SUMMARY:Dinner\r\n');
+    expect(file).toContain(
+      'DTSTART:20300310T093000Z\r\nDTEND:20300310T113000Z',
+    );
+    expect(file).toContain('LOCATION:1 Main St\r\n');
+    expect(file).toContain('DESCRIPTION:Bring a dish');
+    expect(file).toContain(`URL:http://localhost:8787/#event/${id}\r\n`);
+    expect(file).not.toContain(token);
+    expect(file).not.toContain(url);
+    expect(file).not.toContain('@example.com');
+    expect(file).not.toContain('ATTENDEE:');
+  }
+  expect(
+    await runtime.db
+      .prepare('SELECT COUNT(*) AS count FROM event_response')
+      .first('count'),
+  ).toBe(0);
+  const again = await runtime.request('david', path);
+  expect(await again.text()).toContain(`UID:${id}@localhost`);
+  await newLinkVersion(id);
+  expect((await runtime.request('david', path)).status).toBe(404);
+});
+
+it('rechecks calendar access after blocks, removal, expired sessions and inactive membership', async () => {
+  const { id, token } = await event();
+  const path = `/api/events/${id}/calendar.ics`;
+  await open('bob', token);
+  expect((await runtime.request('bob', path)).status).toBe(200);
+  for (const pair of [
+    ['alice', 'bob'],
+    ['bob', 'alice'],
+  ]) {
+    await runtime.db
+      .prepare('INSERT INTO block VALUES(?,?,1)')
+      .bind(...pair)
+      .run();
+    expect((await runtime.request('bob', path)).status).toBe(404);
+    await runtime.db.prepare('DELETE FROM block').run();
+  }
+  await runtime.db
+    .prepare("DELETE FROM event_access WHERE user_id='bob'")
+    .run();
+  expect((await runtime.request('bob', path)).status).toBe(404);
+  await open('bob', token);
+  await runtime.db
+    .prepare("UPDATE membership SET status='disabled' WHERE user_id='alice'")
+    .run();
+  expect((await runtime.request('bob', path)).status).toBe(404);
+  await runtime.db
+    .prepare("UPDATE membership SET status='active' WHERE user_id='alice'")
+    .run();
+  await runtime.db
+    .prepare("UPDATE session SET expiresAt=? WHERE userId='bob'")
+    .bind(new Date(0).toISOString())
+    .run();
+  expect((await runtime.request('bob', path)).status).toBe(401);
+});
+
+it('does not export unpublished, deleted or cancelled events, including after a successful download', async () => {
+  const { id } = await draft();
+  const path = `/api/events/${id}/calendar.ics`;
+  expect((await runtime.request('alice', path)).status).toBe(404);
+  await publish(id);
+  expect((await runtime.request('alice', path)).status).toBe(200);
+  await runtime.request('alice', `/api/events/${id}/cancel`, 'POST', {
+    messageId: crypto.randomUUID(),
+  });
+  expect((await runtime.request('alice', path)).status).toBe(404);
+  const deleted = await event();
+  await runtime.db
+    .prepare("UPDATE event SET state='deleted' WHERE id=?")
+    .bind(deleted.id)
+    .run();
+  expect(
+    (await runtime.request('alice', `/api/events/${deleted.id}/calendar.ics`))
+      .status,
+  ).toBe(404);
+});

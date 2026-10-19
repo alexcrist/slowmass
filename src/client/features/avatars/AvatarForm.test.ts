@@ -44,7 +44,6 @@ async function setup() {
     renderer = create(
       createElement(AvatarForm, {
         handle: 'alice',
-        onboarding: true,
         onChange: vi.fn(),
       }),
       {

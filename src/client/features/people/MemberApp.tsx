@@ -11,6 +11,7 @@ import { InstallApp, InstallProvider } from '../install';
 import { InviteLinkDialog } from '../invite-links';
 import { ProfileForm, type Profile } from './ProfileForm';
 import { ProfilePage } from './ProfilePage';
+import { ProfileSetup } from './ProfileSetup';
 import { Discover } from './Discover';
 import { Connections, type Kind } from './Connections';
 import { HeaderActions, MemberNavigation } from './MemberNavigation';
@@ -67,12 +68,11 @@ function MemberPages({
   onSignOut,
   signingOut,
 }: MemberProps) {
-  const { route, backRoute, eventRoute } = useRoute();
+  const { route, backRoute, eventRoute, navigate } = useRoute();
   const [page, handle, profileTab] = route.split('/');
   const pageKey =
     page === 'profile' ? route.split('/').slice(0, 2).join('/') : route;
   const [profile, setProfile] = useState(initialProfile);
-  const [usernameConfirmed, setUsernameConfirmed] = useState(false);
   const [avatarVersion, setAvatarVersion] = useState(0);
   const [pageVersion, setPageVersion] = useState(0);
   const ready = Boolean(profile?.hasAvatar);
@@ -100,9 +100,6 @@ function MemberPages({
     if (ready && !wasReady.current) heading.current?.focus();
     wasReady.current = ready;
   }, [ready]);
-  useEffect(() => {
-    if (usernameConfirmed) heading.current?.focus();
-  }, [usernameConfirmed]);
   const notifications = useNotificationCount(active);
   const deviceSetup = useDeviceSetup(initialDeviceSetup, ready);
   // The device-setup row counts once per step until seen on this device.
@@ -151,18 +148,15 @@ function MemberPages({
   function photoSaved() {
     setProfile((current) => (current ? { ...current, hasAvatar: 1 } : current));
     setAvatarVersion((version) => version + 1);
-    // Keep gated destinations in the address, so finishing opens the page
-    // originally selected. Standalone photo setup from Settings opens Feed.
-    if (eventOnly && page === 'photo') location.hash = '#feed';
   }
-  function usernameSaved(value: Profile) {
+  function setupFinished(value: Profile) {
     const ownDestination =
       page === 'profile' && (!handle || handle === profile?.handle);
     setProfile(value);
-    setUsernameConfirmed(true);
-    // Renaming must not leave an own-profile destination pointing at the
-    // released username. Other members' destinations stay unchanged.
-    if (ownDestination) location.hash = profileHref(value.handle, profileTab);
+    setAvatarVersion((version) => version + 1);
+    // Preserve the requested destination, including an own-profile rename.
+    if (ownDestination) navigate(profileHref(value.handle, profileTab));
+    else if (page === 'photo') navigate('#feed');
   }
   function eventPage() {
     return handle ? (
@@ -172,35 +166,14 @@ function MemberPages({
     );
   }
   function eventOnlyScreen() {
-    if (needsPhoto)
+    if (needsPhoto && profile)
       return (
-        <>
-          <p className="onboarding-intro">
-            {usernameConfirmed
-              ? 'Add a profile photo to share photos and follow friends.'
-              : 'Choose a username, then add a profile photo to share photos and follow friends.'}{' '}
-            Your profile is private, and follow requests need your approval.
-          </p>
-          {usernameConfirmed ? (
-            <AvatarForm
-              handle={profile!.handle}
-              onChange={photoSaved}
-              onboarding
-            />
-          ) : (
-            <ProfileForm
-              profile={profile}
-              onSave={usernameSaved}
-              mode="username"
-            />
-          )}
-          <a
-            className="text-button setup-return"
-            href={eventRoute ? `#${eventRoute}` : '#events'}
-          >
-            {eventRoute ? 'Back to event' : 'Back to events'}
-          </a>
-        </>
+        <ProfileSetup
+          profile={profile}
+          eventRoute={eventRoute}
+          startImmediately={page === 'photo'}
+          onFinish={setupFinished}
+        />
       );
     switch (page) {
       case 'events':
@@ -420,24 +393,20 @@ function MemberPages({
           aria-labelledby="screen-title"
         >
           {active && back && <BackControl {...back} />}
-          <h1
-            id="screen-title"
-            ref={heading}
-            tabIndex={-1}
-            className={active && !needsPhoto ? 'visually-hidden' : undefined}
-          >
-            {profile === null
-              ? 'What’s your name?'
-              : !active
-                ? 'Add a profile photo'
-                : needsPhoto
-                  ? usernameConfirmed
-                    ? 'Add a profile photo'
-                    : 'Choose your username'
-                  : eventOnly && page === 'edit'
-                    ? 'Edit name'
-                    : titles[page] || 'slowmass'}
-          </h1>
+          {!needsPhoto && (
+            <h1
+              id="screen-title"
+              ref={heading}
+              tabIndex={-1}
+              className={active ? 'visually-hidden' : undefined}
+            >
+              {profile === null
+                ? 'What’s your name?'
+                : eventOnly && page === 'edit'
+                  ? 'Edit name'
+                  : titles[page] || 'slowmass'}
+            </h1>
+          )}
           {screen()}
         </section>
       </PageHistoryProvider>

@@ -24,6 +24,10 @@ Members invite friends with their own invite link, from the mail icon beside Set
 
 Event appearance is implemented locally: hosts choose from nine color themes and six font pairings using separate Color theme and Fonts dialogs on Edit event. The full interface is themed while viewing or editing the event and in its signed-out preview; extra fonts load for the selected pairing or visible font-picker previews. Migration 0033 is additive and classified for automatic deployment. All 589 tests and the production build pass; production rollout is pending. See [event appearance](docs/implementation-plan.md#event-colors-and-font-pairings--october-18-2026).
 
+Account setup for event-only members is updated locally: photo-app destinations explain that a username and profile photo are required, with Continue and Back to event actions. Continuing opens one screen with both fields and Finish. Photos stay as local drafts until Finish; completed setup preserves the requested destination. Production rollout is pending. See [combined account setup](docs/implementation-plan.md#combined-account-setup-for-event-guests--october-18-2026).
+
+Events now have a local Add to calendar picker for Google Calendar, Apple Calendar, and Outlook, plus an outline crown beside the hosts. Calendar copies exclude the invitation credential; Apple downloads recheck session and event access. Production rollout and provider/device import verification are pending. See [calendar picker and crown](docs/implementation-plan.md#event-calendar-picker-and-host-crown--october-18-2026).
+
 The operating target is $0/month within Cloudflare's free allowances, followed by measured upgrades. See [architecture](docs/architecture.md) for constraints and the scaling path.
 
 Activity follow requests and new followers show private avatars and inline actions. Eligible follower items offer a normal Follow back request with cross-device dismissal; the unread badge is green. See the [Activity release](docs/setup.md#follow-back-activity-release--october-13-2026) for deployment and verification.

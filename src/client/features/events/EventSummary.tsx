@@ -58,11 +58,13 @@ export function EventSummary({
   event,
   hosts,
   actions,
+  onAddToCalendar,
 }: {
   event: EventDetails;
   hosts: Host[];
   // Controls shown beside the title, such as the host's menu.
   actions?: ReactNode;
+  onAddToCalendar?: () => void;
 }) {
   const when = eventWhen(event);
   const [photoOpen, setPhotoOpen] = useState(false);
@@ -153,8 +155,31 @@ export function EventSummary({
               <span>{event.location}</span>
             </p>
           )}
+          {onAddToCalendar && (
+            <button
+              type="button"
+              className="button-link event-calendar-button"
+              aria-haspopup="dialog"
+              onClick={onAddToCalendar}
+            >
+              Add to calendar
+            </button>
+          )}
           {hosts.length > 0 && (
             <div className="event-hosts">
+              <svg
+                className="event-host-crown"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="m3 6 4.5 4L12 3l4.5 7L21 6l-2 12H5L3 6Z" />
+                <path d="M5 21h14" />
+              </svg>
               <span className="event-host-photos">
                 {hosts.map((host) => (
                   <PersonPhoto

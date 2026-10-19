@@ -242,11 +242,12 @@ p {
 .onboarding-intro {
   margin: 0 0 24px;
 }
-.setup-return {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  margin-top: 16px;
+.setup-actions {
+  display: grid;
+  gap: 12px;
+}
+.setup-actions > .primary-button {
+  margin: 0;
 }
 .onboarding .avatar-form {
   margin-bottom: 0;
@@ -1741,6 +1742,19 @@ a.profile-tab {
 .event-information > p {
   margin: 0;
 }
+.event-calendar-button {
+  justify-self: start;
+  font-size: 14px;
+}
+.event-calendar-options {
+  display: grid;
+  gap: 12px;
+}
+.event-host-crown {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
 .event-detail-row {
   display: flex;
   align-items: flex-start;
@@ -1761,6 +1775,7 @@ a.profile-tab {
 }
 .event-hosts {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
 }

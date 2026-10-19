@@ -14,6 +14,7 @@ import {
   declineHosting,
   deleteMessage,
   eventLog,
+  eventCalendar,
   eventMediaKey,
   eventPreviewMediaKey,
   findEvent,
@@ -109,6 +110,17 @@ events.post('/', jsonLimit, async (c) => {
 events.get('/:id', async (c) => {
   const event = await findEvent(c.env, c.get('userId'), c.req.param('id'));
   return event ? c.json({ event }) : c.json(notFound, 404);
+});
+events.get('/:id/calendar.ics', async (c) => {
+  const calendar = await eventCalendar(
+    c.env,
+    c.get('userId'),
+    c.req.param('id'),
+  );
+  if (!calendar) return c.json(notFound, 404);
+  c.header('Content-Type', 'text/calendar; charset=utf-8');
+  c.header('Content-Disposition', 'attachment; filename="slowmass-event.ics"');
+  return c.body(calendar);
 });
 events.patch('/:id/appearance', bodyLimit({ maxSize: 1024 }), async (c) => {
   const body = (await json(c)) as Record<string, unknown> | null;

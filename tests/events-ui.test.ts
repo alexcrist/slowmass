@@ -1,3 +1,4 @@
+import { mockUploads } from './support/upload';
 import { act, createElement, type ReactElement } from 'react';
 import {
   create,
@@ -80,6 +81,7 @@ function view(overrides: Record<string, unknown> = {}) {
 }
 const host = { isHost: true, isCreator: true, response: null };
 beforeEach(() => {
+  mockUploads((path, options) => fetch(path, options));
   authMocks.magicLink.mockReset();
   requests = [];
   const events = new EventTarget();
@@ -535,7 +537,7 @@ it('links available event avatars to profile setup for viewers without a photo',
     location.hash = profileLinks[0].props.href;
     window.dispatchEvent(new Event('hashchange'));
   });
-  expect(visibleText()).toContain('Choose your username');
+  expect(visibleText()).toContain('Set up your account');
   expect(
     requests.some((request) => request.path.startsWith('/api/people/alice')),
   ).toBe(false);
@@ -1123,13 +1125,19 @@ it.each(['feed', 'people', 'compose', 'profile/erin'])(
       location.hash = `#${destination}`;
       window.dispatchEvent(new Event('hashchange'));
     });
-    expect(visibleText()).toContain('Choose your username');
+    expect(visibleText()).toContain('Set up your account');
     expect(visibleText()).toContain('follow requests need your approval');
     expect(renderer.root.findAllByType(AvatarForm)).toHaveLength(0);
     const back = renderer.root.findByProps({
-      className: 'text-button setup-return',
+      className: 'button-link',
     });
     expect(back.props.href).toBe(`#event/${id}`);
+    expect(requests.slice(before)).toEqual([]);
+    expect(button('Continue').props.className).toBe('primary-button');
+    await click('Continue');
+    expect(button('Finish').props.disabled).toBe(true);
+    expect(button('Choose profile photo')).toBeDefined();
+    await selectSetupPhoto();
     expect(requests.slice(before)).toEqual([]);
     await type('handle', 'erin_photos');
     await submit();
@@ -1147,13 +1155,13 @@ it.each(['feed', 'people', 'compose', 'profile/erin'])(
         hasAvatar: 0,
       },
     });
+    expect(visibleText()).toContain('Set up your account');
+    expect(button('Finishing…').props.disabled).toBe(true);
+    await reply(pending('/api/avatar'), { ok: true });
+    expect(
+      requests.some((request) => request.path === '/api/people/erin'),
+    ).toBe(false);
     await act(async () => window.dispatchEvent(new Event('hashchange')));
-    expect(visibleText()).toContain('Add a profile photo');
-    expect(button('Add profile photo')).toBeDefined();
-    // AvatarForm's callback fires only after its upload succeeds.
-    await act(async () =>
-      renderer.root.findByType(AvatarForm).props.onChange(),
-    );
     expect(location.hash).toBe(
       destination.startsWith('profile/')
         ? '#profile/erin_photos'
@@ -1163,7 +1171,7 @@ it.each(['feed', 'people', 'compose', 'profile/erin'])(
       renderer.root.findAllByProps({ className: 'nav-lock' }),
     ).toHaveLength(0);
     expect(renderer.root.findAllByType(AvatarForm)).toHaveLength(0);
-    expect(visibleText()).not.toContain('Choose your username');
+    expect(visibleText()).not.toContain('Set up your account');
   },
 );
 
@@ -1187,7 +1195,7 @@ it('lets members leave setup for their event without changing access', async () 
     window.dispatchEvent(new Event('hashchange'));
   });
   const href = renderer.root.findByProps({
-    className: 'text-button setup-return',
+    className: 'button-link',
   }).props.href;
   await act(async () => {
     location.hash = href;
@@ -1319,7 +1327,12 @@ it('keeps username conflicts in setup and preserves another member’s destinati
       signingOut: false,
     }),
   );
-  expect(visibleText()).toContain('Choose your username');
+  expect(visibleText()).toContain('Set up your account');
+  expect(
+    renderer.root.findByProps({ className: 'button-link' }).props.href,
+  ).toBe('#events');
+  await click('Continue');
+  await selectSetupPhoto();
   await type('handle', 'alice');
   await submit();
   await reply(
@@ -1329,7 +1342,9 @@ it('keeps username conflicts in setup and preserves another member’s destinati
   );
   expect(visibleText()).toContain('That username is unavailable');
   expect(renderer.root.findByProps({ id: 'handle' }).props.value).toBe('alice');
-  expect(renderer.root.findAllByType(AvatarForm)).toHaveLength(0);
+  expect(requests.some((request) => request.path === '/api/avatar')).toBe(
+    false,
+  );
   await type('handle', 'erin_photos');
   await submit();
   await reply(pending('/api/people/self'), {
@@ -1341,7 +1356,111 @@ it('keeps username conflicts in setup and preserves another member’s destinati
     },
   });
   expect(location.hash).toBe('#profile/alice');
-  await act(async () => renderer.root.findByType(AvatarForm).props.onChange());
+  await reply(pending('/api/avatar'), { ok: true });
   expect(location.hash).toBe('#profile/alice');
   expect(pending('/api/people/alice')).toBeDefined();
+});
+
+async function selectSetupPhoto() {
+  await act(async () =>
+    renderer.root.findByType(AvatarForm).props.onSelect({
+      id: crypto.randomUUID(),
+      blob: new Blob(['synthetic crop'], { type: 'image/webp' }),
+    }),
+  );
+}
+
+it.each([false, true])(
+  'offers calendar providers below the location and above the crowned hosts (complete profile: %s)',
+  async (linkProfiles) => {
+    await mount(createElement(EventPage, { id, linkProfiles }));
+    await reply(pending(`/api/events/${id}`), {
+      event: view({ counts: null }),
+    });
+    const info = renderer.root.findByProps({ className: 'event-information' });
+    const children = info.children.filter(
+      (child): child is ReactTestInstance => typeof child !== 'string',
+    );
+    const locationIndex = children.findIndex(
+      (child) => child.props.className === 'event-detail-row event-location',
+    );
+    expect(children[locationIndex + 1]).toBe(button('Add to calendar'));
+    expect(children[locationIndex + 2].props.className).toBe('event-hosts');
+    const hosts = children[locationIndex + 2];
+    expect(hosts.findByType('svg').props['aria-hidden']).toBe('true');
+    expect(hosts.children[0]).toBe(hosts.findByType('svg'));
+    const before = requests.length;
+    await click('Add to calendar');
+    const providers = renderer.root
+      .findByProps({ 'aria-label': 'Calendar provider' })
+      .findAllByType('a');
+    expect(providers.map(labelText)).toEqual([
+      'Google Calendar',
+      'Apple Calendar',
+      'Outlook',
+    ]);
+    expect(new URL(providers[0].props.href).searchParams.get('text')).toBe(
+      'Dinner',
+    );
+    expect(providers[1].props.href).toBe(`/api/events/${id}/calendar.ics`);
+    expect(new URL(providers[2].props.href).searchParams.get('subject')).toBe(
+      'Dinner',
+    );
+    for (const provider of providers) {
+      expect(provider.props.target).toBe('_blank');
+      expect(provider.props.rel).toBe('noopener noreferrer');
+      expect(decodeURIComponent(provider.props.href)).not.toContain(token);
+    }
+    expect(visibleText()).toContain('one hour');
+    expect(requests.slice(before)).toEqual([]);
+    await act(async () =>
+      renderer.root
+        .findByType('dialog')
+        .props.onCancel({ preventDefault: vi.fn() }),
+    );
+    expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
+    await click('Add to calendar');
+    await click('Close add to calendar');
+    expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
+  },
+);
+
+it('keeps the calendar action above multiple hosts when there is no location and omits the default-duration note for explicit ends', async () => {
+  await mount(createElement(EventPage, { id, linkProfiles: true }));
+  await reply(pending(`/api/events/${id}`), {
+    event: view({
+      counts: null,
+      location: '',
+      endsAt: startsAt + 7200000,
+      hosts: [
+        ...details.hosts,
+        { ...details.hosts[0], handle: 'bob', displayName: 'Bob' },
+      ],
+    }),
+  });
+  expect(visibleText()).toContain('Alice and Bob');
+  expect(
+    renderer.root.findAllByProps({ className: 'event-host-crown' }),
+  ).toHaveLength(1);
+  const info = renderer.root.findByProps({ className: 'event-information' });
+  expect(info.children.indexOf(button('Add to calendar'))).toBeLessThan(
+    info.children.indexOf(
+      renderer.root.findByProps({ className: 'event-hosts' }),
+    ),
+  );
+  await click('Add to calendar');
+  expect(visibleText()).not.toContain('one hour');
+  await act(async () => renderer.unmount());
+});
+
+it('does not offer calendar export for cancelled or inaccessible events', async () => {
+  await mount(createElement(EventPage, { id, linkProfiles: false }));
+  await reply(pending(`/api/events/${id}`), {
+    event: view({ cancelled: true, counts: null }),
+  });
+  expect(visibleText()).not.toContain('Add to calendar');
+  await act(async () => renderer.unmount());
+  await mount(createElement(EventPage, { id, linkProfiles: false }));
+  await reply(pending(`/api/events/${id}`), { error: 'Event not found.' }, 404);
+  expect(visibleText()).not.toContain('Add to calendar');
 });

@@ -2,7 +2,7 @@
 
 A static React application served by Workers Assets. [Welcome](features/welcome/README.md) handles email login (including signing in through an invite or event link) and logout, then mounts [member screens](features/people/README.md). These compose [avatars](features/avatars/README.md), [posts](features/posts/README.md), [interactions](features/interactions/README.md), [events](features/events/README.md), [invite links](features/invite-links/README.md), and [notifications](features/notifications/README.md), using the shared [API client](api/README.md).
 
-New members give only a name, then are asked for a profile photo unless they arrived through an event; until they add one they use events, Activity, and Settings. Installation and notification opt-in are available from Settings; [device setup](features/device-setup/README.md) suggests them once in Activity on phones and tablets.
+New members give only a name, then choose a username and profile photo on one setup screen unless they arrived through an event; until they add one they use events, Activity, and Settings. Installation and notification opt-in are available from Settings; [device setup](features/device-setup/README.md) suggests them once in Activity on phones and tablets.
 
 [Install support](features/install/README.md) adds a standalone web-app manifest, mobile-only install instructions and browser install prompts where available.
 

@@ -955,7 +955,7 @@ it.each([null, { ...ownProfile, hasAvatar: 0 }])(
     await mount(createElement(Welcome));
     await reply(pending('/api/bootstrap'), { ...signedIn, profile });
     expect(visibleText()).toContain(
-      profile ? 'Choose your username' : 'What’s your name?',
+      profile ? 'Set up your account' : 'What’s your name?',
     );
     expect(
       renderer.root.findAllByProps({ 'aria-label': 'Main navigation' }),
@@ -1043,7 +1043,13 @@ it.each([false, true])(
       false,
     );
     await go('#photo');
-    expect(visibleText()).toContain('Choose your username');
+    expect(visibleText()).toContain('Set up your account');
+    await act(async () =>
+      renderer.root.findByType(AvatarForm).props.onSelect({
+        id: crypto.randomUUID(),
+        blob: new Blob(['synthetic'], { type: 'image/webp' }),
+      }),
+    );
     await act(async () =>
       renderer.root
         .findByType('form')
@@ -1052,10 +1058,7 @@ it.each([false, true])(
     await reply(pending('/api/people/self'), {
       profile: { ...ownProfile, hasAvatar: 0 },
     });
-    expect(renderer.root.findByType(AvatarForm).props.onboarding).toBe(true);
-    await act(async () =>
-      renderer.root.findByType(AvatarForm).props.onChange(),
-    );
+    await reply(pending('/api/avatar'), { ok: true });
     expect(location.hash).toBe('#feed');
     await go('#feed');
     expect(

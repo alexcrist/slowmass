@@ -34,15 +34,19 @@ function pointerPosition(
   };
 }
 
-export function AvatarForm({
-  handle,
-  onChange,
-  onboarding = false,
-}: {
-  handle: string;
-  onChange: () => void;
-  onboarding?: boolean;
-}) {
+export type PreparedAvatar = { id: string; blob: Blob };
+type AvatarFormProps =
+  | { handle: string; onChange: () => void }
+  | {
+      draft: PreparedAvatar | null;
+      onSelect: (photo: PreparedAvatar) => void;
+      disabled: boolean;
+    };
+
+export function AvatarForm(props: AvatarFormProps) {
+  const selecting = 'onSelect' in props;
+  const disabled = selecting && props.disabled;
+  const [preview, setPreview] = useState('');
   const [version, setVersion] = useState(0);
   const [file, setFile] = useState<File | null>(null);
   const [source, setSource] = useState<{
@@ -59,11 +63,17 @@ export function AvatarForm({
   const canvas = useRef<HTMLCanvasElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const pointers = useRef(new Map<number, CropPoint>());
-  const prepared = useRef<{ id: string; blob: Blob } | null>(null);
+  const prepared = useRef<PreparedAvatar | null>(null);
   const controller = useRef<AbortController | null>(null);
   const image = source?.file === file ? source?.image : null;
 
   useEffect(() => () => controller.current?.abort(), []);
+  useEffect(
+    () => () => {
+      if (preview) URL.revokeObjectURL(preview);
+    },
+    [preview],
+  );
   useEffect(() => {
     if (!file) return;
     let active = true;
@@ -170,7 +180,7 @@ export function AvatarForm({
   }
   async function upload(event: FormEvent) {
     event.preventDefault();
-    if (!image || controller.current) return;
+    if (!image || controller.current || disabled) return;
     pointers.current.clear();
     setBusy(true);
     setProgress({ phase: 'preparing' });
@@ -185,30 +195,39 @@ export function AvatarForm({
       };
       if (request.signal.aborted) return;
       prepared.current = payload;
-      await api('/api/avatar', {
-        method: 'PUT',
-        headers: {
-          'Idempotency-Key': payload.id,
-          'Content-Type': payload.blob.type,
-        },
-        body: payload.blob,
-        signal: request.signal,
-        onUploadProgress: (percent) => {
-          if (!request.signal.aborted)
-            setProgress({
-              phase: percent === 100 ? 'processing' : 'uploading',
-              percent,
-            });
-        },
-      });
+      if (selecting) {
+        setPreview(URL.createObjectURL(payload.blob));
+        props.onSelect(payload);
+      } else {
+        await api('/api/avatar', {
+          method: 'PUT',
+          headers: {
+            'Idempotency-Key': payload.id,
+            'Content-Type': payload.blob.type,
+          },
+          body: payload.blob,
+          signal: request.signal,
+          onUploadProgress: (percent) => {
+            if (!request.signal.aborted)
+              setProgress({
+                phase: percent === 100 ? 'processing' : 'uploading',
+                percent,
+              });
+          },
+        });
+      }
       if (request.signal.aborted) return;
       setVersion((value) => value + 1);
       setFile(null);
       setSource(null);
       prepared.current = null;
       if (input.current) input.current.value = '';
-      setMessage('Profile photo saved.');
-      onChange();
+      setMessage(
+        selecting
+          ? 'Photo selected. Press Finish to save your account.'
+          : 'Profile photo saved.',
+      );
+      if (!selecting) props.onChange();
     } catch (failure) {
       if (!request.signal.aborted)
         setError(failure instanceof Error ? failure.message : 'Upload failed.');
@@ -221,30 +240,41 @@ export function AvatarForm({
   }
   return (
     <section className="avatar-form" aria-label="Profile photo">
-      {!onboarding && <h3>Profile photo</h3>}
-      {!onboarding && (
-        <ProfilePhoto key={version} handle={handle} version={version} />
+      <h3>Profile photo</h3>
+      {!selecting && (
+        <ProfilePhoto key={version} handle={props.handle} version={version} />
+      )}
+      {selecting && preview && (
+        <img
+          className="avatar"
+          src={preview}
+          alt="Selected profile photo"
+          width={96}
+          height={96}
+        />
       )}
       <div className="avatar-choose">
         <button
           type="button"
-          className={onboarding ? 'primary-button' : 'text-button'}
+          className={selecting ? 'button-link' : 'text-button'}
+          disabled={disabled}
           aria-describedby="avatar-file-help"
           onClick={() => input.current?.click()}
         >
-          {onboarding ? 'Add profile photo' : 'Change photo'}
+          {selecting && !props.draft ? 'Choose profile photo' : 'Change photo'}
         </button>
         <input
           ref={input}
           id="avatar-file"
           type="file"
           hidden
+          disabled={disabled}
           aria-label="Choose profile photo"
           accept="image/jpeg,image/png,image/webp"
           onChange={(event) => {
             const selected = event.target.files?.[0];
             event.target.value = '';
-            if (!selected) return;
+            if (!selected || disabled) return;
             setFile(selected);
             setCrop(initialCrop);
             prepared.current = null;

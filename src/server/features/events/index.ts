@@ -1,6 +1,10 @@
 import { symmetricDecrypt, symmetricEncrypt } from 'better-auth/crypto';
 import type { Env } from '../../env';
 import type { EventAppearance } from '../../../shared/event-appearance';
+import {
+  calendarFile,
+  type CalendarEvent,
+} from '../../../shared/event-calendar';
 export { parseAppearance } from '../../../shared/event-appearance';
 import { PhotoError, processPhoto } from '../../photos';
 import {
@@ -444,6 +448,19 @@ export async function findEvent(env: Env, viewer: string, id: string) {
       response,
     },
   };
+}
+
+export async function eventCalendar(env: Env, viewer: string, id: string) {
+  const event = await env.DB.prepare(
+    `WITH viewer AS (SELECT ? AS id)
+      SELECT e.id,e.title,e.description,e.location,e.starts_at AS startsAt,
+        e.ends_at AS endsAt,e.time_zone AS timeZone
+      FROM event e CROSS JOIN viewer
+      WHERE e.id=? AND ${viewing} AND e.cancelled_at IS NULL`,
+  )
+    .bind(viewer, id)
+    .first<CalendarEvent>();
+  return event ? calendarFile(event, env.APP_ORIGIN, Date.now()) : null;
 }
 
 // Any host adds someone by email. The reply is the same whether or not an

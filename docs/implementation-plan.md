@@ -685,3 +685,17 @@ The combined tree passed formatting, lint, TypeScript, boundary checks, all 558 
 - [x] Use the shared horizontal action row for Cancel and Send notification, and show the current authorized cover photo on Edit event until a cropped replacement preview is ready.
 - [x] Pass the Node 24 check gate: formatting, lint, types, boundary checks, all 589 tests across 64 files, and the production build. Component tests cover all saved answer choices, expansion without mutation, hidden-option accessibility, pending/failed/successful changes, API retry behavior, and the authorized current cover image. No browser or visual testing.
 - [ ] Production release. No migration is required.
+
+## Combined account setup for event guests — October 18, 2026
+
+- [x] Explain the username/profile-photo requirements when an event-only member opens a photo-app destination. Offer primary Continue and secondary Back to event controls, with Events as the direct-entry fallback.
+- [x] Combine photo selection and username in one screen with Finish at the bottom. Keep cropping local until Finish, validate/save the username before uploading, preserve the chosen destination and own-profile renames, and retain retry identities, upload progress, deadlines, and navigation cancellation. Settings and non-event onboarding open the combined form directly. No server contract or migration changes.
+- [x] Pass formatting, lint, TypeScript, boundary checks, all 594 tests across 65 files (`npm test -- --maxWorkers=2`), and the production build on Node 24. Focused checks cover all gated navigation destinations, return-to-event and direct entry, username conflicts, no upload before Finish, crop cancellation and preview cleanup, duplicate submissions, timeout/lost-response retries, and navigation during either save. No browser or visual testing.
+- [ ] Production release.
+
+## Event calendar picker and host crown — October 18, 2026
+
+- [x] Put a compact Add to calendar button under location and above the host row, with a shared native modal offering Google Calendar, Apple Calendar, and Outlook. Add one decorative outline crown before the hosts, preserving profile links and wrapping on narrow screens.
+- [x] Generate prefilled Google/Outlook links and an authorized Apple calendar-file download. Preserve UTC time, disclose the one-hour default when no end was set, omit invite credentials and people/media, and explain that copies do not synchronize. Keep cancelled events and signed-out previews excluded. No migration, dependency, service, or calendar-account connection is added.
+- [x] Pass formatting, lint, TypeScript, boundary checks, all 605 tests across 66 files (`npm test -- --maxWorkers=2`), and the production build on Node 24. Focused tests cover provider parameters, DST/midnight/default-duration handling, Unicode folding and property injection, credential exclusion, dialog placement/dismissal, the crown, event-only access before RSVP, and calendar denial after blocks, access removal, link changes, expired sessions, inactive creators, cancellation, or deletion. No browser or visual testing.
+- [ ] Production release and manual verification of provider saves/native-device imports.

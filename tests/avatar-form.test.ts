@@ -95,7 +95,6 @@ it('retries exactly the same encoded crop and upload ID after a lost response', 
       createElement(AvatarForm, {
         handle: 'alice',
         onChange,
-        onboarding: true,
       }),
     );
   });
@@ -268,4 +267,47 @@ it('guards against duplicate crop confirmations and cancellation during saving',
   );
   expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
   expect(fetch).toHaveBeenCalledOnce();
+});
+
+it('prepares a setup photo without uploading, keeps it when a replacement is cancelled, and releases previews', async () => {
+  const fetch = vi.fn();
+  vi.stubGlobal('fetch', fetch);
+  const createUrl = vi
+    .spyOn(URL, 'createObjectURL')
+    .mockReturnValueOnce('blob:first')
+    .mockReturnValueOnce('blob:second');
+  const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+  const onSelect = vi.fn();
+  await act(async () => {
+    renderer = create(
+      createElement(AvatarForm, { draft: null, onSelect, disabled: false }),
+    );
+  });
+  await select(photo());
+  await save();
+  expect(fetch).not.toHaveBeenCalled();
+  expect(onSelect).toHaveBeenCalledOnce();
+  expect(onSelect.mock.calls[0][0].blob).toBe(
+    await vi.mocked(encodeCrop).mock.results[0].value,
+  );
+  expect(createUrl).toHaveBeenCalledOnce();
+  expect(renderer.root.findByType('img').props.src).toBe('blob:first');
+  expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
+  await select(photo());
+  await act(async () =>
+    renderer.root
+      .findByType('dialog')
+      .props.onCancel({ preventDefault: vi.fn() }),
+  );
+  expect(onSelect).toHaveBeenCalledOnce();
+  expect(renderer.root.findByType('img').props.src).toBe('blob:first');
+  await select(photo());
+  await save();
+  expect(onSelect.mock.calls[1][0].id).not.toBe(onSelect.mock.calls[0][0].id);
+  expect(revoke).toHaveBeenCalledWith('blob:first');
+  expect(fetch).not.toHaveBeenCalled();
+  await act(async () => renderer.unmount());
+  expect(revoke).toHaveBeenCalledWith('blob:second');
+  createUrl.mockRestore();
+  revoke.mockRestore();
 });

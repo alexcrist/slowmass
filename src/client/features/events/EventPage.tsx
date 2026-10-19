@@ -9,6 +9,7 @@ import { EventGuests } from './EventGuests';
 import { EventHosts } from './EventHosts';
 import { EventLinkDialog } from './EventLinkDialog';
 import { EventNotificationDialog } from './EventNotificationDialog';
+import { EventCalendarDialog } from './EventCalendarDialog';
 import { MailIcon } from '../../ui/MailIcon';
 import { LockIcon } from '../../ui/LockIcon';
 import { EventLog } from './EventLog';
@@ -83,7 +84,7 @@ export function EventPage({
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState('');
   const [dialog, setDialog] = useState<
-    'link' | 'hosts' | 'notification' | 'cancel' | null
+    'link' | 'hosts' | 'notification' | 'cancel' | 'calendar' | null
   >(null);
   const [messageId] = useState(() => crypto.randomUUID());
   const [notificationSent, setNotificationSent] = useState(0);
@@ -155,6 +156,9 @@ export function EventPage({
       <EventSummary
         event={event}
         hosts={event.hosts}
+        onAddToCalendar={
+          event.cancelled ? undefined : () => setDialog('calendar')
+        }
         actions={
           (sharing || managing) && (
             <div className="event-actions">
@@ -279,6 +283,9 @@ export function EventPage({
       </div>
       {dialog === 'link' && sharing && url && (
         <EventLinkDialog url={url} onClose={closeDialog} />
+      )}
+      {dialog === 'calendar' && !event.cancelled && (
+        <EventCalendarDialog event={event} onClose={closeDialog} />
       )}
       {dialog === 'notification' && managing && (
         <EventNotificationDialog
