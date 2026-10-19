@@ -977,6 +977,33 @@ export async function cancelEvent(
   );
 }
 
+// Keep the event/link identity for permanent join provenance. Deletion and
+// cleanup intent commit together; uploads cannot publish over a deleted row.
+// Only the active creator may delete, including an already deleted retry.
+export async function deleteEvent(db: D1Database, actor: string, id: string) {
+  const owned = `id=? AND creator_id=?
+    AND EXISTS(SELECT 1 FROM membership WHERE user_id=event.creator_id AND status='active')`;
+  const now = Date.now();
+  const results = await db.batch([
+    ...['object_key', 'thumbnail_key'].map((column) =>
+      db
+        .prepare(
+          `INSERT INTO photo_cleanup(object_key,not_before)
+          SELECT ${column},? FROM event WHERE ${owned} AND ${column} IS NOT NULL
+          ON CONFLICT DO NOTHING`,
+        )
+        .bind(now, id, actor),
+    ),
+    db
+      .prepare(
+        `UPDATE event SET state='deleted',title='Deleted event',description='',location='',
+          object_key=NULL,thumbnail_key=NULL,link_encrypted=NULL WHERE ${owned}`,
+      )
+      .bind(id, actor),
+  ]);
+  return results[2].meta.changes > 0;
+}
+
 export async function listEvents(
   db: D1Database,
   viewer: string,

@@ -47,6 +47,24 @@ async function verify() {
       await response.arrayBuffer();
     }
   }
+  // No session and a synthetic ID: verify deletion boundaries without touching
+  // an existing event or creating production fixtures.
+  for (const [requestOrigin, status] of [
+    [origin, 401],
+    ['https://invalid.example', 403],
+  ]) {
+    const response = await fetch(
+      new URL('/api/events/deployment-probe', origin),
+      {
+        method: 'DELETE',
+        headers: { Origin: requestOrigin },
+        signal: AbortSignal.timeout(15000),
+      },
+    );
+    assert.equal(response.status, status, 'Event deletion boundary');
+    assert.match(response.headers.get('cache-control') ?? '', /no-store/);
+    await response.arrayBuffer();
+  }
   // Synthetic invalid credentials exercise preview rejection without reading
   // a real event, admitting a member, or sending email.
   for (const [path, status, requestOrigin] of [

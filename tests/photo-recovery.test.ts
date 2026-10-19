@@ -2,7 +2,7 @@ import { afterAll, beforeAll, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { testRuntime, seedProfilePhotos } from './support/runtime';
 import { saveAvatar } from '../src/server/features/avatars';
-import { saveEventPhoto } from '../src/server/features/events';
+import { deleteEvent, saveEventPhoto } from '../src/server/features/events';
 import type { Env } from '../src/server/env';
 
 let runtime: Awaited<ReturnType<typeof testRuntime>>;
@@ -16,6 +16,79 @@ beforeAll(async () => {
   await seedProfilePhotos(runtime.db);
 });
 afterAll(async () => runtime?.worker.dispose());
+
+it('cannot republish an event deleted while its cover was processing', async () => {
+  const id = crypto.randomUUID();
+  const upload = crypto.randomUUID();
+  expect(
+    (
+      await runtime.request('alice', '/api/events', 'POST', {
+        id,
+        title: 'Dinner',
+        description: '',
+        location: '',
+        startsAt: Date.now() + 86400000,
+        endsAt: null,
+        timeZone: 'UTC',
+      })
+    ).status,
+  ).toBe(200);
+  const db = runtime.db as unknown as D1Database;
+  const bucket = await runtime.worker.getR2Bucket('PHOTOS');
+  const output = readFileSync('tests/fixtures/photos/still.webp');
+  const env = {
+    DB: db,
+    PHOTOS: bucket,
+    IMAGES: {
+      info: async () => ({
+        format: 'image/webp',
+        width: 120,
+        height: 80,
+        fileSize: output.length,
+      }),
+      input: () => ({
+        transform: () => ({
+          output: async () => {
+            expect(await deleteEvent(db, 'alice', id)).toBe(true);
+            return { response: () => new Response(output) };
+          },
+        }),
+      }),
+    },
+  } as unknown as Env;
+  expect(
+    await saveEventPhoto(
+      env,
+      'alice',
+      id,
+      upload,
+      new Request('http://localhost/upload', {
+        method: 'PUT',
+        body: readFileSync('tests/fixtures/photos/still.png'),
+      }),
+    ),
+  ).toBe('missing');
+  expect(
+    await db
+      .prepare('SELECT state,object_key FROM event WHERE id=?')
+      .bind(id)
+      .first(),
+  ).toEqual({ state: 'deleted', object_key: null });
+  expect(
+    await db
+      .prepare('SELECT state FROM photo_attempt WHERE id=?')
+      .bind(`alice:event/${upload}`)
+      .first('state'),
+  ).toBe('failed');
+  const objects = await bucket.list({ prefix: 'events/' });
+  expect(objects.objects).toHaveLength(1);
+  expect(
+    await db
+      .prepare('SELECT 1 FROM photo_cleanup WHERE object_key=?')
+      .bind(objects.objects[0].key)
+      .first(),
+  ).not.toBeNull();
+});
 
 it.each(['avatar', 'event'] as const)(
   'keeps a completed %s retryable after losing the commit reply',

@@ -13,6 +13,7 @@ import {
   createEvent,
   declineHosting,
   deleteMessage,
+  deleteEvent,
   eventLog,
   eventCalendar,
   eventMediaKey,
@@ -111,6 +112,11 @@ events.get('/:id', async (c) => {
   const event = await findEvent(c.env, c.get('userId'), c.req.param('id'));
   return event ? c.json({ event }) : c.json(notFound, 404);
 });
+events.delete('/:id', async (c) =>
+  (await deleteEvent(c.env.DB, c.get('userId'), c.req.param('id')))
+    ? c.json({ ok: true })
+    : c.json(notFound, 404),
+);
 events.get('/:id/calendar.ics', async (c) => {
   const calendar = await eventCalendar(
     c.env,

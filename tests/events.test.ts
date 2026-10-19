@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { unstable_splitSqlQuery } from 'wrangler';
 import { testRuntime, seedProfilePhotos } from './support/runtime';
 import { cleanupAccounts } from '../src/server/features/account';
-import { cleanupEvents } from '../src/server/features/events';
+import { cleanupEvents, deleteEvent } from '../src/server/features/events';
 import { invitationTokenHash } from '../src/server/membership';
 import {
   originalAppearance,
@@ -1314,6 +1314,277 @@ it('lets people join only by signing in through an event link, recording the lin
     403,
   );
   expect((await requestEmail('bob@example.com', other.token)).status).toBe(200);
+});
+
+it('deletes an event for everyone, revokes warm media and activity, and cleans up its cover', async () => {
+  const { id, token } = await event();
+  const version = await linkVersion(id);
+  await respond('bob', id, 'going', token);
+  await open('david', token);
+  await message('alice', id, 'Dinner is ready');
+  expect(await activity('bob')).toHaveLength(1);
+  expect(await unread('bob')).toBe(1);
+  const bucket = await runtime.worker.getR2Bucket('PHOTOS');
+  const keys = [`events/${id}.webp`, `events/${id}-thumb.webp`];
+  for (const key of keys) await bucket.put(key, new Uint8Array([1, 2, 3]));
+  for (const size of ['', '?size=thumb']) {
+    const photo = await runtime.request('bob', `/media/events/${id}${size}`);
+    expect(photo.status).toBe(200);
+    await photo.arrayBuffer();
+  }
+  const cache = await (
+    await runtime.worker.getCaches()
+  ).open('slowmass-private-images-v1');
+  for (const key of keys)
+    await expect
+      .poll(async () =>
+        Boolean(
+          await cache.match(
+            `http://localhost:8787/media/_objects/${encodeURIComponent(key)}`,
+          ),
+        ),
+      )
+      .toBe(true);
+
+  const remove = () => runtime.request('alice', `/api/events/${id}`, 'DELETE');
+  expect(
+    (await Promise.all([remove(), remove()])).map((r) => r.status),
+  ).toEqual([200, 200]);
+  for (const actor of ['alice', 'bob', 'david']) {
+    expect((await runtime.request(actor, `/api/events/${id}`)).status).toBe(
+      404,
+    );
+    expect(
+      (await runtime.request(actor, `/api/events/${id}/calendar.ics`)).status,
+    ).toBe(404);
+    expect(await (await runtime.request(actor, '/api/events')).json()).toEqual({
+      items: [],
+      next: null,
+    });
+    expect(await activity(actor)).toEqual([]);
+    expect(await unread(actor)).toBe(0);
+  }
+  for (const size of ['', '?size=thumb'])
+    expect(
+      (await runtime.request('bob', `/media/events/${id}${size}`)).status,
+    ).toBe(404);
+  expect(
+    (await runtime.request(null, '/api/event-link/photo', 'POST', { token }))
+      .status,
+  ).toBe(404);
+  expect(await check(token)).toBeNull();
+  expect((await open('bob', token)).status).toBe(404);
+  expect((await respond('bob', id, 'maybe')).status).toBe(409);
+  expect((await message('alice', id, 'Too late')).response.status).toBe(409);
+  expect(
+    await (
+      await runtime.request('bob', `/api/events/${id}/guests?status=going`)
+    ).json(),
+  ).toEqual({ items: [], next: null });
+  expect(
+    await (await runtime.request('bob', `/api/events/${id}/activity`)).json(),
+  ).toEqual({ items: [], next: null });
+  expect(
+    await runtime.db
+      .prepare(
+        'SELECT state,title,description,location,object_key,thumbnail_key,link_encrypted,link_id FROM event WHERE id=?',
+      )
+      .bind(id)
+      .first(),
+  ).toEqual({
+    state: 'deleted',
+    title: 'Deleted event',
+    description: '',
+    location: '',
+    object_key: null,
+    thumbnail_key: null,
+    link_encrypted: null,
+    link_id: version,
+  });
+  expect(
+    (
+      await runtime.db
+        .prepare(
+          "SELECT object_key FROM photo_cleanup WHERE object_key LIKE 'events/%' ORDER BY object_key",
+        )
+        .all()
+    ).results,
+  ).toEqual([...keys].sort().map((object_key) => ({ object_key })));
+  await cleanupEvents(
+    runtime.db as unknown as D1Database,
+    bucket as unknown as R2Bucket,
+  );
+  for (const key of keys) expect(await bucket.get(key)).toBeNull();
+  expect((await remove()).status).toBe(200);
+  expect(
+    await runtime.db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM photo_cleanup WHERE object_key LIKE 'events/%'",
+      )
+      .first('n'),
+  ).toBe(0);
+});
+
+it('allows only the active creator to delete, including after cancellation or the event ends', async () => {
+  const { id, token } = await event();
+  const remove = (actor: string | null) =>
+    runtime.request(actor, `/api/events/${id}`, 'DELETE');
+  expect((await remove(null)).status).toBe(401);
+  expect((await remove('carol')).status).toBe(404);
+  await respond('bob', id, 'going', token);
+  expect((await remove('bob')).status).toBe(404);
+  await runtime.request('alice', `/api/events/${id}/hosts`, 'POST', {
+    email: 'bob@example.com',
+  });
+  expect((await remove('bob')).status).toBe(404);
+  expect(
+    (await runtime.request('bob', `/api/events/${id}/hosting`, 'POST')).status,
+  ).toBe(200);
+  expect((await remove('bob')).status).toBe(404);
+  await runtime.request('alice', `/api/events/${id}/hosts/bob`, 'DELETE');
+  expect((await remove('bob')).status).toBe(404);
+  await runtime.db.prepare("INSERT INTO block VALUES('alice','bob',1)").run();
+  expect((await remove('bob')).status).toBe(404);
+  expect(
+    (
+      await runtime.request('alice', `/api/events/${id}`, 'DELETE', undefined, {
+        Origin: 'https://elsewhere.example',
+      })
+    ).status,
+  ).toBe(403);
+  expect(
+    await runtime.db
+      .prepare('SELECT state FROM event WHERE id=?')
+      .bind(id)
+      .first('state'),
+  ).toBe('published');
+  expect(
+    await runtime.db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM photo_cleanup WHERE object_key LIKE 'events/%'",
+      )
+      .first('n'),
+  ).toBe(0);
+
+  expect(
+    (
+      await runtime.request('alice', `/api/events/${id}/cancel`, 'POST', {
+        messageId: crypto.randomUUID(),
+      })
+    ).status,
+  ).toBe(200);
+  expect((await remove('alice')).status).toBe(200);
+  const past = await event(details({ startsAt: Date.now() - 2 * day }));
+  expect(
+    (await runtime.request('alice', `/api/events/${past.id}`, 'DELETE')).status,
+  ).toBe(200);
+  expect(
+    await (await runtime.request('alice', '/api/events?when=past')).json(),
+  ).toEqual({ items: [], next: null });
+  const pending = await draft();
+  expect(
+    (await runtime.request('alice', `/api/events/${pending.id}`, 'DELETE'))
+      .status,
+  ).toBe(200);
+
+  await runtime.db
+    .prepare("UPDATE session SET expiresAt='2000-01-01' WHERE userId='alice'")
+    .run();
+  expect((await remove('alice')).status).toBe(401);
+  await runtime.db
+    .prepare("UPDATE membership SET status='disabled' WHERE user_id='alice'")
+    .run();
+  expect(
+    await deleteEvent(runtime.db as unknown as D1Database, 'alice', id),
+  ).toBe(false);
+});
+
+it('rolls back deletion and media cleanup intent together when the write fails', async () => {
+  const { id } = await event();
+  await runtime.db
+    .prepare(
+      "CREATE TRIGGER fail_event_delete BEFORE UPDATE OF state ON event WHEN NEW.state='deleted' BEGIN SELECT RAISE(ABORT,'synthetic_delete_failure'); END",
+    )
+    .run();
+  await expect(
+    deleteEvent(runtime.db as unknown as D1Database, 'alice', id),
+  ).rejects.toThrow('synthetic_delete_failure');
+  expect((await runtime.request('alice', `/api/events/${id}`)).status).toBe(
+    200,
+  );
+  expect(
+    await runtime.db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM photo_cleanup WHERE object_key LIKE 'events/%'",
+      )
+      .first('n'),
+  ).toBe(0);
+  await runtime.db.prepare('DROP TRIGGER fail_event_delete').run();
+  expect(
+    (await runtime.request('alice', `/api/events/${id}`, 'DELETE')).status,
+  ).toBe(200);
+});
+
+it('preserves admitted members and link provenance but rejects pending sign-ins after deletion', async () => {
+  const { id, token } = await event();
+  const requestEmail = (email: string) =>
+    runtime.request(
+      null,
+      '/api/auth/sign-in/magic-link',
+      'POST',
+      {
+        email,
+        callbackURL: `/#event/${id}`,
+        errorCallbackURL: '/?error=event',
+        metadata: { eventLink: token },
+      },
+      { 'CF-Connecting-IP': `192.0.2.${++ip}` },
+    );
+  const verify = () =>
+    runtime.worker.dispatchFetch(
+      new URL(sent.at(-1)!.text.match(/https?:\/\/\S+/)![0]).toString(),
+      {
+        headers: { 'CF-Connecting-IP': `192.0.2.${++ip}` },
+        redirect: 'manual',
+      },
+    );
+  expect((await requestEmail('joined@example.com')).status).toBe(200);
+  expect((await verify()).status).toBe(302);
+  const snapshot = async () => ({
+    invitations: (
+      await runtime.db
+        .prepare('SELECT * FROM invitation WHERE event_id=?')
+        .bind(id)
+        .all()
+    ).results,
+    memberships: (
+      await runtime.db
+        .prepare('SELECT * FROM membership ORDER BY user_id')
+        .all()
+    ).results,
+    link: await runtime.db
+      .prepare(
+        'SELECT creator_id,link_id,link_hash,created_at FROM event WHERE id=?',
+      )
+      .bind(id)
+      .first(),
+  });
+  const before = await snapshot();
+  expect(before.invitations).toHaveLength(1);
+  expect((await requestEmail('pending@example.com')).status).toBe(200);
+  expect(
+    (await runtime.request('alice', `/api/events/${id}`, 'DELETE')).status,
+  ).toBe(200);
+  expect((await verify()).headers.get('Location')).toMatch(/\/\?error=event$/);
+  expect(await snapshot()).toEqual(before);
+  expect((await requestEmail('new@example.com')).status).toBe(403);
+  expect(
+    await runtime.db
+      .prepare(
+        "SELECT 1 FROM membership m JOIN user u ON u.id=m.user_id WHERE u.email='pending@example.com'",
+      )
+      .first(),
+  ).toBeNull();
 });
 
 it('removes events, answers and messages with account deletion', async () => {

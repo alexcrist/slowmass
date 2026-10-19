@@ -160,7 +160,7 @@ it.each(['response', 'message', 'notification', 'cancel'])(
   },
 );
 
-it.each(['read', 'block'])(
+it.each(['read', 'block', 'delete'])(
   'rechecks event %s state before retrying a failed immediate send',
   async (reason) => {
     const { id } = await event();
@@ -200,6 +200,10 @@ it.each(['read', 'block'])(
             items: [receipt],
           })
         ).status,
+      ).toBe(200);
+    else if (reason === 'delete')
+      expect(
+        (await runtime.request('alice', `/api/events/${id}`, 'DELETE')).status,
       ).toBe(200);
     else
       await runtime.db

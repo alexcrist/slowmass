@@ -152,9 +152,12 @@ function visibleText(
     .map((child) => visibleText(child))
     .join(' ');
 }
-function pending(path: string) {
+function pending(path: string, method?: string) {
   const request = requests.find(
-    (item) => item.path.startsWith(path) && !item.settled,
+    (item) =>
+      item.path.startsWith(path) &&
+      !item.settled &&
+      (!method || item.options?.method === method),
   );
   expect(request, `Pending request for ${path}`).toBeDefined();
   return request!;
@@ -918,12 +921,98 @@ it.each([
   async (overrides) => {
     await mount(createElement(EventPage, { id, linkProfiles: true }));
     await reply(pending(`/api/events/${id}`), { event: view(overrides) });
-    expect(
-      renderer.root.findAllByProps({ 'aria-label': 'Event options' }),
-    ).toHaveLength(0);
+    if (overrides.viewer.isCreator) await click('Event options');
+    else
+      expect(
+        renderer.root.findAllByProps({ 'aria-label': 'Event options' }),
+      ).toHaveLength(0);
     expect(visibleText()).not.toContain('Send notification');
   },
 );
+
+it.each([
+  { cancelled: false, over: false },
+  { cancelled: true, over: false },
+  { cancelled: false, over: true },
+])(
+  'keeps creator deletion available with confirmation for %j',
+  async (state) => {
+    await mount(createElement(EventPage, { id, linkProfiles: true }));
+    await reply(pending(`/api/events/${id}`), {
+      event: view({ viewer: host, ...state }),
+    });
+    await click('Event options');
+    if (state.cancelled)
+      expect(
+        renderer.root.findAllByProps({ role: 'menuitem' }).map(labelText),
+      ).toEqual(['Delete event']);
+    await click('Delete event');
+    expect(visibleText()).toContain('removes the event for everyone');
+    expect(visibleText()).toContain('Guests won’t be notified');
+    expect(requests.filter((r) => r.options?.method === 'DELETE')).toHaveLength(
+      0,
+    );
+    await click('Cancel');
+    expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
+    expect(requests.filter((r) => r.options?.method === 'DELETE')).toHaveLength(
+      0,
+    );
+  },
+);
+
+it('excludes deletion from co-host controls', async () => {
+  await mount(createElement(EventPage, { id, linkProfiles: true }));
+  await reply(pending(`/api/events/${id}`), {
+    event: view({ viewer: { ...host, isCreator: false } }),
+  });
+  await click('Event options');
+  expect(visibleText()).toContain('Cancel event');
+  expect(visibleText()).not.toContain('Delete event');
+});
+
+it('blocks duplicate deletion, preserves failures for retry, and returns to Events only after success', async () => {
+  location.hash = `#event/${id}`;
+  await mount(createElement(EventPage, { id, linkProfiles: true }));
+  await reply(pending(`/api/events/${id}`), {
+    event: view({ viewer: host, cancelled: true }),
+  });
+  await click('Event options');
+  await click('Delete event');
+  const confirm = button('Delete event');
+  await act(async () => {
+    confirm.props.onClick();
+    confirm.props.onClick();
+  });
+  expect(requests.filter((r) => r.options?.method === 'DELETE')).toHaveLength(
+    1,
+  );
+  expect(button('Cancel').props.disabled).toBe(true);
+  expect(button('Saving…').props.disabled).toBe(true);
+  await reply(
+    pending(`/api/events/${id}`, 'DELETE'),
+    { error: 'Could not delete. Try again.' },
+    503,
+  );
+  expect(location.hash).toBe(`#event/${id}`);
+  expect(visibleText()).toContain('Could not delete. Try again.');
+  await click('Delete event');
+  await reply(pending(`/api/events/${id}`, 'DELETE'), { ok: true });
+  expect(location.hash).toBe('#events');
+});
+
+it('does not redirect after leaving while deletion is pending', async () => {
+  await mount(createElement(EventPage, { id, linkProfiles: true }));
+  await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
+  await click('Event options');
+  await click('Delete event');
+  await click('Delete event');
+  const request = pending(`/api/events/${id}`, 'DELETE');
+  await act(async () => renderer.unmount());
+  location.hash = '#settings';
+  expect(request.options?.signal?.aborted).toBe(true);
+  await reply(request, { ok: true });
+  expect(location.hash).toBe('#settings');
+});
 
 it.each([
   ['creator', true],

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEventAppearance } from './useEventAppearance';
 import { api, jsonRequest } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
@@ -82,9 +82,12 @@ export function EventPage({
     event: EventView;
   }>(`/api/events/${encodeURIComponent(id)}`);
   const [busy, setBusy] = useState(false);
+  const running = useRef(false);
+  const deletion = useRef<AbortController | null>(null);
+  useEffect(() => () => deletion.current?.abort(), []);
   const [failure, setFailure] = useState('');
   const [dialog, setDialog] = useState<
-    'link' | 'hosts' | 'notification' | 'cancel' | 'calendar' | null
+    'link' | 'hosts' | 'notification' | 'cancel' | 'delete' | 'calendar' | null
   >(null);
   const [messageId] = useState(() => crypto.randomUUID());
   const [notificationSent, setNotificationSent] = useState(0);
@@ -99,7 +102,8 @@ export function EventPage({
       window.history?.replaceState(window.history.state, '', hash);
   }, [url]);
   async function run(action: () => Promise<void>) {
-    if (busy) return;
+    if (running.current) return;
+    running.current = true;
     setBusy(true);
     setFailure('');
     try {
@@ -109,6 +113,7 @@ export function EventPage({
         error instanceof Error ? error.message : 'Something went wrong.',
       );
     } finally {
+      running.current = false;
       setBusy(false);
     }
   }
@@ -150,6 +155,7 @@ export function EventPage({
   if (!event) return loading ? <p role="status">Loading event…</p> : null;
   const open = !event.cancelled && !event.over;
   const managing = event.viewer.isHost && !event.cancelled;
+  const deleting = event.viewer.isCreator;
   const sharing = managing && Boolean(url);
   return (
     <article className="event">
@@ -160,7 +166,7 @@ export function EventPage({
           event.cancelled ? undefined : () => setDialog('calendar')
         }
         actions={
-          (sharing || managing) && (
+          (managing || deleting) && (
             <div className="event-actions">
               {sharing && (
                 <button
@@ -173,30 +179,43 @@ export function EventPage({
                   <MailIcon />
                 </button>
               )}
-              {managing && (
+              {(managing || deleting) && (
                 <OverflowMenu
                   label="Event options"
                   disabled={busy}
                   items={[
-                    {
-                      label: 'Edit event',
-                      onSelect: () => {
-                        location.hash = eventHref(id, 'edit');
-                      },
-                    },
-                    {
-                      label: 'Edit hosts',
-                      onSelect: () => setDialog('hosts'),
-                    },
-                    {
-                      label: 'Send notification',
-                      onSelect: () => setDialog('notification'),
-                    },
-                    {
-                      label: 'Cancel event',
-                      danger: true,
-                      onSelect: () => setDialog('cancel'),
-                    },
+                    ...(managing
+                      ? [
+                          {
+                            label: 'Edit event',
+                            onSelect: () => {
+                              location.hash = eventHref(id, 'edit');
+                            },
+                          },
+                          {
+                            label: 'Edit hosts',
+                            onSelect: () => setDialog('hosts'),
+                          },
+                          {
+                            label: 'Send notification',
+                            onSelect: () => setDialog('notification'),
+                          },
+                          {
+                            label: 'Cancel event',
+                            danger: true,
+                            onSelect: () => setDialog('cancel'),
+                          },
+                        ]
+                      : []),
+                    ...(deleting
+                      ? [
+                          {
+                            label: 'Delete event',
+                            danger: true,
+                            onSelect: () => setDialog('delete'),
+                          },
+                        ]
+                      : []),
                   ]}
                 />
               )}
@@ -332,6 +351,33 @@ export function EventPage({
           <p>
             Everyone who answered is notified. The event stays visible as
             cancelled, and this can’t be undone.
+          </p>
+        </ConfirmDialog>
+      )}
+      {dialog === 'delete' && deleting && (
+        <ConfirmDialog
+          title="Delete event?"
+          confirmLabel="Delete event"
+          danger
+          busy={busy}
+          error={failure}
+          onClose={closeDialog}
+          onConfirm={() =>
+            void run(async () => {
+              const controller = new AbortController();
+              deletion.current = controller;
+              await api(`/api/events/${id}`, {
+                method: 'DELETE',
+                signal: controller.signal,
+                timeoutMs: 30000,
+              });
+              if (!controller.signal.aborted) location.hash = '#events';
+            })
+          }
+        >
+          <p>
+            This removes the event for everyone and disables its link. Guests
+            won’t be notified. This can’t be undone.
           </p>
         </ConfirmDialog>
       )}
