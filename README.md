@@ -28,7 +28,7 @@ Account setup for event-only members is updated locally: photo-app destinations 
 
 Events now have a local Add to calendar picker for Google Calendar, Apple Calendar, and Outlook, plus an outline crown beside the hosts. Calendar copies exclude the invitation credential; Apple downloads recheck session and event access. Production rollout and provider/device import verification are pending. See [calendar picker and crown](docs/implementation-plan.md#event-calendar-picker-and-host-crown--october-18-2026).
 
-Creator-only event deletion is implemented locally, including on cancelled and past events. Delete event removes it for everyone, disables its link, and queues cover cleanup while retaining invitation provenance; cancellation continues to notify participants and remain readable. Verification and rollout are tracked in the [implementation plan](docs/implementation-plan.md#creator-event-deletion--october-19-2026).
+Creator-only event deletion is deployed, including on cancelled and past events. Delete event removes it for everyone, disables its link, and queues cover cleanup while retaining invitation provenance; cancellation continues to notify participants and remain readable. Verification and rollout are tracked in the [implementation plan](docs/implementation-plan.md#creator-event-deletion--october-19-2026).
 
 The operating target is $0/month within Cloudflare's free allowances, followed by measured upgrades. See [architecture](docs/architecture.md) for constraints and the scaling path.
 
