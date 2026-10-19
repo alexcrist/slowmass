@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useState, type FormEvent } from 'react';
 import { createAuthClient } from 'better-auth/react';
 import { magicLinkClient } from 'better-auth/client/plugins';
 import { PasteLoginLink } from './PasteLoginLink';
+import { LoginSubmit } from './LoginSubmit';
 import { MemberApp } from '../people';
 import { EventPreview, type EventPreviewDetails } from '../events';
 import { api, jsonRequest, onUnauthorized } from '../../api';
@@ -278,10 +279,7 @@ export function Welcome() {
                     : 'Enter your email to see details and RSVP.'}
                 </p>
                 {checked?.open && (
-                  <p className="status-copy">
-                    We’ll send a sign-in link. If you’re new, this creates your
-                    slowmass account.
-                  </p>
+                  <p className="status-copy">We’ll send a sign-in link.</p>
                 )}
               </div>
             </>
@@ -289,8 +287,7 @@ export function Welcome() {
             <>
               <h1>You’re invited to slowmass</h1>
               <p className="status-copy">
-                Enter your email to join. We’ll send a sign-in link; if you’re
-                new, this creates your slowmass account.
+                Enter your email to join. We’ll send a sign-in link.
               </p>
             </>
           ) : (
@@ -345,9 +342,6 @@ export function Welcome() {
                 {checking ? 'Checking…' : 'I’ve opened the email link'}
               </button>
               {loginStatus && <p role="status">{loginStatus}</p>}
-              <button className="text-button" onClick={() => setSent(false)}>
-                Use another email or try again
-              </button>
             </div>
           ) : link && checked === undefined ? (
             linkError ? (
@@ -366,25 +360,32 @@ export function Welcome() {
               <p role="status">{`Checking this ${link.kind} link…`}</p>
             )
           ) : (
-            <form onSubmit={(submit) => void signIn(submit)}>
+            <form onSubmit={(submit) => void signIn(submit)} aria-busy={busy}>
               <label className="field-label" htmlFor="email">
                 Your email
               </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                required
-                maxLength={254}
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="you@example.com"
-                disabled={busy}
-              />
-              <button className="primary-button" type="submit" disabled={busy}>
-                {busy ? 'Requesting your link…' : 'Send sign-in link'}
-              </button>
-              <p className="status-copy">No password is needed.</p>
+              <div className="login-input">
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  maxLength={254}
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="you@example.com"
+                  disabled={busy}
+                />
+                <LoginSubmit
+                  label={busy ? 'Requesting your link…' : 'Send sign-in link'}
+                  busy={busy}
+                />
+              </div>
+              {busy && (
+                <p className="visually-hidden" role="status">
+                  Requesting your link…
+                </p>
+              )}
             </form>
           )}
           {name === null && state === 'ready' && <PasteLoginLink />}

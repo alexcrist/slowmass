@@ -59,6 +59,7 @@ export function EventHosts({
           <li key={host.handle}>
             <PersonPhoto
               name={host.displayName}
+              profileHandle={host.hasAvatar && !busy ? host.handle : undefined}
               src={guestPhoto(host)}
               size={36}
             />

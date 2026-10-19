@@ -571,7 +571,10 @@ it('shows login only after bootstrap confirms a signed-out session', async () =>
     user: null,
     profile: null,
   });
-  expect(visibleText()).toContain('Send sign-in link');
+  expect(
+    renderer.root.findByProps({ 'aria-label': 'Send sign-in link' }).props.type,
+  ).toBe('submit');
+  expect(visibleText()).not.toContain('No password is needed.');
   expect(visibleText()).not.toContain('Loading slowmass');
 });
 
@@ -1007,8 +1010,9 @@ it.each([false, true])(
     );
     if (!existing) {
       expect(renderer.root.findAllByProps({ id: 'handle' })).toHaveLength(0);
-      await click('Use a different account');
-      expect(onSignOut).toHaveBeenCalledOnce();
+      expect(visibleText()).not.toContain('Use a different account');
+      expect(visibleText()).not.toContain('It doesn’t need to be unique.');
+      expect(visibleText()).not.toContain('Other members see this name.');
       await act(async () => {
         renderer.root
           .findByProps({ id: 'display-name' })

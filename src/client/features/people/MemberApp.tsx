@@ -241,8 +241,8 @@ function MemberPages({
         <>
           <p className="onboarding-intro">
             {page === 'event'
-              ? 'Hosts and other guests see this name. It doesn’t need to be unique.'
-              : 'It doesn’t need to be unique. Next, you’ll add a profile photo.'}
+              ? 'Hosts and other guests see this name.'
+              : 'Next, you’ll add a profile photo.'}
           </p>
           <ProfileForm profile={null} onSave={saved} nameOnly />
         </>
@@ -412,16 +412,6 @@ function MemberPages({
                     : titles[page] || 'slowmass'}
           </h1>
           {screen()}
-          {!active && (
-            <button
-              type="button"
-              className="text-button onboarding-switch"
-              onClick={onSignOut}
-              disabled={signingOut}
-            >
-              {signingOut ? 'Signing out…' : 'Use a different account'}
-            </button>
-          )}
         </section>
       </PageHistoryProvider>
     </>

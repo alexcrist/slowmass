@@ -188,7 +188,7 @@ async function submit() {
   );
 }
 
-it('shows members without a photo the event, with guests linked only by name', async () => {
+it('links available event avatars to profile setup for viewers without a photo', async () => {
   location.hash = `#event/${id}`;
   await mount(
     createElement(MemberApp, {
@@ -222,15 +222,24 @@ it('shows members without a photo the event, with guests linked only by name', a
     next: null,
   });
   expect(visibleText()).not.toContain('bob_k3j9z');
+  const profileLinks = renderer.root
+    .findAllByType('a')
+    .filter(
+      (link) =>
+        String(link.props.href).startsWith('#profile') &&
+        link.props['aria-label'] !== 'Profile',
+    );
+  expect(profileLinks).toHaveLength(1);
+  expect(profileLinks[0].props.href).toBe('#profile/alice');
+  expect(profileLinks[0].props['aria-label']).toBe('View Alice’s profile');
+  await act(async () => {
+    location.hash = profileLinks[0].props.href;
+    window.dispatchEvent(new Event('hashchange'));
+  });
+  expect(visibleText()).toContain('Share photos and follow friends');
   expect(
-    renderer.root
-      .findAllByType('a')
-      .filter(
-        (link) =>
-          String(link.props.href).startsWith('#profile') &&
-          link.props['aria-label'] !== 'Profile',
-      ),
-  ).toHaveLength(0);
+    requests.some((request) => request.path.startsWith('/api/people/alice')),
+  ).toBe(false);
 });
 
 it('keeps Activity and Settings in the event-only phone header', async () => {
@@ -756,4 +765,50 @@ it('retries a failed preview cover and releases its in-memory URL on unmount', a
   expect(renderer.root.findByType('img').props.src).toBe('blob:preview');
   await act(async () => renderer.unmount());
   expect(revoke).toHaveBeenCalledWith('blob:preview');
+});
+
+it('links available avatars in host, guest, activity, and host-dialog sections', async () => {
+  await mount(createElement(EventPage, { id, linkProfiles: true }));
+  await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
+  const people = [
+    { handle: 'bob', displayName: 'Bob', hasAvatar: true },
+    { handle: 'carol', displayName: 'Carol', hasAvatar: false },
+  ];
+  await reply(pending(`/api/events/${id}/guests`), {
+    items: people,
+    next: null,
+  });
+  await reply(pending(`/api/events/${id}/activity`), {
+    items: people.map((person) => ({
+      ...person,
+      key: person.handle,
+      kind: 'response',
+      id: null,
+      status: 'going',
+      body: '',
+      createdAt: Date.now(),
+      canDelete: false,
+    })),
+    next: null,
+  });
+  const avatarLinks = () =>
+    renderer.root
+      .findAllByType('a')
+      .filter((link) => link.props.className === 'event-person-link');
+  expect(avatarLinks().map((link) => link.props.href)).toEqual([
+    '#profile/alice',
+    '#profile/bob',
+    '#profile/bob',
+  ]);
+  expect(
+    avatarLinks().every((link) => link.props['aria-label'].startsWith('View ')),
+  ).toBe(true);
+  expect(
+    renderer.root.findAllByProps({ className: 'event-person-initial' }),
+  ).toHaveLength(2);
+  await click('Event options');
+  await click('Edit hosts');
+  expect(
+    avatarLinks().filter((link) => link.props.href === '#profile/alice'),
+  ).toHaveLength(2);
 });

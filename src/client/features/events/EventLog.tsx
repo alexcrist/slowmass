@@ -124,6 +124,7 @@ export function EventLog({
           <li key={entry.key} className="comment-row">
             <PersonPhoto
               name={entry.displayName}
+              profileHandle={entry.hasAvatar ? entry.handle : undefined}
               src={guestPhoto(entry)}
               size={32}
             />

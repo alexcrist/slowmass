@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { loginLinkTarget } from './login-link';
+import { LoginSubmit } from './LoginSubmit';
 
 export function PasteLoginLink() {
   const [link, setLink] = useState('');
@@ -32,24 +33,24 @@ export function PasteLoginLink() {
         <label className="field-label" htmlFor="login-link">
           Unused sign-in link
         </label>
-        <input
-          id="login-link"
-          type="password"
-          value={link}
-          onChange={(event) => setLink(event.target.value)}
-          autoComplete="off"
-          autoCapitalize="none"
-          spellCheck={false}
-          maxLength={4096}
-          required
-          aria-describedby="login-link-help"
-        />
-        <p id="login-link-help" className="field-help">
+        <div className="login-input">
+          <input
+            id="login-link"
+            type="password"
+            value={link}
+            onChange={(event) => setLink(event.target.value)}
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            maxLength={4096}
+            required
+            aria-describedby="login-link-help"
+          />
+          <LoginSubmit label="Sign in here" />
+        </div>
+        <p id="login-link-help" className="field-help login-input-help">
           This link signs you in. Do not share it with anyone.
         </p>
-        <button type="submit" className="primary-button">
-          Sign in here
-        </button>
         {error && (
           <p role="alert" className="error-message">
             {error}

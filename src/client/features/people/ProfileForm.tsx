@@ -92,9 +92,7 @@ export function ProfileForm({
         disabled={busy}
         autoComplete="name"
       />
-      {nameOnly ? (
-        <p className="field-help">Other members see this name.</p>
-      ) : (
+      {!nameOnly && (
         <>
           <label className="field-label" htmlFor="bio">
             Bio

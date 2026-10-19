@@ -237,11 +237,6 @@ p {
 .onboarding .avatar-form {
   margin-bottom: 0;
 }
-.onboarding .onboarding-switch {
-  margin-top: 24px;
-  font-size: 14px;
-  color: var(--muted);
-}
 .back-control {
   display: inline-flex;
   align-items: center;
@@ -339,6 +334,49 @@ textarea {
 input:disabled {
   color: var(--muted);
   background: var(--hover);
+}
+.login-input {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid #d4d4d4;
+  border-radius: 5px;
+  background: var(--paper);
+}
+.login-input > input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  border-radius: 4px 0 0 4px;
+  margin: 0;
+}
+.login-input:has(input:focus-visible) {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+.login-input > input:focus-visible {
+  outline: none;
+}
+.login-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 52px;
+  min-height: 48px;
+  padding: 10px;
+  border: 0;
+  border-radius: 0 4px 4px 0;
+  background: var(--brand);
+  color: var(--paper);
+}
+.login-submit:enabled:hover {
+  background: #193e30;
+}
+.login-submit svg {
+  width: 24px;
+  height: 24px;
+}
+.login-input + .login-input-help {
+  margin-top: 12px;
 }
 textarea {
   resize: vertical;
@@ -1700,6 +1738,23 @@ a.profile-tab {
 .event-person-photo {
   object-fit: cover;
 }
+.event-person-link {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+/* Keep the existing avatar sizes with a 44px minimum pointer target. */
+.event-person-link::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
 .event-person-initial {
   align-items: center;
   justify-content: center;
@@ -1764,9 +1819,6 @@ a.profile-tab {
   padding: 0;
   margin-top: 16px;
   list-style: none;
-}
-.event .comment-composer {
-  margin-top: 16px;
 }
 /* The share and options icons beside the title. */
 .event-actions {

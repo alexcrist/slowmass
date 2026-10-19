@@ -589,3 +589,10 @@ Owner direction: show a cover/title/date preview before email sign-in, keep desc
 - [x] Deploy commit `953db5c` through [GitHub run 39178713478](https://github.com/alexcrist/slowmass/actions/runs/39178713478) as Worker `8fa475db-6744-42b2-800b-19f8310cc7a3` at about 00:02 UTC on October 19 (October 18 Pacific). CI passed all 508 tests, confirmed the migration history with none pending, and verified matching production assets, sign-in availability, signed-out private routes, and invalid/foreign-origin preview rejection. The same direct HTTP checks passed locally after deployment. No migration or browser/visual test was performed.
 
 The same release also replaces the invitation calendar date with “This link works for the next 7 days.” Opening the owner’s dialog extends an unexpired link without changing its version or pending claims; expired/revoked links still rotate. Concurrent requests never shorten expiry, and recipient visits never extend it. No migration is required.
+
+## Event avatar links and compact sign-in — October 18, 2026
+
+- [x] Remove the event activity composer’s extra top margin; link host, guest, activity, and host-dialog avatars only when the person has a profile. Event-only viewers reach the existing profile setup gate.
+- [x] Join inputs and icon-only submit controls across regular, invitation, event, and installed-app link sign-in. Remove account-creation/password reassurance, duplicate name help and uniqueness copy, plus account-switch/retry-email options throughout sign-in and onboarding.
+- [x] Pass formatting, lint, types, boundary checks, all 509 tests, and the production build on Node 24. Component checks cover avatar destinations, unavailable profiles, and the setup gate. No browser or visual testing.
+- [ ] Deploy and verify production assets and access boundaries by direct HTTP.

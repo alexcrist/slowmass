@@ -105,6 +105,7 @@ export function EventGuests({
             <li key={guest.handle}>
               <PersonPhoto
                 name={guest.displayName}
+                profileHandle={guest.hasAvatar ? guest.handle : undefined}
                 src={guestPhoto(guest)}
                 size={36}
               />

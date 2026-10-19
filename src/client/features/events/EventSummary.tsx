@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { profileHref } from '../../navigation';
 import { eventWhen } from './time';
 import {
   answerEmoji,
@@ -13,12 +14,14 @@ export function PersonPhoto({
   name,
   src,
   size,
+  profileHandle,
 }: {
   name: string;
   src: string | null;
   size: number;
+  profileHandle?: string;
 }) {
-  return src ? (
+  const photo = src ? (
     <img
       className="event-person-photo"
       src={src}
@@ -36,6 +39,17 @@ export function PersonPhoto({
     >
       {name.trim().charAt(0).toUpperCase()}
     </span>
+  );
+  return profileHandle ? (
+    <a
+      className="event-person-link"
+      href={profileHref(profileHandle)}
+      aria-label={`View ${name}’s profile`}
+    >
+      {photo}
+    </a>
+  ) : (
+    photo
   );
 }
 
@@ -87,6 +101,7 @@ export function EventSummary({
                 <PersonPhoto
                   key={host.handle}
                   name={host.displayName}
+                  profileHandle={host.hasAvatar ? host.handle : undefined}
                   src={
                     host.hasAvatar
                       ? `/media/avatar/${encodeURIComponent(host.handle)}`
