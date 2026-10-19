@@ -603,3 +603,12 @@ The same release also replaces the invitation calendar date with “This link wo
 - [x] Remove navigation lock badges for event-only members. Before entering photo features, explicitly ask them to choose or confirm their username, then add a profile photo. Keep conflicts retryable, preserve the selected destination, update an own-profile destination on rename, and retain a return to the event. The existing profile endpoint validates usernames; no migration is needed.
 - [ ] Pass formatting, lint, types, boundary checks, component/integration tests, and the production build. No browser or visual testing.
 - [ ] Deploy and verify production assets and access boundaries by direct HTTP.
+
+## Simpler email confirmation and installed-app recovery — October 18, 2026
+
+- [x] Replace the routine “I’ve opened the email link” button with a shared, action-first instruction and short supporting details across regular, invite, and event sign-in. Remove stale email-entry instructions after sending.
+- [x] Recheck on focus, visibility return, restored pages, and reconnect, without polling; coalesce simultaneous checks, bound reads with the existing startup recovery, ignore late responses, and show retry only after failure.
+- [x] Keep installed-app recovery under “Trouble signing in?” with the masked unused-link field and same-email resend, preserving invitation metadata, suppressing duplicate requests, and retaining server eligibility/rate limits. Account switching remains removed. No migration or auth-protocol change.
+- [x] Run formatting, lint, types, boundaries, component/integration tests, and the production build. All static checks and the build pass; 522 of 523 tests pass, including all 124 focused UI checks. The unchanged migration CLI test exceeds its 60-second limit in both full and isolated runs; diagnostic timing shows individual local Wrangler operations taking 10–16 seconds. No assertions, timeouts, or CI gates were changed. No browser or visual testing.
+
+Release uses the existing `main` automatic deployment, gated by the full CI checks. Per owner direction, CI and production deployment are not monitored or verified in this workstream.

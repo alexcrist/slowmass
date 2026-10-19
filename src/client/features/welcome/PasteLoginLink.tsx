@@ -2,7 +2,15 @@ import { useState, type FormEvent } from 'react';
 import { loginLinkTarget } from './login-link';
 import { LoginSubmit } from './LoginSubmit';
 
-export function PasteLoginLink() {
+export function PasteLoginLink({
+  onResend,
+  resending = false,
+  resendStatus = '',
+}: {
+  onResend?: () => void;
+  resending?: boolean;
+  resendStatus?: string;
+}) {
   const [link, setLink] = useState('');
   const [error, setError] = useState('');
   function submit(event: FormEvent) {
@@ -22,12 +30,12 @@ export function PasteLoginLink() {
   if (!installed) return null;
   return (
     <details className="login-link-help">
-      <summary>Link opened in a different browser?</summary>
+      <summary>Trouble signing in?</summary>
       <p>
-        If your email link opens a separate browser, request a new link above.
+        If the link signs you into a different browser, use an unused link here.
         In your email, press and hold the sign-in link and copy it{' '}
-        <strong>without opening it</strong>. Return to the slowmass app and
-        paste it here. Links work once and expire after 10 minutes.
+        <strong>without opening it</strong>. Paste it below to sign in to this
+        app.
       </p>
       <form onSubmit={submit}>
         <label className="field-label" htmlFor="login-link">
@@ -57,6 +65,20 @@ export function PasteLoginLink() {
           </p>
         )}
       </form>
+      {onResend && (
+        <div>
+          <p>Already opened it, or has it expired?</p>
+          <button
+            type="button"
+            className="text-button"
+            disabled={resending}
+            onClick={onResend}
+          >
+            {resending ? 'Sending…' : 'Send a new link'}
+          </button>
+          {resendStatus && <p role="status">{resendStatus}</p>}
+        </div>
+      )}
     </details>
   );
 }
