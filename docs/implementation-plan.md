@@ -640,3 +640,25 @@ Release uses the existing `main` automatic deployment, gated by the full CI chec
 Merged the local upload recovery, event push/backup, and dialog changes (`5cb0179`) with the sign-in recovery changes already on `origin/main` (`408c224`). Both sets of progress notes are preserved; the only textual conflict was their addition at the same point in this plan. The combined product/design documentation and shared component tests retain both changes.
 
 The combined tree passed formatting, lint, TypeScript, boundary checks, all 558 tests across 61 files (`npm test -- --maxWorkers=2`), and the production build on Node 24. The migration CLI test passed with its existing timeout. No browser or visual testing was performed. This records local verification; production deployment is not verified here.
+
+## Event detail spacing and icons — October 18, 2026
+
+- [x] Separate date and time into rows with decorative calendar, clock, and location-pin icons. Use consistent 16px gaps through the host row, description, and answer buttons; reduce the Guests heading’s bottom margin to 4px above its tabs.
+- [x] Pass formatting, lint, TypeScript, boundary checks, all 558 tests across 61 files (`npm test -- --maxWorkers=2`), and the production build on Node 24. No browser or visual testing.
+- [ ] Production release. No migration is required.
+
+## Silent event edits and host notification blasts — October 18, 2026
+
+- [x] Make all detail edits silent and exclude historical detail-change entries from the event log, Activity, badges, focus, read acknowledgements, and push eligibility. Keep cancellation notifications and strengthen the guarded edit’s access/concurrency checks.
+- [x] Add Send notification to the host menu with a required message, delivery guidance, retry-safe submission, error recovery, and event-log refresh. Send Activity to every other host and everyone who RSVP’d, with Web Push only for opted-in devices and no email. Reuse the existing transactional host-message fan-out, limits, deletion, and push queue; no migration or service is added.
+- [x] Pass TypeScript and 55 focused event component/Workers/D1 tests covering host/co-host permissions, pending/removed hosts, invalid input, concurrent retries, changed-text conflicts, rollback, limits, silent edits, legacy suppression, Activity/read state, and opt-in push dispatch.
+- [x] Pass formatting, lint, TypeScript, boundary checks, all 569 tests across 61 files (`npm test -- --maxWorkers=2`), and the production build on Node 24. Review host access, transaction failure, retry identities, React state, and preservation of existing event layout changes. No browser or visual testing.
+- [ ] Production release and real-device push observation. Existing push throughput remains five deliveries per opportunistic/hourly pass, with a 24-hour queue lifetime; large blasts can be delayed or expire before every device is reached. Activity persists independently of device delivery.
+
+## Event colors and font pairings — October 18, 2026
+
+- [x] Add nine coordinated palettes, including four evening palettes, and six independently chosen font pairings. Apply every text/UI color and both font roles throughout the event shell and signed-out preview; restore normal appearance on exit.
+- [x] Add a host-only Appearance dialog with preview, cancel, guarded save, retry, and reload. Save curated IDs with a backward-compatible defaulted migration (0033, automatic), fresh write-time authorization, and protection against conflicting co-host edits; preserve silent detail edits.
+- [x] Self-host selected Latin-subset WOFF2 files and licenses, with content-hashed names, immutable caching, and no font catalog preloading or third-party runtime requests.
+- [x] Pass formatting, lint, TypeScript, boundary checks, all 581 tests across 63 files (`npm test -- --maxWorkers=2`), and the production build on Node 24. Coverage includes palette contrast, local font assets and loading scope, preview/cancel/save/unmount behavior, navigation restoration, host authorization, concurrent saves/retries, constrained storage, private previews, and migration compatibility. No browser or visual testing.
+- [ ] Production rollout: apply 0033 through the normal reviewed migration/deployment workflow and verify HTTP boundaries.

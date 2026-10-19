@@ -15,6 +15,12 @@ type State = 'loading' | 'ready' | 'unavailable' | 'error';
 // Invite and event links carry their credential in the URL fragment. Signed
 // out, event links show a limited preview before asking for an email.
 type Link = { kind: 'event' | 'invite'; token: string };
+function currentLink(): Link | null {
+  const match = /^#(event|invite)\/([a-zA-Z0-9]{48})$/.exec(location.hash);
+  return match
+    ? { kind: match[1] === 'event' ? 'event' : 'invite', token: match[2] }
+    : null;
+}
 // A working link: whether it admits new people, and an event link's event.
 type LinkCheck = {
   open: boolean;
@@ -50,12 +56,7 @@ export function Welcome() {
           ? 'That sign-in link could not be used. It may have expired or been used already. Request a new link below.'
           : '';
   });
-  const [link] = useState<Link | null>(() => {
-    const match = /^#(event|invite)\/([a-zA-Z0-9]{48})$/.exec(location.hash);
-    return match
-      ? { kind: match[1] === 'event' ? 'event' : 'invite', token: match[2] }
-      : null;
-  });
+  const [link, setLink] = useState<Link | null>(currentLink);
   const [checked, setChecked] = useState<LinkCheck | undefined>();
   const [linkAttempt, setLinkAttempt] = useState(0);
   const [linkError, setLinkError] = useState(false);
@@ -146,6 +147,21 @@ export function Welcome() {
     };
   }, [sent, name, loginAttempt]);
   const signedOut = state === 'ready' && member === null;
+  useLayoutEffect(() => {
+    if (!signedOut) return;
+    const changed = () => {
+      const next = currentLink();
+      if (next?.kind === link?.kind && next?.token === link?.token) return;
+      setLink(next);
+      setChecked(undefined);
+      setLinkError(false);
+      setSent(false);
+      setMessage('');
+    };
+    changed();
+    window.addEventListener('hashchange', changed);
+    return () => window.removeEventListener('hashchange', changed);
+  }, [signedOut, link]);
   useEffect(() => {
     if (!signedOut || !link) return;
     const controller = new AbortController();

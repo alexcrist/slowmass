@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { api, jsonRequest } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
 import { usePageHistory } from '../../navigation/PageHistory';
@@ -10,7 +10,7 @@ import { answerEmoji, type Answer } from './types';
 
 type Entry = {
   key: string;
-  kind: 'response' | 'message' | 'changed' | 'cancelled';
+  kind: 'response' | 'message' | 'cancelled';
   id: string | null;
   status: Answer | null;
   body: string;
@@ -21,13 +21,6 @@ type Entry = {
   canDelete: boolean;
 };
 
-export function changedText(fields: string) {
-  return fields === 'time,location'
-    ? 'the time and location'
-    : fields === 'location'
-      ? 'the location'
-      : 'the time';
-}
 function entryText(entry: Entry) {
   if (entry.kind === 'response')
     return entry.status === 'going'
@@ -35,7 +28,6 @@ function entryText(entry: Entry) {
       : entry.status === 'maybe'
         ? ' might go '
         : ' can’t go ';
-  if (entry.kind === 'changed') return ` changed ${changedText(entry.body)}.`;
   if (entry.kind === 'cancelled') return ' cancelled the event.';
   return ' ';
 }
@@ -46,10 +38,12 @@ export function EventLog({
   id,
   linkProfiles,
   onPosted,
+  refreshVersion = 0,
 }: {
   id: string;
   linkProfiles: boolean;
   onPosted?: () => void;
+  refreshVersion?: number;
 }) {
   const label = useId();
   const [history, setHistory] = usePageHistory(`event/${id}/activity`);
@@ -65,6 +59,13 @@ export function EventLog({
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState('');
   const [deleting, setDeleting] = useState<Entry | null>(null);
+  const lastRefresh = useRef(refreshVersion);
+  useEffect(() => {
+    if (lastRefresh.current === refreshVersion) return;
+    lastRefresh.current = refreshVersion;
+    if (history.length > 1) setHistory(['']);
+    else refresh();
+  }, [refreshVersion, history, setHistory, refresh]);
   async function post(submit: FormEvent) {
     submit.preventDefault();
     if (busy || !body.trim()) return;

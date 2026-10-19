@@ -105,40 +105,83 @@ export function EventSummary({
           <h2 className="event-title">{event.title}</h2>
           {actions}
         </div>
-        <p className="event-when">
-          <strong>{when.date}</strong>
-          <br />
-          {when.time}
-        </p>
-        {event.location && <p className="event-location">{event.location}</p>}
-        {hosts.length > 0 && (
-          <div className="event-hosts">
-            <span className="event-host-photos">
-              {hosts.map((host) => (
-                <PersonPhoto
-                  key={host.handle}
-                  name={host.displayName}
-                  profileHandle={host.hasAvatar ? host.handle : undefined}
-                  src={
-                    host.hasAvatar
-                      ? `/media/avatar/${encodeURIComponent(host.handle)}`
-                      : null
-                  }
-                  size={32}
-                />
-              ))}
-            </span>
-            <p>
-              Hosted by{' '}
-              {new Intl.ListFormat(undefined, { type: 'conjunction' }).format(
-                hosts.map((host) => host.displayName),
-              )}
+        <div className="event-information">
+          <p className="event-detail-row event-when">
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <rect x="3" y="5" width="18" height="16" rx="2" />
+              <path d="M16 3v4M8 3v4M3 11h18" />
+            </svg>
+            <strong>{when.date}</strong>
+          </p>
+          <p className="event-detail-row event-when">
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 7v5l3 2" />
+            </svg>
+            <span>{when.time}</span>
+          </p>
+          {event.location && (
+            <p className="event-detail-row event-location">
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20 10c0 6-8 11-8 11S4 16 4 10a8 8 0 1 1 16 0Z" />
+                <circle cx="12" cy="10" r="2.5" />
+              </svg>
+              <span>{event.location}</span>
             </p>
-          </div>
-        )}
-        {event.description && (
-          <p className="event-description">{event.description}</p>
-        )}
+          )}
+          {hosts.length > 0 && (
+            <div className="event-hosts">
+              <span className="event-host-photos">
+                {hosts.map((host) => (
+                  <PersonPhoto
+                    key={host.handle}
+                    name={host.displayName}
+                    profileHandle={host.hasAvatar ? host.handle : undefined}
+                    src={
+                      host.hasAvatar
+                        ? `/media/avatar/${encodeURIComponent(host.handle)}`
+                        : null
+                    }
+                    size={32}
+                  />
+                ))}
+              </span>
+              <p>
+                Hosted by{' '}
+                {new Intl.ListFormat(undefined, { type: 'conjunction' }).format(
+                  hosts.map((host) => host.displayName),
+                )}
+              </p>
+            </div>
+          )}
+          {event.description && (
+            <p className="event-description">{event.description}</p>
+          )}
+        </div>
       </div>
     </div>
   );

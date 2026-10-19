@@ -15,6 +15,8 @@ import { EditEvent } from '../src/client/features/events/EventForm';
 import { fromZoned } from '../src/client/features/events/time';
 import { AvatarForm } from '../src/client/features/avatars/AvatarForm';
 import { EventPreview } from '../src/client/features/events/EventPreview';
+import { originalAppearance } from '../src/shared/event-appearance';
+import { appearanceDocument } from './support/appearance-document';
 
 const authMocks = vi.hoisted(() => ({ magicLink: vi.fn() }));
 vi.mock('better-auth/react', () => ({
@@ -37,6 +39,7 @@ const id = '11111111-2222-4333-8444-555555555555';
 const token = 'a'.repeat(48);
 const startsAt = Date.UTC(2030, 0, 5, 3, 0);
 const details = {
+  appearance: originalAppearance,
   id,
   title: 'Dinner',
   description: 'Bring a dish',
@@ -77,6 +80,7 @@ beforeEach(() => {
   requests = [];
   const events = new EventTarget();
   const documentEvents = new EventTarget();
+  const { root, themeColor } = appearanceDocument();
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   vi.stubGlobal('location', {
     hash: '#feed',
@@ -88,12 +92,15 @@ beforeEach(() => {
   });
   vi.stubGlobal('navigator', { standalone: false });
   vi.stubGlobal('document', {
+    documentElement: root,
     visibilityState: 'visible',
     addEventListener: documentEvents.addEventListener.bind(documentEvents),
     removeEventListener:
       documentEvents.removeEventListener.bind(documentEvents),
     dispatchEvent: documentEvents.dispatchEvent.bind(documentEvents),
-    querySelector: vi.fn(() => null),
+    querySelector: vi.fn((selector: string) =>
+      selector === 'meta[name="theme-color"]' ? themeColor : null,
+    ),
   });
   vi.stubGlobal('window', {
     addEventListener: events.addEventListener.bind(events),
@@ -187,6 +194,170 @@ async function submit() {
       .props.onSubmit({ preventDefault: vi.fn() }),
   );
 }
+
+async function chooseAppearance(name: string, value: string) {
+  await act(async () =>
+    renderer.root
+      .findAllByType('input')
+      .find(
+        (input) => input.props.name === name && input.props.value === value,
+      )!
+      .props.onChange(),
+  );
+}
+const rootStyle = (name: string) =>
+  document.documentElement.style.getPropertyValue(name);
+
+it('previews host appearance across the root, cancels it, and saves only the selected IDs', async () => {
+  await mount(createElement(EventPage, { id, linkProfiles: true }));
+  await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
+  await reply(pending(`/api/events/${id}/guests`), { items: [], next: null });
+  await reply(pending(`/api/events/${id}/activity`), { items: [], next: null });
+  await click('Event options');
+  await click('Appearance');
+  await chooseAppearance('event-color', 'wine');
+  await chooseAppearance('event-font', 'classic');
+  expect(rootStyle('--paper')).toBe('#351d2b');
+  expect(rootStyle('--wordmark-font')).toContain('Fraunces');
+  expect(rootStyle('--body-font')).toContain('Source Sans 3');
+  expect(requests.some((request) => request.path.endsWith('/appearance'))).toBe(
+    false,
+  );
+  await click('Cancel');
+  expect(rootStyle('--paper')).toBe('#ffffff');
+  expect(rootStyle('--wordmark-font')).toContain('Caveat');
+  await click('Event options');
+  await click('Appearance');
+  await chooseAppearance('event-color', 'evergreen');
+  await chooseAppearance('event-font', 'rounded');
+  await submit();
+  await submit();
+  const save = pending(`/api/events/${id}/appearance`);
+  const appearance = { colorTheme: 'evergreen', fontPairing: 'rounded' };
+  expect(JSON.parse(String(save.options?.body))).toEqual({
+    appearance,
+    expected: originalAppearance,
+  });
+  expect(
+    requests.filter((request) => request.path.endsWith('/appearance')),
+  ).toHaveLength(1);
+  expect(button('Saving…').props.disabled).toBe(true);
+  await reply(save, { appearance });
+  expect(rootStyle('--paper')).toBe('#162e28');
+  expect(rootStyle('--body-font')).toContain('Nunito Sans');
+  expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
+  await reply(pending(`/api/events/${id}`), {
+    event: view({ viewer: host, appearance }),
+  });
+  await act(async () => renderer.unmount());
+  expect(rootStyle('--paper')).toBe('');
+  expect(rootStyle('--body-font')).toBe('');
+});
+
+it('keeps failed appearance edits retryable and aborts saves when the event unmounts', async () => {
+  await mount(createElement(EventPage, { id, linkProfiles: true }));
+  await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
+  await click('Event options');
+  await click('Appearance');
+  await chooseAppearance('event-color', 'after-hours');
+  await submit();
+  const first = pending(`/api/events/${id}/appearance`);
+  await reply(first, { error: 'The event changed. Reload it.' }, 409);
+  expect(visibleText()).toContain('The event changed. Reload it.');
+  expect(rootStyle('--paper')).toBe('#202544');
+  expect(button('Save appearance').props.disabled).toBe(false);
+  await submit();
+  const retry = pending(`/api/events/${id}/appearance`);
+  expect(retry.options?.body).toBe(first.options?.body);
+  await act(async () => renderer.unmount());
+  expect(retry.options?.signal?.aborted).toBe(true);
+  expect(rootStyle('--paper')).toBe('');
+  await reply(retry, {
+    appearance: { colorTheme: 'after-hours', fontPairing: 'original' },
+  });
+  expect(rootStyle('--paper')).toBe('');
+});
+
+it('restores ordinary app styling on navigation and uses the next event’s own pairing', async () => {
+  location.hash = `#event/${id}`;
+  await mount(
+    createElement(MemberApp, {
+      initialProfile: {
+        handle: 'bob',
+        displayName: 'Bob',
+        bio: '',
+        hasAvatar: 1,
+      },
+      onSignOut: vi.fn(),
+      signingOut: false,
+    }),
+  );
+  await reply(pending(`/api/events/${id}`), {
+    event: view({
+      counts: null,
+      appearance: { colorTheme: 'wine', fontPairing: 'classic' },
+    }),
+  });
+  expect(rootStyle('--wordmark-font')).toContain('Fraunces');
+  expect(
+    renderer.root.findAllByProps({ 'aria-label': 'Event options' }),
+  ).toHaveLength(0);
+  await act(async () => {
+    location.hash = '#settings';
+    window.dispatchEvent(new Event('hashchange'));
+  });
+  expect(rootStyle('--body-font')).toBe('');
+  expect(
+    document.documentElement.getAttribute('data-event-appearance'),
+  ).toBeNull();
+  const other = '22222222-3333-4444-8555-666666666666';
+  await act(async () => {
+    location.hash = `#event/${other}`;
+    window.dispatchEvent(new Event('hashchange'));
+  });
+  await reply(pending(`/api/events/${other}`), {
+    event: view({
+      id: other,
+      counts: null,
+      appearance: { colorTheme: 'pool', fontPairing: 'poster' },
+    }),
+  });
+  expect(rootStyle('--paper')).toBe('#e5f3ff');
+  expect(rootStyle('--body-font')).toContain('Barlow');
+});
+
+it('themes only the current authorized signed-out preview and clears it on leaving the link', async () => {
+  location.hash = `#event/${token}`;
+  await mount(createElement(Welcome));
+  await reply(pending('/api/bootstrap'), {
+    signInAvailable: true,
+    user: null,
+    profile: null,
+  });
+  await reply(pending('/api/event-link'), {
+    event: {
+      id,
+      open: true,
+      preview: {
+        title: 'Dinner',
+        date: 'Friday',
+        width: 4,
+        height: 3,
+        appearance: { colorTheme: 'candlelight', fontPairing: 'geometric' },
+      },
+    },
+  });
+  expect(rootStyle('--paper')).toBe('#33211e');
+  expect(rootStyle('--wordmark-font')).toContain('Space Grotesk');
+  expect(rootStyle('--body-font')).toContain('DM Sans');
+  await act(async () => {
+    location.hash = '';
+    window.dispatchEvent(new Event('hashchange'));
+  });
+  expect(rootStyle('--paper')).toBe('');
+  expect(rootStyle('--body-font')).toBe('');
+  expect(renderer.root.findAllByType(EventPreview)).toHaveLength(0);
+});
 
 it('links available event avatars to profile setup for viewers without a photo', async () => {
   location.hash = `#event/${id}`;
@@ -448,8 +619,8 @@ it('describes event activity and links to the event', async () => {
         eventTitle: 'Dinner',
         handle: 'alice',
         displayName: 'Alice',
-        messageKind: 'changed',
-        body: 'time,location',
+        messageKind: 'message',
+        body: 'Bring a jacket',
         version: 2,
         unread: false,
         createdAt: 2,
@@ -460,9 +631,8 @@ it('describes event activity and links to the event', async () => {
   // Guests never choose usernames, so event activity shows names.
   expect(visibleText()).toContain('Bob B might go to Dinner.');
   expect(visibleText()).not.toContain('bob_q1');
-  expect(visibleText()).toContain(
-    'Alice changed the time and location of Dinner.',
-  );
+  expect(visibleText()).toContain('Alice posted in Dinner.');
+  expect(visibleText()).toContain('Bring a jacket');
   expect(
     renderer.root
       .findAllByProps({ className: 'notification-post' })
@@ -470,7 +640,7 @@ it('describes event activity and links to the event', async () => {
   ).toEqual([`#event/${id}`, `#event/${id}`]);
 });
 
-it('edits details in the event time zone with a retry-safe change ID', async () => {
+it('edits details silently in the event time zone', async () => {
   const saved = vi.fn();
   await mount(createElement(EditEvent, { id, onSaved: saved }));
   await reply(pending(`/api/events/${id}`), {
@@ -495,10 +665,101 @@ it('edits details in the event time zone with a retry-safe change ID', async () 
     endsAt: fromZoned('2030-01-05', '01:00', 'America/Los_Angeles'),
     timeZone: 'America/Los_Angeles',
   });
-  expect(body.messageId).toMatch(/^[0-9a-f-]{36}$/);
+  expect(body.messageId).toBeUndefined();
+  expect(visibleText()).toContain('Edits don’t notify guests.');
   await reply(patch, { ok: true });
   expect(saved).toHaveBeenCalledWith(id);
 });
+
+it.each([true, false])(
+  'lets a host (creator: %s) send a notification with retry-safe text and clear delivery guidance',
+  async (isCreator) => {
+    await mount(createElement(EventPage, { id, linkProfiles: true }));
+    await reply(pending(`/api/events/${id}`), {
+      event: view({ viewer: { ...host, isCreator } }),
+    });
+    await reply(pending(`/api/events/${id}/activity`), {
+      items: [],
+      next: null,
+    });
+    await click('Event options');
+    await click('Send notification');
+    expect(visibleText()).toContain('everyone who RSVP’d');
+    expect(visibleText()).toContain(
+      'Only people with push notifications enabled receive a push alert.',
+    );
+    expect(visibleText()).toContain('No email is sent.');
+    expect(button('Send notification').props.disabled).toBe(true);
+    const field = renderer.root.findByType('dialog').findByType('textarea');
+    await type(field.props.id, 'Bring a jacket');
+    await submit();
+    const first = pending(`/api/events/${id}/notifications`);
+    expect(first.options?.method).toBe('POST');
+    expect(JSON.parse(String(first.options?.body))).toMatchObject({
+      id: expect.any(String),
+      body: 'Bring a jacket',
+    });
+    expect(button('Sending…').props.disabled).toBe(true);
+    await submit();
+    expect(
+      requests.filter((request) => request.path.endsWith('/notifications')),
+    ).toHaveLength(1);
+    await reply(first, { error: 'Connection interrupted. Try again.' }, 503);
+    expect(visibleText()).toContain('Connection interrupted. Try again.');
+    expect(
+      renderer.root.findByType('dialog').findByType('textarea').props.value,
+    ).toBe('Bring a jacket');
+    await submit();
+    const retry = pending(`/api/events/${id}/notifications`);
+    expect(retry.options?.body).toBe(first.options?.body);
+    await reply(retry, { id: JSON.parse(String(first.options?.body)).id });
+    expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
+    expect(visibleText()).toContain('Notification sent.');
+    expect(pending(`/api/events/${id}/activity`)).toBeDefined();
+  },
+);
+
+it('starts a new notification attempt when its message changes after failure', async () => {
+  await mount(createElement(EventPage, { id, linkProfiles: true }));
+  await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
+  await click('Event options');
+  await click('Send notification');
+  const fieldId = renderer.root.findByType('dialog').findByType('textarea')
+    .props.id;
+  await type(fieldId, 'First update');
+  await submit();
+  const first = pending(`/api/events/${id}/notifications`);
+  await reply(first, { error: 'Try again.' }, 503);
+  await type(fieldId, 'Corrected update');
+  await submit();
+  const corrected = pending(`/api/events/${id}/notifications`);
+  expect(JSON.parse(String(corrected.options?.body)).id).not.toBe(
+    JSON.parse(String(first.options?.body)).id,
+  );
+});
+
+it.each([
+  { viewer: { isHost: false, isCreator: false, response: 'going' } },
+  {
+    viewer: {
+      isHost: false,
+      isCreator: false,
+      response: null,
+      hostInvited: true,
+    },
+  },
+  { viewer: host, cancelled: true },
+])(
+  'withholds the host notification control when unavailable: %j',
+  async (overrides) => {
+    await mount(createElement(EventPage, { id, linkProfiles: true }));
+    await reply(pending(`/api/events/${id}`), { event: view(overrides) });
+    expect(
+      renderer.root.findAllByProps({ 'aria-label': 'Event options' }),
+    ).toHaveLength(0);
+    expect(visibleText()).not.toContain('Send notification');
+  },
+);
 
 it.each([
   ['creator', true],
@@ -785,7 +1046,13 @@ it('retries a failed preview cover and releases its in-memory URL on unmount', a
   await mount(
     createElement(EventPreview, {
       token,
-      preview: { title: 'Dinner', date: 'Friday', width: 4, height: 3 },
+      preview: {
+        title: 'Dinner',
+        date: 'Friday',
+        width: 4,
+        height: 3,
+        appearance: originalAppearance,
+      },
     }),
   );
   await reply(pending('/api/event-link/photo'), {}, 503);

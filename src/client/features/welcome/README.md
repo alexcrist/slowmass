@@ -21,3 +21,5 @@ An event's URL (`/#event/<link>`) also invites people. Signed in, the member app
 Regular, invite-link, and event-link email forms share one joined email/submit control: a labeled email input with a green paper-plane button on its right. The icon button retains an accessible action name, keyboard submission, disabled sending state, and an announced pending status. The installed-app unused-link helper uses the same treatment. Account-creation and password reassurance sentences are omitted; eligibility and delivery errors remain explicit.
 
 The confirmation has no account-switch action. Same-email resend is available only inside installed-app recovery. Name onboarding likewise has no account-switch control; Settings retains normal sign-out.
+
+Event previews apply the event’s saved color and font pairing to the entire sign-in shell, through the events feature. Signed-out hash navigation clears the old link check, email confirmation, preview, and appearance before checking a new link. Leaving the event or receiving an unavailable link restores the normal shell; stale requests cannot restyle the new route.

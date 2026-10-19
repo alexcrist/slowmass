@@ -25,7 +25,7 @@ const visibleSource = `
      JOIN event_response r ON r.event_id=ev.id AND r.user_id=e.actor_id
      WHERE ev.id=substr(e.event_key,16,36) AND ${eventAccess}))
    OR (e.kind='event_message' AND EXISTS(SELECT 1 FROM event ev
-     JOIN event_message msg ON msg.event_id=ev.id AND msg.id=substr(e.event_key,15) AND msg.deleted_at IS NULL
+     JOIN event_message msg ON msg.event_id=ev.id AND msg.id=substr(e.event_key,15) AND msg.deleted_at IS NULL AND msg.kind!='changed'
      WHERE ${eventAccess}
        AND (EXISTS(SELECT 1 FROM event_host WHERE event_id=ev.id AND user_id=e.recipient_id)
          OR EXISTS(SELECT 1 FROM event_response WHERE event_id=ev.id AND user_id=e.recipient_id))))
@@ -55,7 +55,7 @@ export type Notification = {
   eventTitle: string | null;
   // The guest's current answer, or the kind of event message.
   response: 'going' | 'maybe' | 'declined' | null;
-  messageKind: 'message' | 'changed' | 'cancelled' | null;
+  messageKind: 'message' | 'cancelled' | null;
   handle: string | null;
   // Event activity names people, since guests never choose a username.
   displayName: string | null;

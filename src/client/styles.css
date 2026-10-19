@@ -1,3 +1,5 @@
+@import './features/events/fonts.css';
+
 @font-face {
   font-family: 'Caveat';
   src: url('/fonts/caveat-bold.woff2') format('woff2');
@@ -13,9 +15,26 @@
   font-display: swap;
 }
 :root {
-  font-family: 'Source Sans 3', system-ui, sans-serif;
-  color: #171717;
-  background: #fff;
+  font-family: var(--body-font);
+  color: var(--ink);
+  background: var(--paper);
+  --body-font: 'Source Sans 3', system-ui, sans-serif;
+  --heading-font: 'Source Sans 3', system-ui, sans-serif;
+  --wordmark-font: 'Caveat', cursive;
+  --heading-weight: 600;
+  --detail: #171717;
+  --control-line: #d4d4d4;
+  --brand-hover: #193e30;
+  --on-brand: #ffffff;
+  --danger: #a42b25;
+  --on-danger: #ffffff;
+  --disabled: #999999;
+  --on-disabled: #ffffff;
+  --overlay: rgb(0 0 0 / 45%);
+  --image-overlay: rgb(0 0 0 / 85%);
+  --viewer-ink: #ffffff;
+  --viewer-hover: rgb(255 255 255 / 15%);
+  --menu-shadow: rgb(0 0 0 / 8%);
   --brand: #214c3b;
   --ink: #171717;
   --muted: #737373;
@@ -41,8 +60,10 @@ a {
 }
 button,
 input,
+select,
 textarea {
   font: inherit;
+  color: inherit;
 }
 button {
   cursor: pointer;
@@ -78,7 +99,7 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   min-height: 48px;
-  font-family: 'Caveat', cursive;
+  font-family: var(--wordmark-font);
   font-style: normal;
   font-size: 37px;
   font-weight: 700;
@@ -103,6 +124,12 @@ button:disabled {
   margin: 56px auto;
   padding: 32px;
   background: var(--paper);
+}
+h1,
+h2,
+h3 {
+  font-family: var(--heading-font);
+  font-weight: var(--heading-weight);
 }
 h1 {
   font-size: 26px;
@@ -268,7 +295,7 @@ p {
 .button-link {
   min-height: 44px;
   padding: 9px 15px;
-  border: 1px solid #d4d4d4;
+  border: 1px solid var(--control-line);
   border-radius: 5px;
   background: var(--paper);
   color: var(--ink);
@@ -292,12 +319,12 @@ p {
   border: 1px solid var(--brand);
   border-radius: 5px;
   background: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
   padding: 11px 16px;
   font-weight: 600;
 }
 .primary-button:enabled:hover {
-  background: #193e30;
+  background: var(--brand-hover);
 }
 .field-label {
   display: block;
@@ -309,7 +336,7 @@ input,
 textarea {
   width: 100%;
   min-height: 48px;
-  border: 1px solid #d4d4d4;
+  border: 1px solid var(--control-line);
   border-radius: 5px;
   background: var(--paper);
   color: var(--ink);
@@ -324,7 +351,7 @@ input:disabled {
 .login-input {
   display: flex;
   align-items: stretch;
-  border: 1px solid #d4d4d4;
+  border: 1px solid var(--control-line);
   border-radius: 5px;
   background: var(--paper);
 }
@@ -352,10 +379,10 @@ input:disabled {
   border: 0;
   border-radius: 0 4px 4px 0;
   background: var(--brand);
-  color: var(--paper);
+  color: var(--on-brand);
 }
 .login-submit:enabled:hover {
-  background: #193e30;
+  background: var(--brand-hover);
 }
 .login-submit svg {
   width: 24px;
@@ -390,7 +417,7 @@ input::file-selector-button {
   color: var(--muted);
 }
 .error-message {
-  color: #a42b25;
+  color: var(--danger);
   font-size: 15px;
 }
 .text-button {
@@ -859,7 +886,7 @@ summary.settings-row::after {
   padding: 0 8px 20px;
 }
 .settings-danger {
-  color: #a42b25;
+  color: var(--danger);
 }
 .person-link {
   display: inline-flex;
@@ -1042,7 +1069,7 @@ summary.settings-row::after {
   border: 0;
   border-radius: 50%;
   background: var(--brand);
-  color: #fff;
+  color: var(--on-brand);
 }
 .comment-submit svg {
   width: 22px;
@@ -1053,10 +1080,11 @@ summary.settings-row::after {
 .comment-submit:disabled {
   /* Keep the button opaque so the composer's outline cannot show through. */
   opacity: 1;
-  background: #999;
+  background: var(--disabled);
+  color: var(--on-disabled);
 }
 .comment-submit:enabled:hover {
-  background: #193e30;
+  background: var(--brand-hover);
 }
 .icon-button,
 .count-button {
@@ -1076,7 +1104,7 @@ summary.settings-row::after {
   height: 24px;
 }
 .icon-button[aria-pressed='true'] {
-  color: #a42b25;
+  color: var(--danger);
 }
 .count-button {
   font-weight: 600;
@@ -1130,7 +1158,7 @@ summary.settings-row::after {
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--paper);
-  box-shadow: 0 4px 16px rgb(0 0 0 / 8%);
+  box-shadow: 0 4px 16px var(--menu-shadow);
 }
 .overflow-menu > button {
   display: block;
@@ -1147,7 +1175,7 @@ summary.settings-row::after {
   background: var(--hover);
 }
 .danger-action {
-  color: #a42b25;
+  color: var(--danger);
 }
 .app-dialog {
   width: min(420px, calc(100% - 32px));
@@ -1161,7 +1189,7 @@ summary.settings-row::after {
   color: var(--ink);
 }
 .app-dialog::backdrop {
-  background: rgb(0 0 0 / 45%);
+  background: var(--overlay);
 }
 .app-dialog-wide {
   width: min(720px, calc(100% - 32px));
@@ -1175,11 +1203,11 @@ summary.settings-row::after {
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #fff;
+  color: var(--viewer-ink);
   outline: none;
 }
 .app-dialog-image::backdrop {
-  background: rgb(0 0 0 / 85%);
+  background: var(--image-overlay);
 }
 .app-dialog-image .dialog-heading > .icon-button {
   position: fixed;
@@ -1187,14 +1215,14 @@ summary.settings-row::after {
   right: max(12px, env(safe-area-inset-right));
   width: 44px;
   height: 44px;
-  color: #fff;
+  color: var(--viewer-ink);
   background: transparent;
 }
 .app-dialog-image .dialog-heading > .icon-button:hover {
-  background: rgb(255 255 255 / 15%);
+  background: var(--viewer-hover);
 }
 .app-dialog-image :focus-visible {
-  outline-color: #fff;
+  outline-color: var(--on-brand);
 }
 .post-crop-stage {
   position: relative;
@@ -1309,9 +1337,9 @@ summary.settings-row::after {
   padding: 11px 16px;
 }
 .danger-button {
-  background: #a42b25;
-  color: #fff;
-  border: 1px solid #a42b25;
+  background: var(--danger);
+  color: var(--on-danger);
+  border: 1px solid var(--danger);
   border-radius: 5px;
   font-weight: 600;
 }
@@ -1698,6 +1726,29 @@ a.profile-tab {
 .event-when {
   font-size: 17px;
 }
+.event-information {
+  display: grid;
+  gap: 16px;
+  padding-bottom: 16px;
+}
+.event-information > p {
+  margin: 0;
+}
+.event-detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.event-detail-row svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  margin-top: calc((1lh - 20px) / 2);
+}
+.event-detail-row > span,
+.event-detail-row > strong {
+  min-width: 0;
+}
 .event-location {
   white-space: pre-wrap;
 }
@@ -1705,7 +1756,6 @@ a.profile-tab {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 4px 0 16px;
 }
 .event-hosts p {
   margin: 0;
@@ -1762,7 +1812,7 @@ a.profile-tab {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  margin: 8px 0 16px;
+  margin: 0 0 16px;
 }
 .event-answer {
   display: inline-flex;
@@ -1772,7 +1822,7 @@ a.profile-tab {
   gap: 4px;
   min-height: 64px;
   padding: 8px;
-  border: 1px solid #d4d4d4;
+  border: 1px solid var(--control-line);
   border-radius: 5px;
   background: var(--paper);
   color: var(--ink);
@@ -1791,6 +1841,9 @@ a.profile-tab {
 }
 .event section > h2 {
   margin-top: 36px;
+}
+.event .event-guests > h2 {
+  margin-bottom: 4px;
 }
 .event-guest-list {
   list-style: none;
@@ -1837,7 +1890,7 @@ a.profile-tab {
   margin: 0;
 }
 .event-host-invite {
-  margin-bottom: 16px;
+  margin: 0 0 16px;
   font-weight: 400;
 }
 .event-host-invite > p {
@@ -1901,4 +1954,110 @@ a.profile-tab {
 }
 .photo-progress progress::-moz-progress-bar {
   background: #171717;
+}
+
+/* Event appearance reaches the entire shell and native top-layer dialogs. */
+:root[data-event-appearance] {
+  accent-color: var(--brand);
+  scrollbar-color: var(--control-line) var(--paper);
+}
+[data-event-appearance] :is(h1, h2, h3) {
+  color: var(--detail);
+}
+[data-event-font]:not([data-event-font='original']) :is(h1, h2, h3) {
+  font-weight: var(--heading-weight);
+}
+[data-event-appearance] .site-name,
+[data-event-appearance] .event-detail-row svg {
+  color: var(--detail);
+}
+[data-event-appearance] [role='alert'] {
+  color: var(--danger);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+.appearance-fieldset {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 24px 0 0;
+}
+.appearance-fieldset legend {
+  padding: 0;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+.appearance-colors {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.appearance-color,
+.appearance-font {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px;
+  border: 1px solid var(--control-line);
+  border-radius: 5px;
+  cursor: pointer;
+}
+.appearance-color {
+  flex-direction: column;
+  align-items: center;
+  font-size: 14px;
+  text-align: center;
+}
+.appearance-color:has(:checked),
+.appearance-font:has(:checked) {
+  outline: 2px solid var(--detail);
+  outline-offset: -2px;
+  background: var(--hover);
+}
+.appearance-color:has(:focus-visible),
+.appearance-font:has(:focus-visible) {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+}
+.appearance-fieldset input[type='radio'] {
+  width: 18px;
+  min-height: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  flex: none;
+  accent-color: var(--brand);
+}
+.appearance-color input {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+}
+.appearance-swatch {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 44px;
+  border: 1px solid;
+  border-radius: 3px;
+  font-size: 22px;
+  font-family: var(--heading-font);
+  font-weight: var(--heading-weight);
+}
+.appearance-fonts {
+  display: grid;
+  gap: 8px;
+}
+.appearance-font {
+  align-items: center;
+}
+.appearance-font small {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
 }

@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import { jsonRequest } from '../../api';
+import type { EventAppearance } from '../../../shared/event-appearance';
+import { useEventAppearance } from './useEventAppearance';
 
 export type EventPreviewDetails = {
+  appearance: EventAppearance;
   title: string;
   date: string;
   width: number;
@@ -17,6 +20,7 @@ export function EventPreview({
   token: string;
   preview: EventPreviewDetails;
 }) {
+  useEventAppearance(preview.appearance);
   const [photo, setPhoto] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);

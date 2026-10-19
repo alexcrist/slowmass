@@ -1,5 +1,7 @@
 import { symmetricDecrypt, symmetricEncrypt } from 'better-auth/crypto';
 import type { Env } from '../../env';
+import type { EventAppearance } from '../../../shared/event-appearance';
+export { parseAppearance } from '../../../shared/event-appearance';
 import { PhotoError, processPhoto } from '../../photos';
 import {
   readPhoto,
@@ -268,18 +270,21 @@ export async function saveEventPhoto(
   }
 }
 
-type EventRow = EventDetails & {
-  id: string;
-  cancelledAt: number | null;
-  width: number;
-  height: number;
-};
+type EventRow = EventDetails &
+  EventAppearance & {
+    id: string;
+    cancelledAt: number | null;
+    width: number;
+    height: number;
+  };
 const detailColumns = `e.id,e.title,e.description,e.location,e.starts_at AS startsAt,
- e.ends_at AS endsAt,e.time_zone AS timeZone,e.cancelled_at AS cancelledAt,e.width,e.height`;
+ e.ends_at AS endsAt,e.time_zone AS timeZone,e.cancelled_at AS cancelledAt,e.width,e.height,
+ e.color_theme AS colorTheme,e.font_pairing AS fontPairing`;
 function publicDetails(row: EventRow) {
-  const { cancelledAt, ...details } = row;
+  const { cancelledAt, colorTheme, fontPairing, ...details } = row;
   return {
     ...details,
+    appearance: { colorTheme, fontPairing },
     cancelled: cancelledAt !== null,
     over: (row.endsAt ?? row.startsAt + EVENT_OVER_AFTER) <= Date.now(),
     photoUrl: `/media/events/${row.id}`,
@@ -535,25 +540,32 @@ export async function checkLink(
   const row = await db
     .prepare(
       `SELECT e.id,e.title,e.starts_at AS startsAt,e.time_zone AS timeZone,e.width,e.height,
+      e.color_theme AS colorTheme,e.font_pairing AS fontPairing,
       e.cancelled_at IS NULL AND ${overAt}>?
         AND EXISTS(SELECT 1 FROM avatar WHERE user_id=e.creator_id) AS open FROM event e
       WHERE e.link_hash=? AND ${previewable}`,
     )
     .bind(Date.now(), await invitationTokenHash(token), viewer, viewer, viewer)
-    .first<{
-      id: string;
-      title: string;
-      startsAt: number;
-      timeZone: string;
-      width: number;
-      height: number;
-      open: number;
-    }>();
+    .first<
+      EventAppearance & {
+        id: string;
+        title: string;
+        startsAt: number;
+        timeZone: string;
+        width: number;
+        height: number;
+        open: number;
+      }
+    >();
   return row
     ? {
         id: row.id,
         open: Boolean(row.open),
         preview: {
+          appearance: {
+            colorTheme: row.colorTheme,
+            fontPairing: row.fontPairing,
+          },
           title: row.title,
           date: new Intl.DateTimeFormat('en-US', {
             timeZone: row.timeZone,
@@ -721,7 +733,7 @@ export async function eventLog(
         FROM allowed CROSS JOIN event_message m ON m.event_id=allowed.id CROSS JOIN viewer
         JOIN membership rm ON rm.user_id=m.user_id AND rm.status='active'
         JOIN profile rp ON rp.user_id=m.user_id
-        WHERE m.deleted_at IS NULL AND (m.created_at,'m:'||m.id)<(?,?)
+        WHERE m.deleted_at IS NULL AND m.kind!='changed' AND (m.created_at,'m:'||m.id)<(?,?)
           AND NOT ${blocked('viewer.id', 'm.user_id')}
         ORDER BY m.created_at DESC,m.id DESC LIMIT 21
       ) SELECT * FROM (SELECT * FROM answers UNION ALL SELECT * FROM messages)
@@ -730,7 +742,7 @@ export async function eventLog(
     .bind(viewer, id, time, key, time, key)
     .all<
       {
-        kind: 'response' | 'message' | 'changed' | 'cancelled';
+        kind: 'response' | 'message' | 'cancelled';
         id: string | null;
         status: ResponseStatus | null;
         body: string;
@@ -771,13 +783,38 @@ export async function postMessage(
   id: string,
   body: string,
 ) {
+  return writeMessage(db, actor, event, id, body, 'participant');
+}
+
+// An explicit host blast is a host message, sharing the same atomic Activity
+// fan-out, push queue, deletion rules and daily allowance.
+export async function sendEventNotification(
+  db: D1Database,
+  actor: string,
+  event: string,
+  id: string,
+  body: string,
+) {
+  return writeMessage(db, actor, event, id, body, 'host');
+}
+
+async function writeMessage(
+  db: D1Database,
+  actor: string,
+  event: string,
+  id: string,
+  body: string,
+  access: 'participant' | 'host',
+) {
+  const allowed =
+    access === 'host' ? `${hostOf} AND e.cancelled_at IS NULL` : participating;
   const now = Date.now();
   await db
     .prepare(
       `WITH viewer AS (SELECT ? AS id)
       INSERT INTO event_message(id,event_id,user_id,kind,body,created_at)
       SELECT ?,e.id,viewer.id,'message',?,? FROM event e CROSS JOIN viewer
-      WHERE e.id=? AND ${participating}
+      WHERE e.id=? AND ${allowed}
         AND (SELECT COUNT(*) FROM event_message WHERE user_id=viewer.id AND created_at>?)<100
       ON CONFLICT DO NOTHING`,
     )
@@ -787,13 +824,16 @@ export async function postMessage(
   return Boolean(
     await db
       .prepare(
-        "SELECT 1 FROM event_message WHERE id=? AND event_id=? AND user_id=? AND kind='message' AND body=? AND deleted_at IS NULL",
+        `WITH viewer AS (SELECT ? AS id)
+        SELECT 1 FROM event_message m JOIN event e ON e.id=m.event_id CROSS JOIN viewer
+        WHERE m.id=? AND e.id=? AND m.user_id=viewer.id AND m.kind='message'
+          AND m.body=? AND m.deleted_at IS NULL AND ${allowed}`,
       )
-      .bind(id, event, actor, body)
+      .bind(actor, id, event, body)
       .first(),
   );
 }
-// Authors and hosts can remove ordinary messages; detail changes stay.
+// Authors and hosts can remove ordinary messages.
 export async function deleteMessage(
   db: D1Database,
   actor: string,
@@ -812,13 +852,44 @@ export async function deleteMessage(
   return Boolean(result.meta.changes);
 }
 
-// Changing the time or location (or cancelling) tells every guest who answered.
+// Compare the host's last read in the write itself. Identical retries succeed,
+// but an old draft cannot overwrite another host's different saved appearance.
+// This touches no event details and creates no activity or push work.
+export async function updateAppearance(
+  db: D1Database,
+  actor: string,
+  id: string,
+  appearance: EventAppearance,
+  expected: EventAppearance,
+) {
+  const result = await db
+    .prepare(
+      `WITH viewer AS (SELECT ? AS id)
+    UPDATE event SET color_theme=?,font_pairing=?
+    WHERE id=? AND cancelled_at IS NULL
+      AND ((color_theme=? AND font_pairing=?) OR (color_theme=? AND font_pairing=?))
+      AND EXISTS(SELECT 1 FROM event e CROSS JOIN viewer WHERE e.id=event.id AND ${hostOf})`,
+    )
+    .bind(
+      actor,
+      appearance.colorTheme,
+      appearance.fontPairing,
+      id,
+      expected.colorTheme,
+      expected.fontPairing,
+      appearance.colorTheme,
+      appearance.fontPairing,
+    )
+    .run();
+  return result.meta.changes > 0;
+}
+
+// Detail edits are silent. Hosts send notifications explicitly.
 export async function updateEvent(
   db: D1Database,
   actor: string,
   id: string,
   details: EventDetails,
-  messageId: string,
 ) {
   const current = await db
     .prepare(
@@ -828,47 +899,33 @@ export async function updateEvent(
     .bind(actor, id)
     .first<EventRow>();
   if (!current) return false;
-  const changed = [
-    current.startsAt !== details.startsAt ||
-    current.endsAt !== details.endsAt ||
-    current.timeZone !== details.timeZone
-      ? 'time'
-      : '',
-    current.location !== details.location ? 'location' : '',
-  ]
-    .filter(Boolean)
-    .join(',');
-  const results = await db.batch([
-    db
-      .prepare(
-        `UPDATE event SET title=?,description=?,location=?,starts_at=?,ends_at=?,time_zone=?
+  const result = await db
+    .prepare(
+      `WITH viewer AS (SELECT ? AS id)
+        UPDATE event SET title=?,description=?,location=?,starts_at=?,ends_at=?,time_zone=?
         WHERE id=? AND state='published' AND cancelled_at IS NULL
           AND starts_at=? AND ends_at IS ? AND time_zone=? AND location=?
-          AND EXISTS(SELECT 1 FROM event_host h JOIN membership m ON m.user_id=h.user_id AND m.status='active'
-            WHERE h.event_id=event.id AND h.user_id=?)`,
-      )
-      .bind(
-        details.title,
-        details.description,
-        details.location,
-        details.startsAt,
-        details.endsAt,
-        details.timeZone,
-        id,
-        current.startsAt,
-        current.endsAt,
-        current.timeZone,
-        current.location,
-        actor,
-      ),
-    db
-      .prepare(
-        `INSERT INTO event_message(id,event_id,user_id,kind,body,created_at)
-        SELECT ?,?,?,'changed',?,? WHERE changes()=1 AND ?!='' ON CONFLICT DO NOTHING`,
-      )
-      .bind(messageId, id, actor, changed, Date.now(), changed),
-  ]);
-  return results[0].meta.changes > 0;
+          AND title=? AND description=?
+          AND EXISTS(SELECT 1 FROM event e CROSS JOIN viewer WHERE e.id=event.id AND ${hostOf})`,
+    )
+    .bind(
+      actor,
+      details.title,
+      details.description,
+      details.location,
+      details.startsAt,
+      details.endsAt,
+      details.timeZone,
+      id,
+      current.startsAt,
+      current.endsAt,
+      current.timeZone,
+      current.location,
+      current.title,
+      current.description,
+    )
+    .run();
+  return result.meta.changes > 0;
 }
 export async function cancelEvent(
   db: D1Database,

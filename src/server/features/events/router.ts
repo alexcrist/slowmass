@@ -20,6 +20,7 @@ import {
   listEvents,
   listGuests,
   parseCursor,
+  parseAppearance,
   parseDetails,
   parseEmail,
   parseMessage,
@@ -30,7 +31,9 @@ import {
   removePendingHost,
   respond,
   saveEventPhoto,
+  sendEventNotification,
   updateEvent,
+  updateAppearance,
   validId,
   validLinkToken,
 } from './index';
@@ -107,16 +110,40 @@ events.get('/:id', async (c) => {
   const event = await findEvent(c.env, c.get('userId'), c.req.param('id'));
   return event ? c.json({ event }) : c.json(notFound, 404);
 });
+events.patch('/:id/appearance', bodyLimit({ maxSize: 1024 }), async (c) => {
+  const body = (await json(c)) as Record<string, unknown> | null;
+  const appearance = parseAppearance(body?.appearance);
+  const expected = parseAppearance(body?.expected);
+  if (!appearance || !expected)
+    return c.json(
+      { error: 'Choose an available color theme and font pairing.' },
+      400,
+    );
+  return (await updateAppearance(
+    c.env.DB,
+    c.get('userId'),
+    c.req.param('id'),
+    appearance,
+    expected,
+  ))
+    ? c.json({ appearance })
+    : c.json(
+        {
+          error:
+            'Appearance could not be saved. The event may have changed or you may no longer be a host. Close this dialog and reload the event before trying again.',
+        },
+        409,
+      );
+});
 events.patch('/:id', jsonLimit, async (c) => {
   const body = (await json(c)) as Record<string, unknown> | null;
   const details = parseDetails(body);
-  if (!details || !validId(body?.messageId)) return c.json(detailsError, 400);
+  if (!details) return c.json(detailsError, 400);
   return (await updateEvent(
     c.env.DB,
     c.get('userId'),
     c.req.param('id'),
     details,
-    body.messageId,
   ))
     ? c.json({ ok: true })
     : c.json(
@@ -263,6 +290,26 @@ events.delete('/:id/messages/:message', async (c) =>
     ? c.json({ ok: true })
     : c.json({ error: 'Message not found.' }, 404),
 );
+events.post('/:id/notifications', jsonLimit, async (c) => {
+  const message = parseMessage(await json(c));
+  if (!message)
+    return c.json({ error: 'Write a message up to 2,000 characters.' }, 400);
+  return (await sendEventNotification(
+    c.env.DB,
+    c.get('userId'),
+    c.req.param('id'),
+    message.id,
+    message.body,
+  ))
+    ? c.json({ id: message.id })
+    : c.json(
+        {
+          error:
+            'The notification could not be sent. Only hosts can send notifications for an event that hasn’t been cancelled, with up to 100 messages a day.',
+        },
+        409,
+      );
+});
 // Pending hosts are emails, so they travel in request bodies, never URLs.
 events.post('/:id/hosts', bodyLimit({ maxSize: 1024 }), async (c) => {
   const body = (await json(c)) as Record<string, unknown> | null;

@@ -69,7 +69,6 @@ export function EventForm({
   } | null>(null);
   // Stable IDs make an unchanged retry converge; any edit starts a new attempt.
   const [id, setId] = useState(() => event?.id ?? crypto.randomUUID());
-  const [messageId, setMessageId] = useState(() => crypto.randomUUID());
   const [upload, setUpload] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<PhotoProgressState>({
@@ -91,7 +90,6 @@ export function EventForm({
         setId(crypto.randomUUID());
         setUpload(crypto.randomUUID());
       }
-      setMessageId(crypto.randomUUID());
     };
   }
   async function save(submit: FormEvent) {
@@ -130,7 +128,7 @@ export function EventForm({
     try {
       if (event)
         await api(`/api/events/${event.id}`, {
-          ...jsonRequest('PATCH', { ...details, messageId }),
+          ...jsonRequest('PATCH', details),
           signal: request.signal,
           timeoutMs: 30_000,
         });
@@ -288,7 +286,8 @@ export function EventForm({
         />
         {event && (
           <p className="field-help">
-            Changing the time or location notifies everyone who answered.
+            Edits don’t notify guests. Use Send notification from the event menu
+            to share an update.
           </p>
         )}
         {busy && <PhotoProgress progress={progress} />}

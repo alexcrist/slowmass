@@ -30,5 +30,6 @@
   "0029_like_runs.sql": "automatic",
   "0030_events.sql": "manual",
   "0031_event_cohosts.sql": "automatic",
-  "0032_invite_links.sql": "automatic"
+  "0032_invite_links.sql": "automatic",
+  "0033_event_appearance.sql": "automatic"
 }

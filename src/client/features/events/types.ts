@@ -1,3 +1,5 @@
+import type { EventAppearance } from '../../../shared/event-appearance';
+
 export type Answer = 'going' | 'maybe' | 'declined';
 export const answers: { value: Answer; label: string }[] = [
   { value: 'going', label: 'Going' },
@@ -19,6 +21,7 @@ export type Host = {
   isViewer: boolean;
 };
 export type EventDetails = {
+  appearance: EventAppearance;
   id: string;
   title: string;
   description: string;

@@ -5,6 +5,10 @@ import { testRuntime, seedProfilePhotos } from './support/runtime';
 import { cleanupAccounts } from '../src/server/features/account';
 import { cleanupEvents } from '../src/server/features/events';
 import { invitationTokenHash } from '../src/server/membership';
+import {
+  originalAppearance,
+  type EventAppearance,
+} from '../src/shared/event-appearance';
 
 let runtime: Awaited<ReturnType<typeof testRuntime>>;
 let sent: { to: string[]; text: string }[];
@@ -159,6 +163,171 @@ async function message(actor: string, id: string, body: string) {
   return { messageId, response };
 }
 
+it('saves appearance separately, exposes only curated IDs in previews, and rejects stale co-host edits', async () => {
+  const { id, token } = await event();
+  const appearance = {
+    colorTheme: 'wine',
+    fontPairing: 'classic',
+  } satisfies EventAppearance;
+  const other = {
+    colorTheme: 'pool',
+    fontPairing: 'poster',
+  } satisfies EventAppearance;
+  const save = (next: EventAppearance, expected = originalAppearance) =>
+    runtime.request('alice', `/api/events/${id}/appearance`, 'PATCH', {
+      appearance: next,
+      expected,
+    });
+  await respond('bob', id, 'going', token);
+  const before = await Promise.all(
+    ['activity_source', 'push_delivery', 'event_message'].map(
+      async (table) =>
+        (await runtime.db.prepare(`SELECT * FROM ${table} ORDER BY 1,2`).all())
+          .results,
+    ),
+  );
+  const results = await Promise.all([save(appearance), save(other)]);
+  expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+  const winner = results[0].status === 200 ? appearance : other;
+  expect((await save(winner)).status).toBe(200);
+  // A details edit by an older client must preserve the new appearance.
+  expect(
+    (
+      await runtime.request(
+        'alice',
+        `/api/events/${id}`,
+        'PATCH',
+        details({ title: 'Updated dinner' }),
+      )
+    ).status,
+  ).toBe(200);
+  expect(
+    await (await runtime.request('bob', `/api/events/${id}`)).json(),
+  ).toMatchObject({ event: { title: 'Updated dinner', appearance: winner } });
+  expect(await check(token)).toEqual({
+    id,
+    open: true,
+    preview: {
+      title: 'Updated dinner',
+      date: expect.any(String),
+      width: 4,
+      height: 3,
+      appearance: winner,
+    },
+  });
+  expect(
+    await Promise.all(
+      ['activity_source', 'push_delivery', 'event_message'].map(
+        async (table) =>
+          (
+            await runtime.db
+              .prepare(`SELECT * FROM ${table} ORDER BY 1,2`)
+              .all()
+          ).results,
+      ),
+    ),
+  ).toEqual(before);
+  // A later edit cannot be rolled back by retrying the first operation.
+  expect((await save(originalAppearance, winner)).status).toBe(200);
+  expect((await save(other, winner)).status).toBe(409);
+});
+
+it('allows only current unblocked hosts to change appearance, including accepted co-hosts', async () => {
+  const { id, token } = await event();
+  const appearance = {
+    colorTheme: 'evergreen',
+    fontPairing: 'rounded',
+  } satisfies EventAppearance;
+  const save = (actor: string | null) =>
+    runtime.request(actor, `/api/events/${id}/appearance`, 'PATCH', {
+      appearance,
+      expected: originalAppearance,
+    });
+  expect((await save(null)).status).toBe(401);
+  expect((await save('carol')).status).toBe(409);
+  await open('bob', token);
+  expect((await save('bob')).status).toBe(409);
+  await respond('bob', id, 'going');
+  expect((await save('bob')).status).toBe(409);
+  await runtime.request('alice', `/api/events/${id}/hosts`, 'POST', {
+    email: 'bob@example.com',
+  });
+  expect((await save('bob')).status).toBe(409);
+  expect(
+    (await runtime.request('bob', `/api/events/${id}/hosting`, 'POST')).status,
+  ).toBe(200);
+  expect((await save('bob')).status).toBe(200);
+  await runtime.db.prepare("INSERT INTO block VALUES('alice','bob',1)").run();
+  expect((await save('bob')).status).toBe(409);
+  await runtime.db.prepare('DELETE FROM block').run();
+  await runtime.request('alice', `/api/events/${id}/hosts/bob`, 'DELETE');
+  expect((await save('bob')).status).toBe(409);
+  await runtime.db
+    .prepare("UPDATE membership SET status='disabled' WHERE user_id='alice'")
+    .run();
+  expect((await save('alice')).status).toBe(401);
+  await runtime.db
+    .prepare("UPDATE membership SET status='active' WHERE user_id='alice'")
+    .run();
+  await runtime.db
+    .prepare('UPDATE event SET cancelled_at=1 WHERE id=?')
+    .bind(id)
+    .run();
+  expect((await save('alice')).status).toBe(409);
+  await runtime.db
+    .prepare("UPDATE event SET state='deleted',cancelled_at=NULL WHERE id=?")
+    .bind(id)
+    .run();
+  expect((await save('alice')).status).toBe(409);
+});
+
+it('validates appearance at both HTTP and storage boundaries and denies expired sessions', async () => {
+  const { id } = await event();
+  for (const appearance of [
+    null,
+    [],
+    {},
+    { colorTheme: '#fff', fontPairing: 'original' },
+    { colorTheme: 'wine', fontPairing: 'https://example.com/font' },
+  ])
+    expect(
+      (
+        await runtime.request(
+          'alice',
+          `/api/events/${id}/appearance`,
+          'PATCH',
+          { appearance, expected: originalAppearance },
+        )
+      ).status,
+    ).toBe(400);
+  expect(
+    (
+      await runtime.request('alice', `/api/events/${id}/appearance`, 'PATCH', {
+        appearance: originalAppearance,
+      })
+    ).status,
+  ).toBe(400);
+  for (const column of ['color_theme', 'font_pairing'])
+    await expect(
+      runtime.db
+        .prepare(`UPDATE event SET ${column}='unknown' WHERE id=?`)
+        .bind(id)
+        .run(),
+    ).rejects.toThrow();
+  await runtime.db
+    .prepare("UPDATE session SET expiresAt=? WHERE userId='alice'")
+    .bind(new Date(0).toISOString())
+    .run();
+  expect(
+    (
+      await runtime.request('alice', `/api/events/${id}/appearance`, 'PATCH', {
+        appearance: originalAppearance,
+        expected: originalAppearance,
+      })
+    ).status,
+  ).toBe(401);
+});
+
 it('creates events idempotently for members with a profile photo', async () => {
   expect((await draft('david')).response.status).toBe(409);
   const input = details();
@@ -228,6 +397,7 @@ it('previews a linked event, shows details after sign-in, and guests after answe
     id,
     open: true,
     preview: {
+      appearance: { colorTheme: 'original', fontPairing: 'original' },
       title: 'Dinner',
       date: expect.any(String),
       width: 4,
@@ -691,7 +861,7 @@ it('posts, retries and removes messages for hosts and guests only', async () => 
   ).toEqual(['response', 'response']);
 });
 
-it('notifies hosts of answers and guests of host messages, changes and cancellation', async () => {
+it('notifies hosts of answers and guests of host messages and cancellation, with silent edits', async () => {
   const { id, token } = await event();
   await respond('bob', id, 'going', token);
   await respond('carol', id, 'maybe', token);
@@ -776,13 +946,18 @@ it('notifies hosts of answers and guests of host messages, changes and cancellat
   expect((await patch(input, moved)).status).toBe(200);
   expect((await patch(input, moved)).status).toBe(200);
   expect((await activity('carol'))[0]).toMatchObject({
-    messageKind: 'changed',
-    body: 'time,location',
+    messageKind: 'message',
+    body: 'Doors at 7',
     eventTitle: 'Supper',
   });
   expect(
     (await activity('carol')).filter((item) => item.messageKind === 'changed'),
-  ).toHaveLength(1);
+  ).toHaveLength(0);
+  expect(
+    await runtime.db
+      .prepare("SELECT COUNT(*) AS n FROM event_message WHERE kind='changed'")
+      .first('n'),
+  ).toBe(0);
   await runtime.request('alice', `/api/events/${id}/cancel`, 'POST', {
     messageId: crypto.randomUUID(),
   });
@@ -794,6 +969,182 @@ it('notifies hosts of answers and guests of host messages, changes and cancellat
     .prepare("DELETE FROM event_response WHERE user_id='carol'")
     .run();
   expect(await activity('carol')).toEqual([]);
+});
+
+it('hides historical detail changes from the log, Activity, badge, focus and read receipts', async () => {
+  const { id, token } = await event();
+  await respond('bob', id, 'going', token);
+  const messageId = crypto.randomUUID();
+  await runtime.db
+    .prepare(
+      "INSERT INTO event_message(id,event_id,user_id,kind,body,created_at) VALUES(?,?,'alice','changed','time,location',?)",
+    )
+    .bind(messageId, id, Date.now())
+    .run();
+  const key = `event_message:${messageId}`;
+  const version = await runtime.db
+    .prepare(
+      "SELECT revision FROM activity_read_state WHERE recipient_id='bob' AND event_key=?",
+    )
+    .bind(key)
+    .first<number>('revision');
+  expect(await activity('bob')).toEqual([]);
+  expect(await unread('bob')).toBe(0);
+  expect(
+    await (
+      await runtime.request(
+        'bob',
+        `/api/notifications?includeEvents=1&focus=${key}`,
+      )
+    ).json(),
+  ).toMatchObject({ focusFound: false, items: [] });
+  const log = (await (
+    await runtime.request('bob', `/api/events/${id}/activity`)
+  ).json()) as { items: { kind: string }[] };
+  expect(log.items.map((item) => item.kind)).toEqual(['response']);
+  await runtime.request('bob', '/api/notifications/read', 'POST', {
+    items: [{ key, version }],
+  });
+  expect(
+    await runtime.db
+      .prepare(
+        "SELECT is_read FROM activity_read_state WHERE recipient_id='bob' AND event_key=?",
+      )
+      .bind(key)
+      .first('is_read'),
+  ).toBe(0);
+});
+
+it('sends retry-safe host notifications to all participants without email, enforcing host access', async () => {
+  const { id, token } = await event();
+  await respond('bob', id, 'declined', token);
+  await respond('david', id, 'maybe', token);
+  await open('carol', token);
+  const path = `/api/events/${id}/notifications`;
+  const input = { id: crypto.randomUUID(), body: '  Bring a jacket  ' };
+  // Answered guests, link viewers, pending hosts and signed-out users cannot blast.
+  for (const actor of ['bob', 'carol', 'david'])
+    expect((await runtime.request(actor, path, 'POST', input)).status).toBe(
+      409,
+    );
+  expect((await runtime.request(null, path, 'POST', input)).status).toBe(401);
+  await runtime.request('alice', `/api/events/${id}/hosts`, 'POST', {
+    email: 'carol@example.com',
+  });
+  expect((await runtime.request('carol', path, 'POST', input)).status).toBe(
+    409,
+  );
+  for (const body of ['', 'x'.repeat(2001)])
+    expect(
+      (await runtime.request('alice', path, 'POST', { ...input, body })).status,
+    ).toBe(400);
+  const results = await Promise.all([
+    runtime.request('alice', path, 'POST', input),
+    runtime.request('alice', path, 'POST', input),
+  ]);
+  expect(results.map((result) => result.status)).toEqual([200, 200]);
+  for (const actor of ['bob', 'david']) {
+    expect(await activity(actor)).toEqual([
+      expect.objectContaining({
+        body: 'Bring a jacket',
+        unread: true,
+        key: `event_message:${input.id}`,
+      }),
+    ]);
+    expect(await unread(actor)).toBe(1);
+  }
+  expect(await activity('carol')).toEqual([]);
+  expect(
+    (
+      await runtime.request('alice', path, 'POST', {
+        ...input,
+        body: 'Different message',
+      })
+    ).status,
+  ).toBe(409);
+  expect(
+    (await runtime.request('carol', `/api/events/${id}/hosting`, 'POST'))
+      .status,
+  ).toBe(200);
+  const cohostInput = { id: crypto.randomUUID(), body: 'Doors are open' };
+  expect(
+    (await runtime.request('carol', path, 'POST', cohostInput)).status,
+  ).toBe(200);
+  expect((await activity('alice'))[0]).toMatchObject({
+    body: 'Doors are open',
+  });
+  await runtime.request('alice', `/api/events/${id}/hosts/carol`, 'DELETE');
+  expect(
+    (await runtime.request('carol', path, 'POST', cohostInput)).status,
+  ).toBe(409);
+  // Creator blocks hide already-sent notifications and deny future sends.
+  await runtime.db.prepare("INSERT INTO block VALUES('bob','alice',1)").run();
+  expect(await activity('bob')).toEqual([]);
+  expect(
+    (
+      await runtime.request('alice', path, 'POST', {
+        id: crypto.randomUUID(),
+        body: 'Another update',
+      })
+    ).status,
+  ).toBe(200);
+  expect(await activity('bob')).toEqual([]);
+  await runtime.request('alice', `/api/events/${id}/cancel`, 'POST', {
+    messageId: crypto.randomUUID(),
+  });
+  expect(
+    (
+      await runtime.request('alice', path, 'POST', {
+        id: crypto.randomUUID(),
+        body: 'Too late',
+      })
+    ).status,
+  ).toBe(409);
+  expect(sent).toEqual([]);
+});
+
+it('rolls back a host blast when notification fan-out fails and enforces the shared daily message limit', async () => {
+  const { id, token } = await event();
+  await respond('bob', id, 'going', token);
+  const path = `/api/events/${id}/notifications`;
+  const input = { id: crypto.randomUUID(), body: 'Doors at 7' };
+  await runtime.db.exec(
+    "CREATE TRIGGER fail_blast BEFORE INSERT ON activity_source WHEN NEW.kind='event_message' BEGIN SELECT RAISE(ABORT,'synthetic failure'); END;",
+  );
+  expect((await runtime.request('alice', path, 'POST', input)).status).toBe(
+    500,
+  );
+  expect(
+    await runtime.db
+      .prepare('SELECT COUNT(*) AS n FROM event_message WHERE id=?')
+      .bind(input.id)
+      .first('n'),
+  ).toBe(0);
+  expect(await activity('bob')).toEqual([]);
+  await runtime.db.exec('DROP TRIGGER fail_blast');
+  expect((await runtime.request('alice', path, 'POST', input)).status).toBe(
+    200,
+  );
+  await runtime.db.batch(
+    Array.from({ length: 99 }, () =>
+      runtime.db
+        .prepare(
+          "INSERT INTO event_message(id,event_id,user_id,kind,body,created_at) VALUES(?,?,'alice','message','synthetic',?)",
+        )
+        .bind(crypto.randomUUID(), id, Date.now()),
+    ),
+  );
+  expect((await runtime.request('alice', path, 'POST', input)).status).toBe(
+    200,
+  );
+  expect(
+    (
+      await runtime.request('alice', path, 'POST', {
+        ...input,
+        id: crypto.randomUUID(),
+      })
+    ).status,
+  ).toBe(409);
 });
 
 it('lets people join only by signing in through an event link, recording the link', async () => {
@@ -1166,6 +1517,7 @@ it('authorizes preview cover bytes through the current link, including warm cach
     id,
     open: true,
     preview: {
+      appearance: originalAppearance,
       title: 'Dinner',
       date: 'Friday, January 4, 2030',
       width: 4,

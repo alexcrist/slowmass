@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { api } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
 import { postHref, profileHref } from '../../navigation';
-import { changedText, eventHref } from '../events';
+import { eventHref } from '../events';
 import { usePageHistory } from '../../navigation/PageHistory';
 import { useReadActivity } from './useReadActivity';
 type Item = {
@@ -28,7 +28,7 @@ type Item = {
       eventId: string;
       eventTitle: string;
       displayName: string;
-      messageKind: 'message' | 'changed' | 'cancelled';
+      messageKind: 'message' | 'cancelled';
       body: string;
     }
 );
@@ -45,9 +45,7 @@ function eventText(item: Item) {
   if (item.kind !== 'event_message') return '';
   return item.messageKind === 'cancelled'
     ? `${item.displayName} cancelled ${item.eventTitle}.`
-    : item.messageKind === 'changed'
-      ? `${item.displayName} changed ${changedText(item.body)} of ${item.eventTitle}.`
-      : `${item.displayName} posted in ${item.eventTitle}.`;
+    : `${item.displayName} posted in ${item.eventTitle}.`;
 }
 type Page = { items: Item[]; next: string | null; focusFound?: boolean };
 export function Notifications({

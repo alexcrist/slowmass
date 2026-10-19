@@ -101,10 +101,10 @@ async function queued() {
     .first('n');
 }
 
-it.each(['response', 'message', 'change', 'cancel'])(
+it.each(['response', 'message', 'notification', 'cancel'])(
   'dispatches event %s immediately with its exact unread Activity identity',
   async (kind) => {
-    const { id, details } = await event();
+    const { id } = await event();
     if (kind !== 'response') await answer(id);
     const recipient = kind === 'response' ? 'alice' : 'bob';
     await enable(recipient);
@@ -117,13 +117,11 @@ it.each(['response', 'message', 'change', 'cancel'])(
     else {
       const response = await runtime.request(
         'alice',
-        `/api/events/${id}${kind === 'change' ? '' : kind === 'cancel' ? '/cancel' : '/messages'}`,
-        kind === 'change' ? 'PATCH' : 'POST',
-        kind === 'change'
-          ? { ...details, location: 'New private location', messageId }
-          : kind === 'cancel'
-            ? { messageId }
-            : { id: messageId, body: 'Private message' },
+        `/api/events/${id}/${kind === 'notification' ? 'notifications' : kind === 'cancel' ? 'cancel' : 'messages'}`,
+        'POST',
+        kind === 'cancel'
+          ? { messageId }
+          : { id: messageId, body: 'Private message' },
       );
       expect(response.status).toBe(200);
     }
@@ -172,10 +170,15 @@ it.each(['read', 'block'])(
     const messageId = crypto.randomUUID();
     expect(
       (
-        await runtime.request('alice', `/api/events/${id}/messages`, 'POST', {
-          id: messageId,
-          body: 'Private message',
-        })
+        await runtime.request(
+          'alice',
+          `/api/events/${id}/notifications`,
+          'POST',
+          {
+            id: messageId,
+            body: 'Private message',
+          },
+        )
       ).status,
     ).toBe(200);
     await expect
@@ -215,3 +218,74 @@ it.each(['read', 'block'])(
     expect(await queued()).toBe(0);
   },
 );
+
+it('keeps detail edits silent and discards historical change alerts before delivery', async () => {
+  const { id, details } = await event();
+  await answer(id);
+  await enable('bob');
+  expect(
+    (
+      await runtime.request('alice', `/api/events/${id}`, 'PATCH', {
+        ...details,
+        startsAt: details.startsAt + 3600000,
+        location: 'New location',
+      })
+    ).status,
+  ).toBe(200);
+  expect(await queued()).toBe(0);
+  expect(sent).toHaveLength(0);
+  await runtime.db
+    .prepare(
+      "INSERT INTO event_message(id,event_id,user_id,kind,body,created_at) VALUES(?,?,'alice','changed','time',?)",
+    )
+    .bind(crypto.randomUUID(), id, Date.now())
+    .run();
+  expect(await queued()).toBe(1);
+  expect(
+    (await (await runtime.worker.getWorker()).scheduled({ cron: '0 * * * *' }))
+      .outcome,
+  ).toBe('ok');
+  expect(await queued()).toBe(0);
+  expect(sent).toHaveLength(0);
+});
+
+it('adds Activity for every guest while only sending push to opted-in devices, without replaying retries', async () => {
+  const { id, token } = await event();
+  await answer(id);
+  await runtime.request('carol', '/api/people/self', 'PUT', {
+    handle: 'carol',
+    displayName: 'Carol',
+    bio: '',
+  });
+  await runtime.request('carol', '/api/events/open', 'POST', { token });
+  await runtime.request('carol', `/api/events/${id}/response`, 'POST', {
+    status: 'declined',
+  });
+  await enable('bob');
+  const input = { id: crypto.randomUUID(), body: 'Bring a jacket' };
+  const path = `/api/events/${id}/notifications`;
+  expect((await runtime.request('alice', path, 'POST', input)).status).toBe(
+    200,
+  );
+  await expect.poll(() => sent.length, { timeout: 5000 }).toBe(1);
+  await expect.poll(queued, { timeout: 5000 }).toBe(0);
+  for (const actor of ['bob', 'carol'])
+    expect(
+      await (
+        await runtime.request(actor, '/api/notifications?includeEvents=1')
+      ).json(),
+    ).toMatchObject({
+      items: [
+        expect.objectContaining({
+          key: `event_message:${input.id}`,
+          body: input.body,
+          unread: true,
+        }),
+      ],
+    });
+  expect((await runtime.request('alice', path, 'POST', input)).status).toBe(
+    200,
+  );
+  expect(sent).toHaveLength(1);
+  expect(await queued()).toBe(0);
+});

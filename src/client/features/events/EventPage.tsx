@@ -1,4 +1,10 @@
 import { useEffect, useState } from 'react';
+import {
+  originalAppearance,
+  type EventAppearance,
+} from '../../../shared/event-appearance';
+import { useEventAppearance } from './useEventAppearance';
+import { EventAppearanceDialog } from './EventAppearanceDialog';
 import { api, jsonRequest } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
@@ -7,6 +13,7 @@ import { EventAnswers, EventSummary } from './EventSummary';
 import { EventGuests } from './EventGuests';
 import { EventHosts } from './EventHosts';
 import { EventLinkDialog } from './EventLinkDialog';
+import { EventNotificationDialog } from './EventNotificationDialog';
 import { MailIcon } from '../../ui/MailIcon';
 import { LockIcon } from '../../ui/LockIcon';
 import { EventLog } from './EventLog';
@@ -80,11 +87,21 @@ export function EventPage({
   }>(`/api/events/${encodeURIComponent(id)}`);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState('');
-  const [dialog, setDialog] = useState<'link' | 'hosts' | 'cancel' | null>(
-    null,
-  );
+  const [dialog, setDialog] = useState<
+    'link' | 'hosts' | 'notification' | 'appearance' | 'cancel' | null
+  >(null);
   const [messageId] = useState(() => crypto.randomUUID());
+  const [notificationSent, setNotificationSent] = useState(0);
   const event = data?.event;
+  const [appearancePreview, setAppearancePreview] =
+    useState<EventAppearance | null>(null);
+  useEventAppearance(
+    event
+      ? dialog === 'appearance' && event.viewer.isHost && !event.cancelled
+        ? (appearancePreview ?? event.appearance)
+        : event.appearance
+      : undefined,
+  );
   const url = event?.url;
   // Show the shareable URL in the address bar, so copying it works too.
   useEffect(() => {
@@ -133,6 +150,7 @@ export function EventPage({
   }
   function closeDialog() {
     setDialog(null);
+    setAppearancePreview(null);
     setFailure('');
   }
   if (error)
@@ -177,8 +195,16 @@ export function EventPage({
                       },
                     },
                     {
+                      label: 'Appearance',
+                      onSelect: () => setDialog('appearance'),
+                    },
+                    {
                       label: 'Edit hosts',
                       onSelect: () => setDialog('hosts'),
+                    },
+                    {
+                      label: 'Send notification',
+                      onSelect: () => setDialog('notification'),
                     },
                     {
                       label: 'Cancel event',
@@ -227,9 +253,10 @@ export function EventPage({
           <p>Answers are closed.</p>
         )}
         {failure && !dialog && <p role="alert">{failure}</p>}
+        {notificationSent > 0 && <p role="status">Notification sent.</p>}
         {event.counts ? (
           <>
-            <section aria-labelledby={`guests-${id}`}>
+            <section className="event-guests" aria-labelledby={`guests-${id}`}>
               <h2 id={`guests-${id}`}>Guests</h2>
               <EventGuests
                 key={JSON.stringify(event.counts)}
@@ -240,7 +267,11 @@ export function EventPage({
             </section>
             <section aria-labelledby={`activity-${id}`}>
               <h2 id={`activity-${id}`}>Activity</h2>
-              <EventLog id={id} linkProfiles={linkProfiles} />
+              <EventLog
+                id={id}
+                linkProfiles={linkProfiles}
+                refreshVersion={notificationSent}
+              />
             </section>
           </>
         ) : (
@@ -266,6 +297,32 @@ export function EventPage({
       </div>
       {dialog === 'link' && sharing && url && (
         <EventLinkDialog url={url} onClose={closeDialog} />
+      )}
+      {dialog === 'appearance' && managing && (
+        <EventAppearanceDialog
+          id={id}
+          appearance={event.appearance ?? originalAppearance}
+          onPreview={setAppearancePreview}
+          onClose={closeDialog}
+          onReload={() => {
+            closeDialog();
+            reload();
+          }}
+          onSaved={(appearance) => {
+            refresh((page) => ({ event: { ...page.event, appearance } }));
+            closeDialog();
+          }}
+        />
+      )}
+      {dialog === 'notification' && managing && (
+        <EventNotificationDialog
+          id={id}
+          onClose={closeDialog}
+          onSent={() => {
+            closeDialog();
+            setNotificationSent((value) => value + 1);
+          }}
+        />
       )}
       {dialog === 'hosts' && (
         <EventHosts
