@@ -12,6 +12,29 @@ export class PhotoError extends Error {
   }
 }
 
+// Bound each external await against the same phase deadline. A late result
+// cannot resume the pipeline, write objects, or publish an unvalidated photo.
+export async function photoDeadline<T>(
+  promise: Promise<T>,
+  expiresAt: number,
+  message: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new PhotoError(message, 503)),
+          Math.max(0, expiresAt - Date.now()),
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer!);
+  }
+}
+
 // Inspect container framing only. The Images service still decodes and validates pixels.
 export function inspectContainer(bytes: Uint8Array): void {
   if (!bytes.length || bytes.length > MAX_PHOTO_BYTES)
@@ -65,11 +88,19 @@ export async function processPhoto(
   size = 1600,
 ) {
   inspectContainer(bytes);
+  const expiresAt = Date.now() + 30_000;
+  const wait = <T>(promise: Promise<T>) =>
+    photoDeadline(
+      promise,
+      expiresAt,
+      'Photo processing took too long. Choose the photo again to start a new upload.',
+    );
   const stream = () => new Blob([new Uint8Array(bytes)]).stream();
   let info: ImageInfoResponse;
   try {
-    info = await images.info(stream());
+    info = await wait(images.info(stream()));
   } catch (error) {
+    if (error instanceof PhotoError) throw error;
     const invalid =
       error instanceof Error &&
       'code' in error &&
@@ -97,13 +128,15 @@ export async function processPhoto(
     );
   // WebP output strips metadata; the processor applies EXIF orientation before resizing.
   try {
-    const result = await images
-      .input(stream())
-      .transform({ width: size, height: size, fit: 'scale-down' })
-      .output({ format: 'image/webp', quality: 82, anim: false });
-    const output = new Uint8Array(await result.response().arrayBuffer());
+    const result = await wait(
+      images
+        .input(stream())
+        .transform({ width: size, height: size, fit: 'scale-down' })
+        .output({ format: 'image/webp', quality: 82, anim: false }),
+    );
+    const output = new Uint8Array(await wait(result.response().arrayBuffer()));
     if (output.length > MAX_PHOTO_BYTES) throw new Error('Output too large');
-    const dimensions = await images.info(new Blob([output]).stream());
+    const dimensions = await wait(images.info(new Blob([output]).stream()));
     if (!('width' in dimensions) || dimensions.format !== 'image/webp')
       throw new Error('Invalid output');
     return {
@@ -111,7 +144,8 @@ export async function processPhoto(
       width: dimensions.width,
       height: dimensions.height,
     };
-  } catch {
+  } catch (error) {
+    if (error instanceof PhotoError) throw error;
     throw new PhotoError(
       'Photo processing is unavailable. Please try again later.',
       503,

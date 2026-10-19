@@ -3,7 +3,11 @@ import { PersonLink } from '../../navigation/PersonLink';
 import { postHref } from '../../navigation';
 import { usePageHistory } from '../../navigation/PageHistory';
 import { Interactions } from '../interactions';
-import { api, jsonRequest } from '../../api';
+import { api, ApiError, jsonRequest } from '../../api';
+import {
+  PhotoProgress,
+  type PhotoProgressState,
+} from '../../images/PhotoProgress';
 import { useApiResource } from '../../api/useApiResource';
 import { RelativeTime } from '../../ui/RelativeTime';
 import { PostActions } from './PostActions';
@@ -235,6 +239,11 @@ export function Compose({ onPublished }: { onPublished: () => void }) {
   const [caption, setCaption] = useState('');
   const [id, setId] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [progress, setProgress] = useState<PhotoProgressState>({
+    phase: 'starting',
+  });
+  const [submitted, setSubmitted] = useState<{ caption: string } | null>(null);
   const [error, setError] = useState('');
   const controller = useRef<AbortController | null>(null);
   useEffect(
@@ -248,15 +257,19 @@ export function Compose({ onPublished }: { onPublished: () => void }) {
     event.preventDefault();
     if (!file || busy || controller.current || editing) return;
     setBusy(true);
+    setProgress({ phase: 'starting' });
     setError('');
     const request = new AbortController();
     controller.current = request;
     try {
       if (file.size > 8 * 1024 * 1024)
         throw new Error('Choose a photo smaller than 8 MB.');
+      const details = submitted ?? { caption };
+      setSubmitted(details);
       const draft = await api<{ state: string }>('/api/posts', {
-        ...jsonRequest('POST', { id, caption, altText: '' }),
+        ...jsonRequest('POST', { id, caption: details.caption, altText: '' }),
         signal: request.signal,
+        timeoutMs: 30_000,
       });
       if (request.signal.aborted) return;
       if (draft.state !== 'published')
@@ -265,6 +278,13 @@ export function Compose({ onPublished }: { onPublished: () => void }) {
           headers: { 'Content-Type': file.type || 'application/octet-stream' },
           body: file,
           signal: request.signal,
+          onUploadProgress: (percent) => {
+            if (!request.signal.aborted)
+              setProgress({
+                phase: percent === 100 ? 'processing' : 'uploading',
+                percent,
+              });
+          },
         });
       if (!request.signal.aborted) onPublished();
     } catch (error) {
@@ -282,17 +302,33 @@ export function Compose({ onPublished }: { onPublished: () => void }) {
     }
   }
   async function cancel() {
+    if (cancelling) return;
     controller.current?.abort();
-    controller.current = null;
+    const request = new AbortController();
+    controller.current = request;
+    setBusy(true);
+    setCancelling(true);
+    setProgress({ phase: 'cancelling' });
     let confirmed = false;
     try {
-      await api(`/api/posts/${id}`, { method: 'DELETE' });
+      await api(`/api/posts/${id}`, {
+        method: 'DELETE',
+        signal: request.signal,
+        timeoutMs: 30_000,
+      });
       confirmed = true;
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) confirmed = true;
       /* An interrupted request may have reached the server. */
     }
-    setId(crypto.randomUUID());
+    if (request.signal.aborted) return;
+    controller.current = null;
+    if (confirmed) {
+      setId(crypto.randomUUID());
+      setSubmitted(null);
+    }
     setBusy(false);
+    setCancelling(false);
     setError(
       confirmed
         ? 'Upload cancelled.'
@@ -309,7 +345,7 @@ export function Compose({ onPublished }: { onPublished: () => void }) {
           id="post-file"
           type="file"
           accept="image/jpeg,image/png,image/webp"
-          disabled={busy}
+          disabled={busy || submitted !== null}
           onChange={(event) => {
             const selected = event.target.files?.[0];
             event.target.value = '';
@@ -330,7 +366,7 @@ export function Compose({ onPublished }: { onPublished: () => void }) {
             <button
               type="button"
               className="text-button"
-              disabled={busy}
+              disabled={busy || submitted !== null}
               onClick={() => setEditing(source)}
             >
               Adjust crop
@@ -345,16 +381,24 @@ export function Compose({ onPublished }: { onPublished: () => void }) {
           rows={3}
           maxLength={2000}
           value={caption}
-          disabled={busy}
+          disabled={busy || submitted !== null}
           onChange={(event) => setCaption(event.target.value)}
         />
+        {busy && <PhotoProgress progress={progress} />}
+        {!busy && submitted && (
+          <p className="field-help">
+            Retry to check this upload. Cancel it before changing the photo or
+            caption.
+          </p>
+        )}
         <button className="primary-button" disabled={busy || !file}>
-          {busy ? 'Uploading and processing…' : 'Publish photo'}
+          {busy ? 'Saving…' : submitted ? 'Retry upload' : 'Publish photo'}
         </button>
-        {busy && (
+        {(busy || submitted) && (
           <button
             type="button"
             className="text-button"
+            disabled={cancelling}
             onClick={() => void cancel()}
           >
             Cancel upload
@@ -376,6 +420,7 @@ export function Compose({ onPublished }: { onPublished: () => void }) {
             setSource({ file: editing.file, crop });
             setPreview(URL.createObjectURL(cropped));
             setId(crypto.randomUUID());
+            setSubmitted(null);
             setError('');
             setEditing(null);
           }}

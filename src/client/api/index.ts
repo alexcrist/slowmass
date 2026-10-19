@@ -1,4 +1,11 @@
 import { separateReads, sharedRead } from './reads';
+import { withDeadline } from './deadline';
+import { uploadResponse } from './upload';
+
+type ApiOptions = RequestInit & {
+  timeoutMs?: number;
+  onUploadProgress?: (percent: number | null) => void;
+};
 
 export class ApiError extends Error {
   constructor(
@@ -20,9 +27,22 @@ export function onUnauthorized(listener: () => void) {
   };
 }
 
-async function request(path: string, options?: RequestInit): Promise<unknown> {
+async function request(path: string, options?: ApiOptions): Promise<unknown> {
   const listeners = [...unauthorizedListeners];
-  const response = await fetch(path, options);
+  const { onUploadProgress, ...fetchOptions } = options ?? {};
+  delete fetchOptions.timeoutMs;
+  const response =
+    onUploadProgress &&
+    fetchOptions.body instanceof Blob &&
+    fetchOptions.method === 'PUT'
+      ? await uploadResponse(
+          path,
+          fetchOptions.body,
+          fetchOptions.headers,
+          fetchOptions.signal,
+          onUploadProgress,
+        )
+      : await fetch(path, fetchOptions);
   const body: unknown = await response.json().catch(() => null);
   const error =
     body &&
@@ -43,10 +63,22 @@ async function request(path: string, options?: RequestInit): Promise<unknown> {
     }
     throw new ApiError(error, response.status);
   }
+  if (
+    onUploadProgress &&
+    !(
+      body &&
+      typeof body === 'object' &&
+      (('ok' in body && body.ok === true) ||
+        ('state' in body && body.state === 'published'))
+    )
+  )
+    throw new Error(
+      'The upload response could not be confirmed. Retry the same photo to check whether it saved.',
+    );
   return body;
 }
 
-export async function api<T>(path: string, options?: RequestInit): Promise<T> {
+export async function api<T>(path: string, options?: ApiOptions): Promise<T> {
   const method = options?.method?.toUpperCase() ?? 'GET';
   // Only ordinary same-origin reads share work. Custom headers, credentials,
   // cache modes and other fetch options retain their exact transport semantics.
@@ -61,9 +93,25 @@ export async function api<T>(path: string, options?: RequestInit): Promise<T> {
     )) as T;
   const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(method);
   if (mutation) separateReads();
+  const controller = options?.timeoutMs ? new AbortController() : null;
+  const abort = () => controller?.abort();
+  if (options?.signal?.aborted) abort();
+  else options?.signal?.addEventListener('abort', abort, { once: true });
   try {
-    return (await request(path, options)) as T;
+    const pending = request(
+      path,
+      controller ? { ...options, signal: controller.signal } : options,
+    );
+    return (await (controller && options?.timeoutMs
+      ? withDeadline(pending, controller.signal, {
+          milliseconds: options.timeoutMs,
+          message:
+            'The request took too long to confirm. Check your connection, then try again with the same details.',
+        })
+      : pending)) as T;
   } finally {
+    controller?.abort();
+    options?.signal?.removeEventListener('abort', abort);
     // A read started during the mutation can also predate its commit.
     if (mutation) separateReads();
   }

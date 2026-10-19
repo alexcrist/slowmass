@@ -1,18 +1,30 @@
-import { MAX_PHOTO_BYTES, PhotoError } from './index';
+import { MAX_PHOTO_BYTES, PhotoError, photoDeadline } from './index';
 export async function readPhoto(request: Request) {
   if (!request.body) throw new PhotoError('Choose a photo.', 422);
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
   let size = 0;
-  for (;;) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > MAX_PHOTO_BYTES) {
-      await reader.cancel();
-      throw new PhotoError('Choose a photo smaller than 8 MB.', 413);
+  const expiresAt = Date.now() + 120_000;
+  try {
+    for (;;) {
+      const { value, done } = await photoDeadline(
+        reader.read(),
+        expiresAt,
+        'Receiving the photo took too long. Check your connection and choose the photo again.',
+      );
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_PHOTO_BYTES) {
+        throw new PhotoError('Choose a photo smaller than 8 MB.', 413);
+      }
+      chunks.push(value);
     }
-    chunks.push(value);
+  } catch (error) {
+    // Cancellation itself can stall; it must not hold the failure response open.
+    void reader.cancel().catch(() => {});
+    throw error;
+  } finally {
+    reader.releaseLock();
   }
   const bytes = new Uint8Array(size);
   let offset = 0;

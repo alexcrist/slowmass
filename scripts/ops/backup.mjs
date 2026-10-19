@@ -70,7 +70,7 @@ try {
     photos: [],
   };
   for (const { object_key: key } of keys) {
-    if (!/^(posts|avatars)\/[a-f0-9-]+\.webp$/.test(key))
+    if (!/^(posts|avatars|events)\/[a-f0-9-]+\.webp$/.test(key))
       throw new Error('Unexpected stored object key.');
     const filename = createHash('sha256').update(key).digest('hex') + '.webp';
     await wr(

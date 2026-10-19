@@ -1,3 +1,4 @@
+import { mockUploads } from './support/upload';
 import { act, createElement } from 'react';
 import { create, type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -17,6 +18,7 @@ const photo = () =>
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   vi.stubGlobal('document', {});
+  mockUploads((path, options) => fetch(path, options));
   vi.mocked(decodePhoto).mockReset().mockResolvedValue(bitmap());
   vi.mocked(encodeCrop)
     .mockReset()
@@ -24,7 +26,48 @@ beforeEach(() => {
 });
 afterEach(async () => {
   if (renderer) await act(async () => renderer.unmount());
+  vi.useRealTimers();
   vi.unstubAllGlobals();
+});
+
+it('shows transfer and processing status, then unlocks a timed-out save for a safe retry', async () => {
+  vi.useFakeTimers();
+  const fetch = vi
+    .fn()
+    .mockImplementationOnce(() => new Promise<Response>(() => {}))
+    .mockResolvedValueOnce(Response.json({ ok: true }));
+  const uploads = mockUploads(fetch);
+  const onChange = vi.fn();
+  await act(async () => {
+    renderer = create(createElement(AvatarForm, { handle: 'alice', onChange }));
+  });
+  await select(photo());
+  await save();
+  await act(async () => uploads[0].progress(45));
+  expect(renderer.root.findByType('progress').props.value).toBe(45);
+  await act(async () => uploads[0].sent());
+  expect(renderer.root.findAllByType('progress')).toHaveLength(0);
+  expect(JSON.stringify(renderer.toJSON())).toContain('Processing and saving');
+  expect(onChange).not.toHaveBeenCalled();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(15_000);
+  });
+  expect(JSON.stringify(renderer.toJSON())).toContain(
+    'taking longer than usual',
+  );
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(105_000);
+  });
+  expect(renderer.root.findByProps({ id: 'avatar-zoom' }).props.disabled).toBe(
+    false,
+  );
+  expect(
+    renderer.root.findByProps({ role: 'alert' }).children.join(''),
+  ).toContain('too long to confirm');
+  await save();
+  expect(uploads[1].headers).toEqual(uploads[0].headers);
+  expect(uploads[1].body).toBe(uploads[0].body);
+  expect(onChange).toHaveBeenCalledOnce();
 });
 async function select(file: File) {
   await act(async () =>
@@ -70,7 +113,7 @@ it('retries exactly the same encoded crop and upload ID after a lost response', 
   await save();
   expect(onChange).not.toHaveBeenCalled();
   expect(renderer.root.findByProps({ role: 'alert' }).children).toContain(
-    'Network error',
+    'The connection was interrupted. Check your connection, then retry the same photo to check whether it saved.',
   );
   await save();
   expect(fetch).toHaveBeenCalledTimes(2);

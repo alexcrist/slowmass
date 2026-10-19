@@ -6,6 +6,10 @@ import {
   type PointerEvent,
 } from 'react';
 import { api } from '../../api';
+import {
+  PhotoProgress,
+  type PhotoProgressState,
+} from '../../images/PhotoProgress';
 import { Dialog } from '../../ui/Dialog';
 import { ProfilePhoto } from './ProfilePhoto';
 import {
@@ -47,6 +51,9 @@ export function AvatarForm({
   } | null>(null);
   const [crop, setCrop] = useState(initialCrop);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<PhotoProgressState>({
+    phase: 'preparing',
+  });
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -166,6 +173,7 @@ export function AvatarForm({
     if (!image || controller.current) return;
     pointers.current.clear();
     setBusy(true);
+    setProgress({ phase: 'preparing' });
     setMessage('');
     setError('');
     const request = new AbortController();
@@ -185,6 +193,13 @@ export function AvatarForm({
         },
         body: payload.blob,
         signal: request.signal,
+        onUploadProgress: (percent) => {
+          if (!request.signal.aborted)
+            setProgress({
+              phase: percent === 100 ? 'processing' : 'uploading',
+              percent,
+            });
+        },
       });
       if (request.signal.aborted) return;
       setVersion((value) => value + 1);
@@ -247,9 +262,16 @@ export function AvatarForm({
       </div>
       {message && <p role="status">{message}</p>}
       {file && (
-        <Dialog title="Crop profile photo" busy={busy} onClose={cancel}>
-          <form onSubmit={(event) => void upload(event)} aria-busy={busy}>
-            {file && !image && !error && <p role="status">Opening photo…</p>}
+        <Dialog
+          title="Crop profile photo"
+          busy={busy}
+          announceWhileBusy
+          onClose={cancel}
+        >
+          <form onSubmit={(event) => void upload(event)}>
+            {file && !image && !error && (
+              <PhotoProgress progress={{ phase: 'opening' }} />
+            )}
             {image && (
               <div className="avatar-crop">
                 <canvas
@@ -318,6 +340,7 @@ export function AvatarForm({
                 </button>
               </div>
             )}
+            {busy && <PhotoProgress progress={progress} />}
             {error && (
               <p role="alert" className="error-message">
                 {error}
@@ -333,7 +356,7 @@ export function AvatarForm({
                 Cancel
               </button>
               <button className="primary-button" disabled={busy || !image}>
-                {busy ? 'Saving…' : 'Use photo'}
+                {busy ? 'Saving…' : error ? 'Retry save' : 'Use photo'}
               </button>
             </div>
           </form>

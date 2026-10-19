@@ -113,9 +113,14 @@ export const pushAfterMutation: MiddlewareHandler<{ Bindings: Env }> = async (
   await next();
   if (
     pushConfigured(c.env) &&
-    ['POST', 'PUT', 'DELETE'].includes(c.req.method) &&
-    (/^\/api\/(people|interactions)\//.test(c.req.path) ||
-      c.req.path === '/api/avatar') &&
+    ((['POST', 'PUT', 'DELETE'].includes(c.req.method) &&
+      (/^\/api\/(people|interactions)\//.test(c.req.path) ||
+        c.req.path === '/api/avatar')) ||
+      (c.req.method === 'PATCH' && /^\/api\/events\/[^/]+$/.test(c.req.path)) ||
+      (c.req.method === 'POST' &&
+        /^\/api\/events\/[^/]+\/(response|messages|cancel)$/.test(
+          c.req.path,
+        ))) &&
     !c.req.path.endsWith('/like') &&
     c.res.status < 300
   )

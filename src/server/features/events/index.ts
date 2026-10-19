@@ -259,7 +259,9 @@ export async function saveEventPhoto(
     ]);
     return saved[2].meta.changes ? 'done' : 'missing';
   } catch (error) {
-    await env.DB.prepare("UPDATE photo_attempt SET state='failed' WHERE id=?")
+    await env.DB.prepare(
+      "UPDATE photo_attempt SET state='failed' WHERE id=? AND state='pending'",
+    )
       .bind(`${actor}:event/${upload}`)
       .run();
     throw error;

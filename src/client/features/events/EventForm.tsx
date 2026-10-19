@@ -1,5 +1,9 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api, jsonRequest } from '../../api';
+import {
+  PhotoProgress,
+  type PhotoProgressState,
+} from '../../images/PhotoProgress';
 import { useApiResource } from '../../api/useApiResource';
 import { PostCropEditor, fullPhoto, type Rectangle } from '../posts';
 import { currentTimeZone, fromZoned, zonedInput } from './time';
@@ -68,7 +72,12 @@ export function EventForm({
   const [messageId, setMessageId] = useState(() => crypto.randomUUID());
   const [upload, setUpload] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<PhotoProgressState>({
+    phase: 'saving',
+  });
+  const controller = useRef<AbortController | null>(null);
   const [error, setError] = useState('');
+  useEffect(() => () => controller.current?.abort(), []);
   useEffect(
     () => () => {
       if (preview) URL.revokeObjectURL(preview);
@@ -78,13 +87,16 @@ export function EventForm({
   function changed<T>(set: (value: T) => void) {
     return (value: T) => {
       set(value);
-      if (!event) setId(crypto.randomUUID());
+      if (!event) {
+        setId(crypto.randomUUID());
+        setUpload(crypto.randomUUID());
+      }
       setMessageId(crypto.randomUUID());
     };
   }
   async function save(submit: FormEvent) {
     submit.preventDefault();
-    if (busy || editing) return;
+    if (busy || editing || controller.current) return;
     setError('');
     const startsAt = fromZoned(date, startTime, timeZone);
     if (startsAt === null) {
@@ -104,6 +116,9 @@ export function EventForm({
       return;
     }
     setBusy(true);
+    setProgress({ phase: file ? 'starting' : 'saving' });
+    const request = new AbortController();
+    controller.current = request;
     const details = {
       title,
       description,
@@ -114,11 +129,18 @@ export function EventForm({
     };
     try {
       if (event)
-        await api(
-          `/api/events/${event.id}`,
-          jsonRequest('PATCH', { ...details, messageId }),
-        );
-      else await api('/api/events', jsonRequest('POST', { id, ...details }));
+        await api(`/api/events/${event.id}`, {
+          ...jsonRequest('PATCH', { ...details, messageId }),
+          signal: request.signal,
+          timeoutMs: 30_000,
+        });
+      else
+        await api('/api/events', {
+          ...jsonRequest('POST', { id, ...details }),
+          signal: request.signal,
+          timeoutMs: 30_000,
+        });
+      if (request.signal.aborted) return;
       if (file)
         await api(`/api/events/${id}/photo`, {
           method: 'PUT',
@@ -127,16 +149,28 @@ export function EventForm({
             'Idempotency-Key': upload,
           },
           body: file,
+          signal: request.signal,
+          onUploadProgress: (percent) => {
+            if (!request.signal.aborted)
+              setProgress({
+                phase: percent === 100 ? 'processing' : 'uploading',
+                percent,
+              });
+          },
         });
-      onSaved(id);
+      if (!request.signal.aborted) onSaved(id);
     } catch (failure) {
-      setError(
-        failure instanceof Error
-          ? failure.message
-          : 'The event could not be saved. Try again.',
-      );
+      if (!request.signal.aborted)
+        setError(
+          failure instanceof Error
+            ? failure.message
+            : 'The event could not be saved. Try again.',
+        );
     } finally {
-      setBusy(false);
+      if (controller.current === request) {
+        controller.current = null;
+        if (!request.signal.aborted) setBusy(false);
+      }
     }
   }
   return (
@@ -257,6 +291,7 @@ export function EventForm({
             Changing the time or location notifies everyone who answered.
           </p>
         )}
+        {busy && <PhotoProgress progress={progress} />}
         <button className="primary-button" disabled={busy}>
           {busy ? 'Saving…' : event ? 'Save changes' : 'Create event'}
         </button>

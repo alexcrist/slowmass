@@ -570,6 +570,84 @@ it('leaves failed processing unpublished and its cleanup intent retryable', asyn
     404,
   );
 });
+
+it('marks a claimed post failed if recording cleanup intent fails', async () => {
+  const { env, transform } = await processingEnv();
+  const id = crypto.randomUUID();
+  await createDraft(env.DB, 'alice', { id, caption: '', altText: '' });
+  await env.DB.prepare(
+    "CREATE TRIGGER fail_photo_cleanup BEFORE INSERT ON photo_cleanup BEGIN SELECT RAISE(ABORT,'synthetic_failure'); END",
+  ).run();
+  try {
+    await expect(
+      publishPhoto(
+        env,
+        'alice',
+        id,
+        new Request('http://localhost/upload', {
+          method: 'PUT',
+          body: readFileSync('tests/fixtures/photos/still.png'),
+        }),
+      ),
+    ).rejects.toThrow();
+    expect(
+      await env.DB.prepare('SELECT state FROM post WHERE id=?')
+        .bind(id)
+        .first(),
+    ).toEqual({ state: 'failed' });
+    expect(
+      await env.DB.prepare('SELECT state FROM photo_attempt WHERE id=?')
+        .bind(`alice:post/${id}`)
+        .first(),
+    ).toEqual({ state: 'failed' });
+    expect(transform).not.toHaveBeenCalled();
+  } finally {
+    await env.DB.prepare('DROP TRIGGER fail_photo_cleanup').run();
+  }
+});
+
+it('preserves completed attempt state when the publication commit reply is lost', async () => {
+  const { env, transform } = await processingEnv();
+  const id = crypto.randomUUID();
+  await createDraft(env.DB, 'alice', { id, caption: '', altText: '' });
+  let loseReply = true;
+  const real = env.DB;
+  env.DB = new Proxy(real, {
+    get(target, key) {
+      if (key === 'batch')
+        return async (statements: D1PreparedStatement[]) => {
+          const result = await target.batch(statements);
+          const done = await real
+            .prepare("SELECT 1 FROM post WHERE id=? AND state='published'")
+            .bind(id)
+            .first();
+          if (done && loseReply) {
+            loseReply = false;
+            throw new Error('Response lost after publication');
+          }
+          return result;
+        };
+      const value = Reflect.get(target, key);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+  const request = () =>
+    new Request('http://localhost/upload', {
+      method: 'PUT',
+      body: readFileSync('tests/fixtures/photos/still.png'),
+    });
+  await expect(publishPhoto(env, 'alice', id, request())).rejects.toThrow(
+    'lost after publication',
+  );
+  expect(
+    await real
+      .prepare('SELECT state FROM photo_attempt WHERE id=?')
+      .bind(`alice:post/${id}`)
+      .first(),
+  ).toEqual({ state: 'done' });
+  expect(await publishPhoto(env, 'alice', id, request())).toBe('published');
+  expect(transform).toHaveBeenCalledOnce();
+});
 it('rejects a competing upload and cannot publish after deletion during processing', async () => {
   const { env, transform } = await processingEnv();
   let resume!: () => void;

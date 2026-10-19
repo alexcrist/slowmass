@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { Dialog } from '../../ui/Dialog';
 import { decodePhoto } from '../../images/decode';
+import { PhotoProgress } from '../../images/PhotoProgress';
 import {
   adjustRectangle,
   encodePostCrop,
@@ -184,11 +185,12 @@ export function PostCropEditor({
       title="Crop photo"
       wide
       busy={busy}
+      announceWhileBusy
       onClose={() => {
         if (!saving.current) onClose();
       }}
     >
-      {!image && !error && <p role="status">Opening photo…</p>}
+      {!image && !error && <PhotoProgress progress={{ phase: 'opening' }} />}
       {image && (
         <>
           <p id={help} className="status-copy">
@@ -264,6 +266,7 @@ export function PostCropEditor({
           </div>
         </>
       )}
+      {busy && <PhotoProgress progress={{ phase: 'preparing' }} />}
       {error && (
         <p role="alert" className="error-message">
           {error}

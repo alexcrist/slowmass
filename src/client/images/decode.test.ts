@@ -1,7 +1,10 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { decodePhoto } from './decode';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 it.each(['image/jpeg', 'image/png', 'image/webp'])(
   'allows a %s original up to 32 MiB to reach local resizing',
@@ -25,4 +28,33 @@ it('reports decoding failures without returning an unprocessed original', async 
   await expect(
     decodePhoto(new File(['invalid'], 'photo.jpg', { type: 'image/jpeg' })),
   ).rejects.toThrow('could not be opened');
+});
+
+it('bounds a stalled decoder and closes its late bitmap', async () => {
+  vi.useFakeTimers();
+  let finish!: (bitmap: ImageBitmap) => void;
+  const bitmap = {
+    width: 1,
+    height: 1,
+    close: vi.fn(),
+  } as unknown as ImageBitmap;
+  vi.stubGlobal(
+    'createImageBitmap',
+    vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    ),
+  );
+  const pending = decodePhoto(
+    new File(['photo'], 'photo.jpg', { type: 'image/jpeg' }),
+  );
+  const failed = expect(pending).rejects.toThrow('could not be opened');
+  await vi.advanceTimersByTimeAsync(30_000);
+  await failed;
+  finish(bitmap);
+  await Promise.resolve();
+  expect(bitmap.close).toHaveBeenCalledOnce();
+  expect(vi.getTimerCount()).toBe(0);
 });

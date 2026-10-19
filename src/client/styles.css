@@ -1817,6 +1817,11 @@ a.profile-tab {
   align-items: center;
   flex-shrink: 0;
 }
+.event-link-description {
+  /* The 44px close target extends 5.5px below the title's 33px line box.
+     Subtract that excess to give the description equal space above and below. */
+  margin-block: 10.5px 16px;
+}
 .link-copy {
   display: flex;
   gap: 8px;
@@ -1863,4 +1868,37 @@ a.profile-tab {
     border-inline: 0;
     border-radius: 0;
   }
+}
+
+.photo-progress {
+  margin-block: 16px;
+  text-align: left;
+}
+.photo-progress p {
+  margin-block: 4px;
+}
+.photo-progress-title {
+  font-weight: 600;
+}
+.photo-progress-transfer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.photo-progress progress {
+  flex: 1;
+  min-width: 0;
+  height: 8px;
+  accent-color: #171717;
+}
+.photo-progress progress::-webkit-progress-bar {
+  background: #e5e5e5;
+}
+.photo-progress progress::-webkit-progress-value {
+  background: #171717;
+}
+.photo-progress progress::-moz-progress-bar {
+  background: #171717;
 }

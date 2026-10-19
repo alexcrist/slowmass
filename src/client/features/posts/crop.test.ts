@@ -67,7 +67,9 @@ it('uses the selected pixels, caps the long edge, preserves aspect ratio, and re
   };
   vi.stubGlobal('document', { createElement: () => canvas });
   const rect = { left: 0.25, right: 0.75, top: 0, bottom: 1 };
-  await expect(encodePostCrop(image, rect)).rejects.toThrow('Could not save');
+  await expect(encodePostCrop(image, rect)).rejects.toThrow(
+    'Could not prepare',
+  );
   expect(canvas.width).toBe(1067);
   expect(canvas.height).toBe(1600);
   expect(context.drawImage).toHaveBeenCalledWith(

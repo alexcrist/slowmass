@@ -1,7 +1,8 @@
-import { expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { inspectContainer, MAX_PHOTO_BYTES } from './index';
+import { inspectContainer, MAX_PHOTO_BYTES, processPhoto } from './index';
 import { readPhoto } from './storage';
+afterEach(() => vi.useRealTimers());
 it('rejects animation, unsupported containers, truncation and oversized input before paid processing', async () => {
   for (const name of ['oriented.jpg', 'still.png', 'still.webp'])
     expect(() =>
@@ -39,4 +40,49 @@ it('enforces actual streaming bytes even without a Content-Length header', async
   } as RequestInit);
   await expect(readPhoto(request)).rejects.toThrow('8 MB');
   expect(cancelled).toBe(true);
+});
+
+it('bounds an interrupted incoming body even if stream cancellation stalls', async () => {
+  vi.useFakeTimers();
+  const cancel = vi.fn(() => new Promise<void>(() => {}));
+  const stream = new ReadableStream<Uint8Array>({ cancel });
+  const pending = readPhoto(
+    new Request('http://localhost/upload', {
+      method: 'PUT',
+      body: stream,
+      duplex: 'half',
+    } as RequestInit),
+  );
+  const failed = expect(pending).rejects.toThrow(
+    'Receiving the photo took too long',
+  );
+  await vi.advanceTimersByTimeAsync(120_000);
+  await failed;
+  expect(cancel).toHaveBeenCalledOnce();
+  expect(stream.locked).toBe(false);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it('does not continue to transform after a timed-out inspection eventually returns', async () => {
+  vi.useFakeTimers();
+  let finish!: (value: unknown) => void;
+  const input = vi.fn();
+  const images = {
+    info: () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    input,
+  } as unknown as ImagesBinding;
+  const pending = processPhoto(
+    images,
+    readFileSync('tests/fixtures/photos/still.png'),
+  );
+  const failed = expect(pending).rejects.toThrow('processing took too long');
+  await vi.advanceTimersByTimeAsync(30_000);
+  await failed;
+  finish({ width: 10, height: 10, format: 'image/png' });
+  await Promise.resolve();
+  expect(input).not.toHaveBeenCalled();
+  expect(vi.getTimerCount()).toBe(0);
 });

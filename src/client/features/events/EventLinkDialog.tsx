@@ -11,7 +11,9 @@ export function EventLinkDialog({
 }) {
   return (
     <Dialog title="Event link" onClose={onClose}>
-      <p>Send the link to your friends to invite them.</p>
+      <p className="event-link-description">
+        Send the link to your friends to invite them.
+      </p>
       <CopyLink url={url} label="Event link" />
     </Dialog>
   );

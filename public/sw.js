@@ -5,6 +5,15 @@ self.addEventListener('install', (event) =>
 self.addEventListener('activate', (event) =>
   event.waitUntil(self.clients.claim()),
 );
+// Match Activity identities, including each event answer and message.
+function validNotificationKey(key) {
+  return (
+    typeof key === 'string' &&
+    /^(?:(?:request|follower|joined|likes|comment):[a-zA-Z0-9-]{1,64}|event_response:[a-f0-9-]{36}\.[a-zA-Z0-9-]{1,64}|event_message:[a-f0-9-]{36})$/.test(
+      key,
+    )
+  );
+}
 self.addEventListener('push', (event) => {
   let data = {};
   try {
@@ -13,13 +22,7 @@ self.addEventListener('push', (event) => {
   } catch {
     /* Still show a generic alert. */
   }
-  const key =
-    typeof data.key === 'string' &&
-    /^(request|follower|joined|likes|comment):[a-zA-Z0-9-]{1,64}$/.test(
-      data.key,
-    )
-      ? data.key
-      : '';
+  const key = validNotificationKey(data.key) ? data.key : '';
   const version =
     Number.isSafeInteger(data.version) && data.version > 0 ? data.version : 0;
   const subscription =
@@ -59,11 +62,9 @@ function installedWindow(client) {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const key = event.notification.data?.key;
-  const path =
-    typeof key === 'string' &&
-    /^(request|follower|joined|likes|comment):[a-zA-Z0-9-]{1,64}$/.test(key)
-      ? `/#notifications/${key}`
-      : '/#notifications';
+  const path = validNotificationKey(key)
+    ? `/#notifications/${key}`
+    : '/#notifications';
   const url = new URL(path, self.location.origin).href;
   event.waitUntil(
     (async () => {

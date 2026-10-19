@@ -1,3 +1,4 @@
+import { encodePhoto } from '../../images/encode';
 export { decodePhoto } from '../../images/decode';
 export type Crop = { zoom: number; x: number; y: number };
 export type CropPoint = { x: number; y: number };
@@ -123,23 +124,5 @@ export async function encodeCrop(image: ImageBitmap, crop: Crop) {
     cropRectangle(image.width, image.height, crop).size,
   );
   drawCrop(canvas, image, crop);
-  const blob = await new Promise<Blob>((resolve, reject) =>
-    canvas.toBlob(
-      (blob) =>
-        blob
-          ? resolve(blob)
-          : reject(
-              new Error('The cropped photo could not be saved. Try again.'),
-            ),
-      'image/webp',
-      0.92,
-    ),
-  );
-  if (!['image/webp', 'image/png', 'image/jpeg'].includes(blob.type))
-    throw new Error(
-      'This browser could not encode the photo. Try another browser.',
-    );
-  if (blob.size > 8 * 1024 * 1024)
-    throw new Error('The cropped photo is too large. Choose a smaller photo.');
-  return blob;
+  return encodePhoto(canvas);
 }

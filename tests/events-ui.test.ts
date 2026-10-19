@@ -292,6 +292,9 @@ it('opens an event from its URL, then shows guests only after answering', async 
     event: view({ counts: null }),
   });
   expect(visibleText()).toContain('RSVP to see who’s going');
+  expect(
+    renderer.root.findAllByProps({ 'aria-label': 'Share event link' }),
+  ).toHaveLength(0);
   expect(visibleText()).toContain('Guests');
   expect(
     requests.some((request) => /\/guests|\/activity/.test(request.path)),
@@ -312,6 +315,9 @@ it('opens an event from its URL, then shows guests only after answering', async 
   });
   expect(button('Going').props['aria-pressed']).toBe(true);
   expect(visibleText()).toContain('Guests');
+  expect(
+    renderer.root.findAllByProps({ 'aria-label': 'Share event link' }),
+  ).toHaveLength(0);
 });
 
 it('explains an unavailable link instead of showing an event', async () => {
@@ -494,33 +500,39 @@ it('edits details in the event time zone with a retry-safe change ID', async () 
   expect(saved).toHaveBeenCalledWith(id);
 });
 
-it('shows the event link with a copy button from the mail icon', async () => {
-  const writeText = vi.fn(() => Promise.resolve());
-  vi.stubGlobal('navigator', { standalone: false, clipboard: { writeText } });
-  await mount(createElement(EventPage, { id, linkProfiles: true }));
-  // Guests can share the one URL too.
-  await reply(pending(`/api/events/${id}`), { event: view() });
-  expect(visibleText()).not.toContain('Share link');
-  await click('Share event link');
-  expect(visibleText()).toContain(
-    'Send the link to your friends to invite them.',
-  );
-  expect(
-    renderer.root.findByProps({ 'aria-label': 'Event link' }).props.value,
-  ).toBe(url);
-  await click('Copy');
-  expect(writeText).toHaveBeenCalledWith(url);
-  expect(visibleText()).toContain('Link copied.');
+it.each([
+  ['creator', true],
+  ['co-host', false],
+] as const)(
+  'shows the event link with a copy button for the %s',
+  async (_, isCreator) => {
+    const viewer = { ...host, isCreator };
+    const writeText = vi.fn(() => Promise.resolve());
+    vi.stubGlobal('navigator', { standalone: false, clipboard: { writeText } });
+    await mount(createElement(EventPage, { id, linkProfiles: true }));
+    await reply(pending(`/api/events/${id}`), { event: view({ viewer }) });
+    expect(visibleText()).not.toContain('Share link');
+    await click('Share event link');
+    expect(visibleText()).toContain(
+      'Send the link to your friends to invite them.',
+    );
+    expect(
+      renderer.root.findByProps({ 'aria-label': 'Event link' }).props.value,
+    ).toBe(url);
+    await click('Copy');
+    expect(writeText).toHaveBeenCalledWith(url);
+    expect(visibleText()).toContain('Link copied.');
 
-  await act(async () => renderer.unmount());
-  requests = [];
-  vi.stubGlobal('navigator', { standalone: false });
-  await mount(createElement(EventPage, { id, linkProfiles: true }));
-  await reply(pending(`/api/events/${id}`), { event: view() });
-  await click('Share event link');
-  await click('Copy');
-  expect(visibleText()).toContain('Couldn’t copy the link.');
-});
+    await act(async () => renderer.unmount());
+    requests = [];
+    vi.stubGlobal('navigator', { standalone: false });
+    await mount(createElement(EventPage, { id, linkProfiles: true }));
+    await reply(pending(`/api/events/${id}`), { event: view({ viewer }) });
+    await click('Share event link');
+    await click('Copy');
+    expect(visibleText()).toContain('Couldn’t copy the link.');
+  },
+);
 
 it('lets hosts answer and add hosts by email', async () => {
   await mount(createElement(EventPage, { id, linkProfiles: true }));
@@ -585,12 +597,16 @@ it('asks members a host added by email to accept hosting', async () => {
     }),
   });
   expect(visibleText()).toContain('You’ve been asked to host this event.');
+  expect(
+    renderer.root.findAllByProps({ 'aria-label': 'Share event link' }),
+  ).toHaveLength(0);
   await click('Become a host');
   const accepted = pending(`/api/events/${id}/hosting`);
   expect(accepted.options?.method).toBe('POST');
   await reply(accepted, { ok: true });
   await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
   expect(visibleText()).not.toContain('asked to host');
+  expect(button('Share event link')).toBeDefined();
 });
 
 it('puts the message composer below the event activity', async () => {

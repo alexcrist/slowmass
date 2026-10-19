@@ -603,3 +603,25 @@ The same release also replaces the invitation calendar date with “This link wo
 - [x] Remove navigation lock badges for event-only members. Before entering photo features, explicitly ask them to choose or confirm their username, then add a profile photo. Keep conflicts retryable, preserve the selected destination, update an own-profile destination on rename, and retain a return to the event. The existing profile endpoint validates usernames; no migration is needed.
 - [ ] Pass formatting, lint, types, boundary checks, component/integration tests, and the production build. No browser or visual testing.
 - [ ] Deploy and verify production assets and access boundaries by direct HTTP.
+
+## Event push and photo backup audit fixes — October 18, 2026
+
+- [x] Start best-effort push dispatch after successful event answers, messages, detail edits, and cancellation, keeping the bounded durable outbox and hourly recovery. Preserve event notification identities in service-worker tags, Activity destinations, and version-aware read dismissal.
+- [x] Include published event covers and thumbnails in encrypted backups and restore verification, including ended/cancelled events and deduplicated shared keys. Keep older schemas restorable and reject archives with missing or corrupt event media. Document that earlier incomplete archives require a fresh backup.
+- [x] Pass focused Workers/D1, service-worker VM, and synthetic backup tests: all four event mutation paths dispatch without cron; read/block changes suppress retries; event identities survive delivery and acknowledgement; the exporter fetches both event sizes and restore rejects omitted, absent, or corrupt media.
+- [x] Verify on Node 24 in an isolated copy of `c8f4883` plus these fixes, excluding concurrent upload work: formatting, lint, types, boundary checks, all 527 tests, and the production build. The full run passed 524 tests and timed out three existing migration cases under concurrent load; a serial rerun of their three files passed all 11 tests without changing time limits. No browser or visual testing.
+- [ ] Deploy and verify production assets and access boundaries by direct HTTP.
+- [ ] Take and verify a fresh production backup with event media, then copy it off-device.
+
+## Photo upload recovery and progress — October 18, 2026
+
+- [x] Audit posts, profile photos, and event covers: unbounded browser decode/encode and upload waits, unbounded server receive/processing phases, cleanup-intent failure after claiming a post, and failure handlers overwriting a completed attempt after a lost commit reply. These are code-level failure paths, not an attributed production incident.
+- [x] Add shared phase copy, measured transfer percentages, slow-phase messages, bounded waits and retry/cancellation recovery while retaining operation identity and server-confirmed success. Preserve completed attempts and include cleanup-intent creation in post failure handling.
+- [x] Pass formatting, lint, types, boundary checks, focused failure/retry tests, all 545 tests, and the production build on Node 24. The full suite passed with `npm test -- --maxWorkers=2`; the default parallel run hit timing failures while other workspace test runs were active, and an outdated crop-error assertion was corrected. No browser or visual testing.
+- [ ] Production release and observation of affected devices. No migration is required; hosted processing latency and the reported incidents' exact cause remain unverified.
+
+## Event invite control and dialog spacing — October 18, 2026
+
+- [x] Show the event invite icon and dialog only to creators and accepted co-hosts; preserve the shareable address-bar URL for all authorized viewers. Balance the dialog description’s spacing above and below while retaining the close button’s touch target.
+- [x] Pass formatting, lint, types, 33 event component/boundary tests, and the production build on Node 24. Coverage includes guests before/after RSVP, pending host acceptance, creators/co-hosts, and clipboard success/failure. No browser or visual testing.
+- [ ] Production release. No migration is required.

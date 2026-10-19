@@ -10,6 +10,7 @@ export function Dialog({
   title,
   onClose,
   busy = false,
+  announceWhileBusy = false,
   wide = false,
   appearance = 'panel',
   children,
@@ -17,6 +18,7 @@ export function Dialog({
   title: string;
   onClose: () => void;
   busy?: boolean;
+  announceWhileBusy?: boolean;
   wide?: boolean;
   appearance?: 'panel' | 'image';
   children: ReactNode;
@@ -52,7 +54,9 @@ export function Dialog({
       ref={ref}
       className={`app-dialog${wide ? ' app-dialog-wide' : ''}${appearance === 'image' ? ' app-dialog-image' : ''}`}
       aria-labelledby={id}
-      aria-busy={busy}
+      // A busy ancestor defers live-region announcements. Upload dialogs keep
+      // dismissal disabled while allowing their progress messages to be heard.
+      aria-busy={busy && !announceWhileBusy}
       onPointerDown={(event) => {
         backdropPress.current = event.button === 0 && onBackdrop(event);
       }}

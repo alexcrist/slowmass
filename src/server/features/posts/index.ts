@@ -117,12 +117,12 @@ export async function publishPhoto(
     .run();
   if (!claimed.meta.changes) return 'conflict';
   const key = `posts/${crypto.randomUUID()}.webp`;
-  await env.DB.prepare(
-    'INSERT INTO photo_cleanup(object_key,not_before) VALUES(?,?)',
-  )
-    .bind(key, Date.now() + 3600000)
-    .run();
   try {
+    await env.DB.prepare(
+      'INSERT INTO photo_cleanup(object_key,not_before) VALUES(?,?)',
+    )
+      .bind(key, Date.now() + 3600000)
+      .run();
     const photo = await processPhoto(env.IMAGES, await readPhoto(request));
     const thumbnail =
       photo.width <= 480 && photo.height <= 480
@@ -166,9 +166,9 @@ export async function publishPhoto(
       env.DB.prepare(
         "UPDATE post SET state='failed' WHERE id=? AND state='processing'",
       ).bind(id),
-      env.DB.prepare("UPDATE photo_attempt SET state='failed' WHERE id=?").bind(
-        `${actor}:post/${id}`,
-      ),
+      env.DB.prepare(
+        "UPDATE photo_attempt SET state='failed' WHERE id=? AND state='pending'",
+      ).bind(`${actor}:post/${id}`),
     ]);
     throw error;
   }

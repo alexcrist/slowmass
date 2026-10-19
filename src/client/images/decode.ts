@@ -1,3 +1,5 @@
+import { withDeadline } from '../api';
+
 export async function decodePhoto(file: File) {
   // Bound local originals separately from the smaller, encoded upload.
   if (file.size > 32 * 1024 * 1024)
@@ -5,10 +7,27 @@ export async function decodePhoto(file: File) {
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type))
     throw new Error('Choose a JPEG, PNG, or WebP photo.');
   let bitmap: ImageBitmap;
+  let expired = false;
   try {
-    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    bitmap = await withDeadline(
+      createImageBitmap(file, { imageOrientation: 'from-image' }).then(
+        (image) => {
+          if (expired) image.close();
+          return image;
+        },
+      ),
+      undefined,
+      {
+        milliseconds: 30_000,
+        message:
+          'This photo took too long to open. Try again or choose a smaller photo.',
+      },
+    );
   } catch {
-    throw new Error('This photo could not be opened. Choose another file.');
+    expired = true;
+    throw new Error(
+      'This photo could not be opened. Try again or choose a smaller JPEG, PNG, or WebP photo.',
+    );
   }
   if (
     bitmap.width < 1 ||

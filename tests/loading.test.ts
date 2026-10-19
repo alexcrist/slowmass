@@ -1,3 +1,4 @@
+import { mockUploads } from './support/upload';
 import { act, createElement, type ReactElement } from 'react';
 import {
   create,
@@ -40,6 +41,7 @@ type Request = {
 let requests: Request[];
 let renderer: ReactTestRenderer;
 beforeEach(() => {
+  mockUploads((path, options) => fetch(path, options));
   authMocks.magicLink.mockReset();
   requests = [];
   const events = new EventTarget();
@@ -2538,7 +2540,9 @@ it('resizes an original over 8 MB before posting and reuses the encoded photo on
   const cropped = upload.options?.body;
   expect(cropped).toBeInstanceOf(File);
   expect(await (cropped as File).text()).toBe('cropped');
-  expect(upload.options?.headers).toEqual({ 'Content-Type': 'image/webp' });
+  expect(new Headers(upload.options?.headers).get('Content-Type')).toBe(
+    'image/webp',
+  );
   expect(upload.options?.method).toBe('PUT');
   await reply(upload, { error: 'Please retry' }, 503);
   await act(async () => {

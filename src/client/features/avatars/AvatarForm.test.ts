@@ -1,3 +1,4 @@
+import { mockUploads } from '../../../../tests/support/upload';
 import { act, createElement } from 'react';
 import { create, type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -11,6 +12,7 @@ afterEach(async () => {
 });
 
 async function setup() {
+  mockUploads((path, options) => fetch(path, options));
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   const image = { width: 1200, height: 800, close: vi.fn() };
   const context = { clearRect: vi.fn(), drawImage: vi.fn() };

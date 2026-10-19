@@ -159,7 +159,7 @@ it('uses the same bounded crop for preview and encoded upload, with encoding fai
   );
   vi.stubGlobal('document', { createElement: () => canvas });
   await expect(encodeCrop(image, initialCrop)).rejects.toThrow(
-    'could not be saved',
+    'Could not prepare',
   );
   const blob = new Blob(['encoded'], { type: 'image/webp' });
   canvas.toBlob.mockImplementation((callback) => callback(blob));

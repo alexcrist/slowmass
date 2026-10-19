@@ -1,3 +1,4 @@
+import { encodePhoto } from '../../images/encode';
 export type Rectangle = {
   left: number;
   top: number;
@@ -71,20 +72,7 @@ export async function encodePostCrop(image: ImageBitmap, rect: Rectangle) {
     canvas.width,
     canvas.height,
   );
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (result) => {
-        if (result) resolve(result);
-        else reject(new Error('Could not save this crop. Please try again.'));
-      },
-      'image/webp',
-      0.92,
-    );
-  });
-  if (blob.size > 8 * 1024 * 1024)
-    throw new Error('The cropped photo is too large. Choose a smaller crop.');
-  if (!['image/webp', 'image/png', 'image/jpeg'].includes(blob.type))
-    throw new Error('This browser could not save a supported photo.');
+  const blob = await encodePhoto(canvas);
   return new File(
     [blob],
     `photo.${blob.type === 'image/webp' ? 'webp' : blob.type === 'image/png' ? 'png' : 'jpg'}`,

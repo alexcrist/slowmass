@@ -174,7 +174,8 @@ it('allows decoding retries and closes bitmaps without applying an encode after 
       }),
   );
   await click('Use photo');
-  expect(renderer.root.findByType('dialog').props['aria-busy']).toBe(true);
+  expect(renderer.root.findByType('dialog').props['aria-busy']).toBe(false);
+  expect(button('Close crop photo').props.disabled).toBe(true);
   await act(async () => renderer.unmount());
   expect(image.close).toHaveBeenCalledOnce();
   await act(async () => finish(cropped));

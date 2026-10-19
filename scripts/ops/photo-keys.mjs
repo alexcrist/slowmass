@@ -1,4 +1,4 @@
-// Old encrypted backups predate additional photo sizes and must remain restorable.
+// Old encrypted backups predate additional photo sizes and events.
 export function requiredPhotoKeys(db) {
   const thumbnails = db
     .prepare('PRAGMA table_info(post)')
@@ -8,6 +8,9 @@ export function requiredPhotoKeys(db) {
     .prepare('PRAGMA table_info(avatar)')
     .all()
     .some((column) => column.name === 'large_key');
+  const events = db
+    .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='event'")
+    .get();
   return db
     .prepare(
       "SELECT object_key FROM post WHERE state='published' UNION SELECT object_key FROM avatar" +
@@ -16,6 +19,9 @@ export function requiredPhotoKeys(db) {
           : '') +
         (largeAvatars
           ? ' UNION SELECT large_key AS object_key FROM avatar WHERE large_key IS NOT NULL'
+          : '') +
+        (events
+          ? " UNION SELECT object_key FROM event WHERE state='published' UNION SELECT thumbnail_key AS object_key FROM event WHERE state='published'"
           : ''),
     )
     .all();

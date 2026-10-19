@@ -144,8 +144,8 @@ export function EventPage({
     );
   if (!event) return loading ? <p role="status">Loading event…</p> : null;
   const open = !event.cancelled && !event.over;
-  const sharing = Boolean(url) && !event.cancelled;
   const managing = event.viewer.isHost && !event.cancelled;
+  const sharing = managing && Boolean(url);
   return (
     <article className="event">
       <EventSummary
@@ -264,7 +264,7 @@ export function EventPage({
           </section>
         )}
       </div>
-      {dialog === 'link' && url && (
+      {dialog === 'link' && sharing && url && (
         <EventLinkDialog url={url} onClose={closeDialog} />
       )}
       {dialog === 'hosts' && (

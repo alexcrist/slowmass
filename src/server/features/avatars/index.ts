@@ -53,7 +53,9 @@ export async function saveAvatar(
     ]);
     return published[2].meta.changes ? 'done' : 'inactive';
   } catch (error) {
-    await env.DB.prepare("UPDATE photo_attempt SET state='failed' WHERE id=?")
+    await env.DB.prepare(
+      "UPDATE photo_attempt SET state='failed' WHERE id=? AND state='pending'",
+    )
       .bind(`${userId}:${id}`)
       .run();
     throw error;
