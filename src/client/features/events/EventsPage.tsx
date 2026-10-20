@@ -1,5 +1,10 @@
 import { useApiResource } from '../../api/useApiResource';
 import { usePageHistory } from '../../navigation/PageHistory';
+import {
+  EventDateIcon,
+  EventLocationIcon,
+  EventStatusIcon,
+} from './EventIcons';
 import { eventStart } from './time';
 import { yourAnswer, type EventItem } from './types';
 
@@ -91,14 +96,23 @@ export function EventsPage({
                 <p>
                   <strong>{event.title}</strong>
                 </p>
-                <p className="event-list-meta">{eventStart(event)}</p>
+                <p className="event-list-meta">
+                  <EventDateIcon />
+                  <span>{eventStart(event)}</span>
+                </p>
                 {event.location && (
-                  <p className="event-list-meta">{event.location}</p>
+                  <p className="event-list-meta">
+                    <EventLocationIcon />
+                    <span>{event.location}</span>
+                  </p>
                 )}
                 <p className="event-list-meta">
-                  {event.cancelled
-                    ? 'Cancelled'
-                    : yourAnswer(event.isHost, event.response)}
+                  <EventStatusIcon />
+                  <span>
+                    {event.cancelled
+                      ? 'Cancelled'
+                      : yourAnswer(event.isHost, event.response)}
+                  </span>
                 </p>
               </div>
             </a>

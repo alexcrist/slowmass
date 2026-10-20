@@ -22,9 +22,44 @@ it('adds appearance defaults without changing existing data or the previous Work
       endsAt: null,
       timeZone: 'America/Los_Angeles',
     };
-    expect(
-      (await runtime.request('alice', '/api/events', 'POST', details)).status,
-    ).toBe(200);
+    // Keep the previous Worker's explicit-column writes here. Today's Worker
+    // also writes appearance and requires migration 0033 before it runs.
+    async function createWithPreviousColumns(eventId: string) {
+      const now = Date.now();
+      await runtime.db.batch([
+        runtime.db
+          .prepare(
+            `INSERT INTO event(id,creator_id,title,description,location,starts_at,ends_at,time_zone,link_id,link_hash,link_encrypted,created_at)
+          SELECT ?,m.user_id,?,?,?,?,?,?,?,?,?,? FROM membership m JOIN avatar a ON a.user_id=m.user_id
+          WHERE m.user_id=? AND m.status='active'
+            AND (SELECT COUNT(*) FROM event WHERE creator_id=m.user_id AND created_at>?)<10
+          ON CONFLICT DO NOTHING`,
+          )
+          .bind(
+            eventId,
+            details.title,
+            details.description,
+            details.location,
+            details.startsAt,
+            details.endsAt,
+            details.timeZone,
+            eventId,
+            `synthetic-hash-${eventId}`,
+            'synthetic-ciphertext',
+            now,
+            'alice',
+            now - 86400000,
+          ),
+        runtime.db
+          .prepare(
+            `INSERT INTO event_host(event_id,user_id,created_at)
+          SELECT id,creator_id,created_at FROM event WHERE id=? AND creator_id=? AND state='pending'
+          ON CONFLICT DO NOTHING`,
+          )
+          .bind(eventId, 'alice'),
+      ]);
+    }
+    await createWithPreviousColumns(id);
     const before = await runtime.db
       .prepare('SELECT * FROM event WHERE id=?')
       .bind(id)
@@ -47,18 +82,9 @@ it('adds appearance defaults without changing existing data or the previous Work
     ).toEqual(hosts);
     // The previous Worker uses explicit-column inserts and these same detail
     // writes. Both remain valid if migration succeeds but deployment fails.
-    expect(
-      (await runtime.request('alice', '/api/events', 'POST', details)).status,
-    ).toBe(200);
+    await createWithPreviousColumns(id);
     const nextId = crypto.randomUUID();
-    expect(
-      (
-        await runtime.request('alice', '/api/events', 'POST', {
-          ...details,
-          id: nextId,
-        })
-      ).status,
-    ).toBe(200);
+    await createWithPreviousColumns(nextId);
     await runtime.db
       .prepare('UPDATE event SET color_theme=?,font_pairing=? WHERE id=?')
       .bind('wine', 'classic', id)

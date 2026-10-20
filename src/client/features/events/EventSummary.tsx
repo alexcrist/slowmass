@@ -1,6 +1,7 @@
 import { useId, useState, type ReactNode } from 'react';
 import { profileHref } from '../../navigation';
 import { ImageViewer } from '../../ui/ImageViewer';
+import { EventDateIcon, EventLocationIcon } from './EventIcons';
 import { eventWhen } from './time';
 import {
   answerEmoji,
@@ -109,18 +110,7 @@ export function EventSummary({
         </div>
         <div className="event-information">
           <p className="event-detail-row event-when">
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <rect x="3" y="5" width="18" height="16" rx="2" />
-              <path d="M16 3v4M8 3v4M3 11h18" />
-            </svg>
+            <EventDateIcon />
             <strong>{when.date}</strong>
           </p>
           <p className="event-detail-row event-when">
@@ -140,18 +130,7 @@ export function EventSummary({
           </p>
           {event.location && (
             <p className="event-detail-row event-location">
-              <svg
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M20 10c0 6-8 11-8 11S4 16 4 10a8 8 0 1 1 16 0Z" />
-                <circle cx="12" cy="10" r="2.5" />
-              </svg>
+              <EventLocationIcon />
               <span>{event.location}</span>
             </p>
           )}
@@ -171,8 +150,7 @@ export function EventSummary({
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
-                <rect x="3" y="5" width="18" height="16" rx="2" />
-                <path d="M16 3v4M8 3v4M3 11h18" />
+                <path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7M16 3v4M8 3v4M3 11h18M19 15v8M15 19h8" />
               </svg>
               Add to calendar
             </button>

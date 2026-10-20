@@ -328,6 +328,63 @@ it('validates appearance at both HTTP and storage boundaries and denies expired 
   ).toBe(401);
 });
 
+it('creates appearance atomically and rejects conflicting or invalid creation retries', async () => {
+  const id = crypto.randomUUID();
+  const appearance = { colorTheme: 'wine', fontPairing: 'classic' };
+  const input = { id, ...details(), appearance };
+  const create = (body = input) =>
+    runtime.request('alice', '/api/events', 'POST', body);
+  const attempts = await Promise.all([create(), create()]);
+  expect(attempts.map((response) => response.status)).toEqual([200, 200]);
+  expect(
+    await runtime.db
+      .prepare('SELECT state,color_theme,font_pairing FROM event WHERE id=?')
+      .bind(id)
+      .first(),
+  ).toEqual({ state: 'pending', color_theme: 'wine', font_pairing: 'classic' });
+  expect(
+    await runtime.db
+      .prepare('SELECT COUNT(*) AS count FROM event_host WHERE event_id=?')
+      .bind(id)
+      .first('count'),
+  ).toBe(1);
+  expect(
+    (await create({ ...input, appearance: originalAppearance })).status,
+  ).toBe(409);
+  for (const invalid of [
+    null,
+    {},
+    { colorTheme: 'unknown', fontPairing: 'classic' },
+    { colorTheme: 'wine', fontPairing: 'url(https://example.com/font)' },
+  ]) {
+    const invalidId = crypto.randomUUID();
+    expect(
+      (
+        await runtime.request('alice', '/api/events', 'POST', {
+          ...input,
+          id: invalidId,
+          appearance: invalid,
+        })
+      ).status,
+    ).toBe(400);
+    expect(
+      await runtime.db
+        .prepare('SELECT id FROM event WHERE id=?')
+        .bind(invalidId)
+        .first(),
+    ).toBeNull();
+  }
+  await publish(id);
+  expect(await (await create()).json()).toEqual({ id, state: 'published' });
+  expect(
+    await (await runtime.request('alice', `/api/events/${id}`)).json(),
+  ).toMatchObject({ event: { appearance } });
+  const eventLink = (await link(id))!;
+  expect(await check(eventLink.token)).toMatchObject({
+    preview: { appearance },
+  });
+});
+
 it('creates events idempotently for members with a profile photo', async () => {
   expect((await draft('david')).response.status).toBe(409);
   const input = details();
@@ -375,6 +432,7 @@ it('creates events idempotently for members with a profile photo', async () => {
     event: {
       id,
       title: 'Dinner',
+      appearance: originalAppearance,
       cancelled: false,
       over: false,
       hosts: [{ handle: 'alice', displayName: 'Alice', hasAvatar: true }],

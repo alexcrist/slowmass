@@ -12,7 +12,8 @@ import { MemberApp } from '../src/client/features/people/MemberApp';
 import { HeaderActions } from '../src/client/features/people/MemberNavigation';
 import { Notifications } from '../src/client/features/notifications/Notifications';
 import { EventPage } from '../src/client/features/events/EventPage';
-import { EditEvent } from '../src/client/features/events/EventForm';
+import { EditEvent, EventForm } from '../src/client/features/events/EventForm';
+import { PostCropEditor, fullPhoto } from '../src/client/features/posts';
 import { fromZoned } from '../src/client/features/events/time';
 import { AvatarForm } from '../src/client/features/avatars/AvatarForm';
 import { EventPreview } from '../src/client/features/events/EventPreview';
@@ -172,7 +173,7 @@ async function reply(request: Request, data: unknown, status = 200) {
 function labelText(value: ReactTestInstance | string): string {
   if (typeof value === 'string') return value;
   if (value.props['aria-hidden']) return '';
-  return value.children.map(labelText).join(' ');
+  return value.children.map(labelText).filter(Boolean).join(' ');
 }
 function button(label: string) {
   const found = renderer.root
@@ -216,6 +217,91 @@ async function chooseAppearance(name: string, value: string) {
 }
 const rootStyle = (name: string) =>
   document.documentElement.style.getPropertyValue(name);
+
+it('previews creation appearance locally and preserves it through cover retries', async () => {
+  vi.stubGlobal(
+    'createImageBitmap',
+    vi.fn(async () => ({ width: 10, height: 10, close: vi.fn() })),
+  );
+  const saved = vi.fn();
+  await mount(createElement(EventForm, { onSaved: saved }));
+  await type('event-title', 'Dinner');
+  await type('event-date', '2030-01-04');
+  await type('event-start', '19:00');
+  await click('Color theme');
+  await chooseAppearance('event-color', 'wine');
+  expect(rootStyle('--paper')).toBe(palettes.wine.paper);
+  await click('Cancel');
+  expect(rootStyle('--paper')).toBe(palettes.original.paper);
+  await click('Color theme');
+  await chooseAppearance('event-color', 'evergreen');
+  await submit();
+  await click('Fonts');
+  await chooseAppearance('event-font', 'rounded');
+  await submit();
+  const appearance = { colorTheme: 'evergreen', fontPairing: 'rounded' };
+  expect(rootStyle('--paper')).toBe(palettes.evergreen.paper);
+  expect(rootStyle('--body-font')).toBe(pairings.rounded.body);
+  expect(renderer.root.findByProps({ id: 'event-title' }).props.value).toBe(
+    'Dinner',
+  );
+  expect(requests).toHaveLength(0);
+  await click('Fonts');
+  await chooseAppearance('event-font', 'classic');
+  await act(async () =>
+    renderer.root
+      .findByType('dialog')
+      .props.onCancel({ preventDefault: vi.fn() }),
+  );
+  expect(rootStyle('--body-font')).toBe(pairings.rounded.body);
+
+  const file = new File(['synthetic photo'], 'cover.webp', {
+    type: 'image/webp',
+  });
+  await act(async () =>
+    renderer.root.findByProps({ id: 'event-photo' }).props.onChange({
+      target: { files: [file], value: '' },
+    }),
+  );
+  await act(async () =>
+    renderer.root.findByType(PostCropEditor).props.onApply(file, fullPhoto),
+  );
+  await submit();
+  const first = pending('/api/events', 'POST');
+  const body = JSON.parse(String(first.options?.body));
+  expect(body).toMatchObject({ title: 'Dinner', appearance });
+  await reply(first, { id: body.id, state: 'pending' });
+  const photo = pending(`/api/events/${body.id}/photo`);
+  await reply(photo, { error: 'Try uploading again.' }, 503);
+  expect(saved).not.toHaveBeenCalled();
+  await submit();
+  const retry = pending('/api/events', 'POST');
+  expect(retry.options?.body).toBe(first.options?.body);
+  await reply(retry, { id: body.id, state: 'pending' });
+  const retryPhoto = pending(`/api/events/${body.id}/photo`);
+  expect(retryPhoto.options?.headers).toEqual(photo.options?.headers);
+  await reply(retryPhoto, { error: 'Try uploading again.' }, 503);
+
+  await click('Color theme');
+  await chooseAppearance('event-color', 'pool');
+  await submit();
+  await submit();
+  const changed = pending('/api/events', 'POST');
+  const changedBody = JSON.parse(String(changed.options?.body));
+  expect(changedBody.id).not.toBe(body.id);
+  expect(changedBody.appearance).toEqual({ ...appearance, colorTheme: 'pool' });
+  await reply(changed, { id: changedBody.id, state: 'pending' });
+  const changedPhoto = pending(`/api/events/${changedBody.id}/photo`);
+  expect(changedPhoto.options?.headers).not.toEqual(photo.options?.headers);
+  await reply(changedPhoto, { ok: true });
+  expect(saved).toHaveBeenCalledExactlyOnceWith(changedBody.id);
+  expect(requests.some((request) => request.path.endsWith('/appearance'))).toBe(
+    false,
+  );
+  await act(async () => renderer.unmount());
+  expect(rootStyle('--paper')).toBe('');
+  expect(rootStyle('--body-font')).toBe('');
+});
 
 it('edits colors and fonts in separate dialogs without losing event details', async () => {
   await mount(createElement(EditEvent, { id, onSaved: vi.fn() }));

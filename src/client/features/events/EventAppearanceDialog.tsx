@@ -18,7 +18,9 @@ export function EventAppearanceDialog({
   onReloaded,
   onSaved,
 }: {
-  id: string;
+  // New events keep selections in the form until creation; existing events
+  // save independently with the current appearance as a concurrency guard.
+  id?: string;
   kind: 'color' | 'fonts';
   appearance: EventAppearance;
   onPreview: (appearance: EventAppearance) => void;
@@ -41,6 +43,10 @@ export function EventAppearanceDialog({
   async function save(event: FormEvent) {
     event.preventDefault();
     if (request.current) return;
+    if (!id) {
+      onSaved(draft);
+      return;
+    }
     const controller = new AbortController();
     request.current = controller;
     setPending('save');
@@ -70,7 +76,7 @@ export function EventAppearanceDialog({
     }
   }
   async function reload() {
-    if (request.current) return;
+    if (!id || request.current) return;
     const controller = new AbortController();
     request.current = controller;
     setPending('reload');

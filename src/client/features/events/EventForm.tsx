@@ -62,7 +62,7 @@ export function EventForm({
   const [appearanceDialog, setAppearanceDialog] = useState<
     'color' | 'fonts' | null
   >(null);
-  useEventAppearance(event ? (appearancePreview ?? appearance) : undefined);
+  useEventAppearance(appearancePreview ?? appearance);
   function closeAppearance() {
     setAppearanceDialog(null);
     setAppearancePreview(null);
@@ -114,7 +114,7 @@ export function EventForm({
   }
   async function save(submit: FormEvent) {
     submit.preventDefault();
-    if (busy || editing || controller.current) return;
+    if (busy || editing || appearanceDialog || controller.current) return;
     setError('');
     const startsAt = fromZoned(date, startTime, timeZone);
     if (startsAt === null) {
@@ -154,7 +154,7 @@ export function EventForm({
         });
       else
         await api('/api/events', {
-          ...jsonRequest('POST', { id, ...details }),
+          ...jsonRequest('POST', { id, ...details, appearance }),
           signal: request.signal,
           timeoutMs: 30_000,
         });
@@ -236,32 +236,30 @@ export function EventForm({
             Adjust crop
           </button>
         )}
-        {event && (
-          <fieldset
-            className="event-appearance-controls"
-            disabled={busy || Boolean(editing)}
-          >
-            <legend>Appearance</legend>
-            <div className="actions">
-              <button
-                type="button"
-                className="event-color-button"
-                aria-haspopup="dialog"
-                onClick={() => setAppearanceDialog('color')}
-              >
-                Color theme
-              </button>
-              <button
-                type="button"
-                className="event-font-button"
-                aria-haspopup="dialog"
-                onClick={() => setAppearanceDialog('fonts')}
-              >
-                Fonts
-              </button>
-            </div>
-          </fieldset>
-        )}
+        <fieldset
+          className="event-appearance-controls"
+          disabled={busy || Boolean(editing)}
+        >
+          <legend>Appearance</legend>
+          <div className="actions">
+            <button
+              type="button"
+              className="event-color-button"
+              aria-haspopup="dialog"
+              onClick={() => setAppearanceDialog('color')}
+            >
+              Color theme
+            </button>
+            <button
+              type="button"
+              className="event-font-button"
+              aria-haspopup="dialog"
+              onClick={() => setAppearanceDialog('fonts')}
+            >
+              Fonts
+            </button>
+          </div>
+        </fieldset>
         <label htmlFor="event-title" className="field-label">
           Title
         </label>
@@ -346,16 +344,20 @@ export function EventForm({
           </p>
         )}
       </form>
-      {event && appearanceDialog && (
+      {appearanceDialog && (
         <EventAppearanceDialog
-          id={event.id}
+          id={event?.id}
           kind={appearanceDialog}
           appearance={appearance}
           onPreview={setAppearancePreview}
           onClose={closeAppearance}
           onReloaded={setAppearance}
           onSaved={(saved) => {
-            setAppearance(saved);
+            if (
+              saved.colorTheme !== appearance.colorTheme ||
+              saved.fontPairing !== appearance.fontPairing
+            )
+              changed(setAppearance)(saved);
             closeAppearance();
           }}
         />

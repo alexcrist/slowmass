@@ -5,7 +5,10 @@ import {
   calendarFile,
   type CalendarEvent,
 } from '../../../shared/event-calendar';
-export { parseAppearance } from '../../../shared/event-appearance';
+export {
+  originalAppearance,
+  parseAppearance,
+} from '../../../shared/event-appearance';
 import { PhotoError, processPhoto } from '../../photos';
 import {
   readPhoto,
@@ -136,17 +139,18 @@ export async function createEvent(
   actor: string,
   id: string,
   details: EventDetails,
+  appearance: EventAppearance,
 ): Promise<'pending' | 'published' | 'conflict' | 'limit'> {
-  const prior = await existingEvent(env.DB, id, actor, details);
+  const prior = await existingEvent(env.DB, id, actor, details, appearance);
   if (prior) return prior;
   const credential = await newInvitationCredential();
   const now = Date.now();
   // Creating, hosting and the creation allowance commit together; a retry with
-  // the same ID and details converges on the first write.
+  // the same ID, details and appearance converges on the first write.
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO event(id,creator_id,title,description,location,starts_at,ends_at,time_zone,link_id,link_hash,link_encrypted,created_at)
-      SELECT ?,m.user_id,?,?,?,?,?,?,?,?,?,? FROM membership m JOIN avatar a ON a.user_id=m.user_id
+      `INSERT INTO event(id,creator_id,title,description,location,starts_at,ends_at,time_zone,color_theme,font_pairing,link_id,link_hash,link_encrypted,created_at)
+      SELECT ?,m.user_id,?,?,?,?,?,?,?,?,?,?,?,? FROM membership m JOIN avatar a ON a.user_id=m.user_id
       WHERE m.user_id=? AND m.status='active'
         AND (SELECT COUNT(*) FROM event WHERE creator_id=m.user_id AND created_at>?)<10
       ON CONFLICT DO NOTHING`,
@@ -158,6 +162,8 @@ export async function createEvent(
       details.startsAt,
       details.endsAt,
       details.timeZone,
+      appearance.colorTheme,
+      appearance.fontPairing,
       crypto.randomUUID(),
       credential.hash,
       await symmetricEncrypt({ key: env.AUTH_SECRET!, data: credential.token }),
@@ -171,21 +177,27 @@ export async function createEvent(
       ON CONFLICT DO NOTHING`,
     ).bind(id, actor),
   ]);
-  return (await existingEvent(env.DB, id, actor, details)) ?? 'limit';
+  return (
+    (await existingEvent(env.DB, id, actor, details, appearance)) ?? 'limit'
+  );
 }
 async function existingEvent(
   db: D1Database,
   id: string,
   actor: string,
   details: EventDetails,
+  appearance: EventAppearance,
 ) {
   const row = await db
     .prepare(
       `SELECT creator_id AS creator,state,title,description,location,starts_at AS startsAt,
-      ends_at AS endsAt,time_zone AS timeZone FROM event WHERE id=?`,
+      ends_at AS endsAt,time_zone AS timeZone,color_theme AS colorTheme,
+      font_pairing AS fontPairing FROM event WHERE id=?`,
     )
     .bind(id)
-    .first<EventDetails & { creator: string; state: string }>();
+    .first<
+      EventDetails & EventAppearance & { creator: string; state: string }
+    >();
   if (!row) return null;
   return row.creator === actor &&
     row.state !== 'deleted' &&
@@ -194,7 +206,9 @@ async function existingEvent(
     row.location === details.location &&
     row.startsAt === details.startsAt &&
     row.endsAt === details.endsAt &&
-    row.timeZone === details.timeZone
+    row.timeZone === details.timeZone &&
+    row.colorTheme === appearance.colorTheme &&
+    row.fontPairing === appearance.fontPairing
     ? (row.state as 'pending' | 'published')
     : 'conflict';
 }

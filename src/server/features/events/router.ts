@@ -22,6 +22,7 @@ import {
   listEvents,
   listGuests,
   parseCursor,
+  originalAppearance,
   parseAppearance,
   parseDetails,
   parseEmail,
@@ -98,7 +99,22 @@ events.post('/', jsonLimit, async (c) => {
   const body = (await json(c)) as Record<string, unknown> | null;
   const details = parseDetails(body);
   if (!details || !validId(body?.id)) return c.json(detailsError, 400);
-  const state = await createEvent(c.env, c.get('userId'), body.id, details);
+  const appearance =
+    body.appearance === undefined
+      ? originalAppearance
+      : parseAppearance(body.appearance);
+  if (!appearance)
+    return c.json(
+      { error: 'Choose an available color theme and font pairing.' },
+      400,
+    );
+  const state = await createEvent(
+    c.env,
+    c.get('userId'),
+    body.id,
+    details,
+    appearance,
+  );
   if (state === 'limit')
     return c.json({ error: 'You can create up to 10 events a day.' }, 429);
   if (state === 'conflict')
