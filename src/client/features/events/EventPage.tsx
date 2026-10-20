@@ -4,7 +4,7 @@ import { api, jsonRequest } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
 import { OverflowMenu } from '../../ui/OverflowMenu';
-import { EventAnswers, EventSummary } from './EventSummary';
+import { EventAnswers, EventCover, EventSummary } from './EventSummary';
 import { EventGuests } from './EventGuests';
 import { EventHosts } from './EventHosts';
 import { EventLinkDialog } from './EventLinkDialog';
@@ -159,146 +159,152 @@ export function EventPage({
   const sharing = managing && Boolean(url);
   return (
     <article className="event">
-      <EventSummary
-        event={event}
-        hosts={event.hosts}
-        onAddToCalendar={
-          event.cancelled ? undefined : () => setDialog('calendar')
-        }
-        actions={
-          (managing || deleting) && (
-            <div className="event-actions">
-              {sharing && (
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label="Share event link"
-                  aria-haspopup="dialog"
-                  onClick={() => setDialog('link')}
-                >
-                  <MailIcon />
-                </button>
-              )}
-              {(managing || deleting) && (
-                <OverflowMenu
-                  label="Event options"
-                  disabled={busy}
-                  items={[
-                    ...(managing
-                      ? [
-                          {
-                            label: 'Edit event',
-                            onSelect: () => {
-                              location.hash = eventHref(id, 'edit');
+      <EventCover event={event} />
+      <div className="event-main">
+        <EventSummary
+          event={event}
+          hosts={event.hosts}
+          onAddToCalendar={
+            event.cancelled ? undefined : () => setDialog('calendar')
+          }
+          actions={
+            (managing || deleting) && (
+              <div className="event-actions">
+                {sharing && (
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="Share event link"
+                    aria-haspopup="dialog"
+                    onClick={() => setDialog('link')}
+                  >
+                    <MailIcon />
+                  </button>
+                )}
+                {(managing || deleting) && (
+                  <OverflowMenu
+                    label="Event options"
+                    disabled={busy}
+                    items={[
+                      ...(managing
+                        ? [
+                            {
+                              label: 'Edit event',
+                              onSelect: () => {
+                                location.hash = eventHref(id, 'edit');
+                              },
                             },
-                          },
-                          {
-                            label: 'Edit hosts',
-                            onSelect: () => setDialog('hosts'),
-                          },
-                          {
-                            label: 'Send notification',
-                            onSelect: () => setDialog('notification'),
-                          },
-                          {
-                            label: 'Cancel event',
-                            danger: true,
-                            onSelect: () => setDialog('cancel'),
-                          },
-                        ]
-                      : []),
-                    ...(deleting
-                      ? [
-                          {
-                            label: 'Delete event',
-                            danger: true,
-                            onSelect: () => setDialog('delete'),
-                          },
-                        ]
-                      : []),
-                  ]}
-                />
-              )}
-            </div>
-          )
-        }
-      />
-      <div className="event-details">
-        {event.viewer.hostInvited && (
-          <div className="event-notice event-host-invite">
-            <p>
-              You’ve been asked to host this event. Hosts appear with their name
-              and profile photo to everyone with the link.
-            </p>
-            <button
-              type="button"
-              className="primary-button"
-              disabled={busy}
-              onClick={() => host(true)}
-            >
-              Become a host
-            </button>
-            <button
-              type="button"
-              className="text-button"
-              disabled={busy}
-              onClick={() => host(false)}
-            >
-              Decline
-            </button>
-          </div>
-        )}
-        {open ? (
-          <EventAnswers
-            value={event.viewer.response}
-            busy={busy}
-            onAnswer={answer}
-          />
-        ) : (
-          <p>Answers are closed.</p>
-        )}
-        {failure && !dialog && <p role="alert">{failure}</p>}
-        {notificationSent > 0 && <p role="status">Notification sent.</p>}
-        {event.counts ? (
-          <>
-            <section className="event-guests" aria-labelledby={`guests-${id}`}>
-              <h2 id={`guests-${id}`}>Guests</h2>
-              <EventGuests
-                key={JSON.stringify(event.counts)}
-                id={id}
-                counts={event.counts}
-                linkProfiles={linkProfiles}
-              />
-            </section>
-            <section aria-labelledby={`activity-${id}`}>
-              <h2 id={`activity-${id}`}>Activity</h2>
-              <EventLog
-                id={id}
-                linkProfiles={linkProfiles}
-                refreshVersion={notificationSent}
-              />
-            </section>
-          </>
-        ) : (
-          <section
-            className="event-guests-locked"
-            aria-labelledby={`guests-${id}`}
-          >
-            <h2 id={`guests-${id}`}>
-              <LockIcon /> Guests
-            </h2>
-            <p>
-              {open
-                ? 'RSVP to see who’s going.'
-                : 'The guest list is hidden. RSVPs are closed.'}
-            </p>
-            {open && (
-              <p className="status-copy">
-                Any answer unlocks the guest list and event activity.
+                            {
+                              label: 'Edit hosts',
+                              onSelect: () => setDialog('hosts'),
+                            },
+                            {
+                              label: 'Send notification',
+                              onSelect: () => setDialog('notification'),
+                            },
+                            {
+                              label: 'Cancel event',
+                              danger: true,
+                              onSelect: () => setDialog('cancel'),
+                            },
+                          ]
+                        : []),
+                      ...(deleting
+                        ? [
+                            {
+                              label: 'Delete event',
+                              danger: true,
+                              onSelect: () => setDialog('delete'),
+                            },
+                          ]
+                        : []),
+                    ]}
+                  />
+                )}
+              </div>
+            )
+          }
+        />
+        <div className="event-details">
+          {event.viewer.hostInvited && (
+            <div className="event-notice event-host-invite">
+              <p>
+                You’ve been asked to host this event. Hosts appear with their
+                name and profile photo to everyone with the link.
               </p>
-            )}
-          </section>
-        )}
+              <button
+                type="button"
+                className="primary-button"
+                disabled={busy}
+                onClick={() => host(true)}
+              >
+                Become a host
+              </button>
+              <button
+                type="button"
+                className="text-button"
+                disabled={busy}
+                onClick={() => host(false)}
+              >
+                Decline
+              </button>
+            </div>
+          )}
+          {open ? (
+            <EventAnswers
+              value={event.viewer.response}
+              busy={busy}
+              onAnswer={answer}
+            />
+          ) : (
+            <p>Answers are closed.</p>
+          )}
+          {failure && !dialog && <p role="alert">{failure}</p>}
+          {notificationSent > 0 && <p role="status">Notification sent.</p>}
+          {event.counts ? (
+            <>
+              <section
+                className="event-guests"
+                aria-labelledby={`guests-${id}`}
+              >
+                <h2 id={`guests-${id}`}>Guests</h2>
+                <EventGuests
+                  key={JSON.stringify(event.counts)}
+                  id={id}
+                  counts={event.counts}
+                  linkProfiles={linkProfiles}
+                />
+              </section>
+              <section aria-labelledby={`activity-${id}`}>
+                <h2 id={`activity-${id}`}>Activity</h2>
+                <EventLog
+                  id={id}
+                  linkProfiles={linkProfiles}
+                  refreshVersion={notificationSent}
+                />
+              </section>
+            </>
+          ) : (
+            <section
+              className="event-guests-locked"
+              aria-labelledby={`guests-${id}`}
+            >
+              <h2 id={`guests-${id}`}>
+                <LockIcon /> Guests
+              </h2>
+              <p>
+                {open
+                  ? 'RSVP to see who’s going.'
+                  : 'The guest list is hidden. RSVPs are closed.'}
+              </p>
+              {open && (
+                <p className="status-copy">
+                  Any answer unlocks the guest list and event activity.
+                </p>
+              )}
+            </section>
+          )}
+        </div>
       </div>
       {dialog === 'link' && sharing && url && (
         <EventLinkDialog url={url} onClose={closeDialog} />

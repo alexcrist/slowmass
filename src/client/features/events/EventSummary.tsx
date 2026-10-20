@@ -55,6 +55,44 @@ export function PersonPhoto({
   );
 }
 
+// The cover's ratio also sizes it to the viewport beside wide-screen details.
+export function EventCover({ event }: { event: EventDetails }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        className="event-photo event-photo-button"
+        style={{
+          ['--event-photo-ratio' as string]: `${event.width} / ${event.height}`,
+        }}
+        aria-label="Enlarge event photo"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen(true)}
+      >
+        <img
+          src={event.photoUrl}
+          width={event.width}
+          height={event.height}
+          alt={`Cover photo for ${event.title}`}
+          fetchPriority="high"
+        />
+      </button>
+      {open && (
+        <ImageViewer
+          title="Event photo"
+          src={event.photoUrl}
+          alt={`Cover photo for ${event.title}`}
+          width={event.width}
+          height={event.height}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
 export function EventSummary({
   event,
   hosts,
@@ -68,52 +106,50 @@ export function EventSummary({
   onAddToCalendar?: () => void;
 }) {
   const when = eventWhen(event);
-  const [photoOpen, setPhotoOpen] = useState(false);
   return (
-    <div className="event-summary">
-      <button
-        type="button"
-        className="event-photo event-photo-button"
-        style={{ aspectRatio: `${event.width} / ${event.height}` }}
-        aria-label="Enlarge event photo"
-        aria-haspopup="dialog"
-        aria-expanded={photoOpen}
-        onClick={() => setPhotoOpen(true)}
-      >
-        <img
-          src={event.photoUrl}
-          width={event.width}
-          height={event.height}
-          alt={`Cover photo for ${event.title}`}
-          fetchPriority="high"
-        />
-      </button>
-      {photoOpen && (
-        <ImageViewer
-          title="Event photo"
-          src={event.photoUrl}
-          alt={`Cover photo for ${event.title}`}
-          width={event.width}
-          height={event.height}
-          onClose={() => setPhotoOpen(false)}
-        />
+    <div className="event-details">
+      {event.cancelled ? (
+        <p className="event-notice">This event was cancelled.</p>
+      ) : (
+        event.over && <p className="event-notice">This event is over.</p>
       )}
-      <div className="event-details">
-        {event.cancelled ? (
-          <p className="event-notice">This event was cancelled.</p>
-        ) : (
-          event.over && <p className="event-notice">This event is over.</p>
-        )}
-        <div className="event-title-row">
-          <h2 className="event-title">{event.title}</h2>
-          {actions}
-        </div>
-        <div className="event-information">
-          <p className="event-detail-row event-when">
-            <EventDateIcon />
-            <strong>{when.date}</strong>
+      <div className="event-title-row">
+        <h2 className="event-title">{event.title}</h2>
+        {actions}
+      </div>
+      <div className="event-information">
+        <p className="event-detail-row event-when">
+          <EventDateIcon />
+          <strong>{when.date}</strong>
+        </p>
+        <p className="event-detail-row event-when">
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7v5l3 2" />
+          </svg>
+          <span>{when.time}</span>
+        </p>
+        {event.location && (
+          <p className="event-detail-row event-location">
+            <EventLocationIcon />
+            <span>{event.location}</span>
           </p>
-          <p className="event-detail-row event-when">
+        )}
+        {onAddToCalendar && (
+          <button
+            type="button"
+            className="button-link event-calendar-button"
+            aria-haspopup="dialog"
+            onClick={onAddToCalendar}
+          >
             <svg
               viewBox="0 0 24 24"
               aria-hidden="true"
@@ -123,80 +159,52 @@ export function EventSummary({
               strokeLinecap="round"
               strokeLinejoin="round"
             >
-              <circle cx="12" cy="12" r="9" />
-              <path d="M12 7v5l3 2" />
+              <path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7M16 3v4M8 3v4M3 11h18M19 15v8M15 19h8" />
             </svg>
-            <span>{when.time}</span>
-          </p>
-          {event.location && (
-            <p className="event-detail-row event-location">
-              <EventLocationIcon />
-              <span>{event.location}</span>
-            </p>
-          )}
-          {onAddToCalendar && (
-            <button
-              type="button"
-              className="button-link event-calendar-button"
-              aria-haspopup="dialog"
-              onClick={onAddToCalendar}
+            Add to calendar
+          </button>
+        )}
+        {hosts.length > 0 && (
+          <div className="event-hosts">
+            <svg
+              className="event-host-crown"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              <svg
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7M16 3v4M8 3v4M3 11h18M19 15v8M15 19h8" />
-              </svg>
-              Add to calendar
-            </button>
-          )}
-          {hosts.length > 0 && (
-            <div className="event-hosts">
-              <svg
-                className="event-host-crown"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="m3 6 4.5 4L12 3l4.5 7L21 6l-2 12H5L3 6Z" />
-                <path d="M5 21h14" />
-              </svg>
-              <span className="event-host-photos">
-                {hosts.map((host) => (
-                  <PersonPhoto
-                    key={host.handle}
-                    name={host.displayName}
-                    profileHandle={host.hasAvatar ? host.handle : undefined}
-                    src={
-                      host.hasAvatar
-                        ? `/media/avatar/${encodeURIComponent(host.handle)}`
-                        : null
-                    }
-                    size={32}
-                  />
-                ))}
-              </span>
-              <p>
-                Hosted by{' '}
-                {new Intl.ListFormat(undefined, { type: 'conjunction' }).format(
-                  hosts.map((host) => host.displayName),
-                )}
-              </p>
-            </div>
-          )}
-          {event.description && (
-            <p className="event-description">{event.description}</p>
-          )}
-        </div>
+              <path d="m3 6 4.5 4L12 3l4.5 7L21 6l-2 12H5L3 6Z" />
+              <path d="M5 21h14" />
+            </svg>
+            <span className="event-host-photos">
+              {hosts.map((host) => (
+                <PersonPhoto
+                  key={host.handle}
+                  name={host.displayName}
+                  profileHandle={host.hasAvatar ? host.handle : undefined}
+                  src={
+                    host.hasAvatar
+                      ? `/media/avatar/${encodeURIComponent(host.handle)}`
+                      : null
+                  }
+                  size={32}
+                />
+              ))}
+            </span>
+            <p>
+              Hosted by{' '}
+              {new Intl.ListFormat(undefined, { type: 'conjunction' }).format(
+                hosts.map((host) => host.displayName),
+              )}
+            </p>
+          </div>
+        )}
+        {event.description && (
+          <p className="event-description">{event.description}</p>
+        )}
       </div>
     </div>
   );

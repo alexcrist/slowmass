@@ -1718,6 +1718,7 @@ a.profile-tab {
 }
 .event-photo-button {
   display: block;
+  aspect-ratio: var(--event-photo-ratio);
   padding: 0;
   cursor: zoom-in;
 }
@@ -2014,6 +2015,32 @@ a.profile-tab {
   .photo-screen .event-photo {
     border-inline: 0;
     border-radius: 0;
+  }
+}
+/* Wide screens keep the details at feed width and pin the cover beside them,
+   scaled down to fit the viewport below the 48px content offset. */
+@media (min-width: 1100px) {
+  .member-content.photo-screen[data-page='event'] {
+    max-width: 1040px;
+  }
+  .event {
+    display: grid;
+    grid-template-columns: minmax(0, 520px) minmax(0, 1fr);
+    column-gap: 48px;
+    align-items: start;
+  }
+  .event > .event-photo {
+    grid-area: 1 / 2;
+    position: sticky;
+    top: 48px;
+    width: min(100%, (100dvh - 96px) * var(--event-photo-ratio));
+    max-height: none;
+  }
+  .event-main {
+    grid-area: 1 / 1;
+  }
+  .event-main > .event-details:first-child > :first-child {
+    margin-top: 0;
   }
 }
 

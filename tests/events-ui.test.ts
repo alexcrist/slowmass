@@ -1571,6 +1571,10 @@ it('opens the authorized event cover in the shared photo modal and closes it', a
     renderer.root.findAllByProps({ className: 'image-viewer' }),
   ).toHaveLength(0);
   expect(button('Enlarge event photo').props['aria-haspopup']).toBe('dialog');
+  // CSS derives both the cover's shape and its wide-screen width from this.
+  expect(button('Enlarge event photo').props.style).toEqual({
+    '--event-photo-ratio': '4 / 3',
+  });
   await click('Enlarge event photo');
   expect(button('Enlarge event photo').props['aria-expanded']).toBe(true);
   const photo = renderer.root.findByProps({ className: 'image-viewer-photo' });
