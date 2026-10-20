@@ -2020,8 +2020,10 @@ a.profile-tab {
 /* Wide screens keep the details at feed width and pin the cover beside them,
    scaled down to fit the viewport below the 48px content offset. */
 @media (min-width: 1100px) {
+  /* The member app sits inside the 640px account column; widen both. */
+  .account-section:has(.member-content.photo-screen[data-page='event']),
   .member-content.photo-screen[data-page='event'] {
-    max-width: 1040px;
+    max-width: 1120px;
   }
   .event {
     display: grid;
