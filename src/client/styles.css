@@ -1740,6 +1740,8 @@ a.profile-tab {
   margin: 20px 0 8px;
 }
 .event-title {
+  flex: 1;
+  min-width: 0;
   margin: 0;
   font-size: 30px;
   line-height: 1.15;
@@ -1858,6 +1860,7 @@ a.profile-tab {
   font-size: 15px;
 }
 .event-description {
+  font-size: 18px;
   white-space: pre-wrap;
 }
 .event-answers {
@@ -2008,8 +2011,183 @@ a.profile-tab {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
+/* The editor is the event page with each part editable in place. Editable
+   parts carry a dashed outline, solid while focused, instead of form chrome. */
+.event-editable {
+  border-radius: 3px;
+  outline: 1px dashed var(--control-line);
+  outline-offset: 4px;
+}
+.event-editable:hover {
+  outline-color: var(--muted);
+}
+.event-editable:focus-visible,
+.event-editable:has(:focus-visible) {
+  outline: 2px solid var(--ink);
+  outline-offset: 4px;
+}
+/* The hidden copy grows the field with wrapping, like the comment composer. */
+.event-field {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.event-field-size,
+.event-field textarea {
+  grid-area: 1 / 1;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.event-field-size {
+  visibility: hidden;
+  overflow: hidden;
+}
+.event-field textarea,
+.event-field textarea:disabled {
+  height: 100%;
+  overflow: hidden;
+  resize: none;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+}
+.event-field textarea:focus-visible {
+  outline: none;
+}
+.event-placeholder {
+  color: var(--muted);
+}
+.event-when-button {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: inherit;
+  text-align: left;
+}
+.event-when-button:disabled {
+  opacity: 1;
+}
+.event-when-editor {
+  display: grid;
+  gap: 12px;
+}
+.event-when-editor .event-detail-row {
+  align-items: flex-end;
+}
+/* Center the icons on the 48px fields beneath the labels. */
+.event-when-editor .event-detail-row svg {
+  margin-block: 0 14px;
+}
+.event-when-editor .event-detail-row > span {
+  flex: 1;
+}
+.event-when-editor .field-label {
+  margin-top: 0;
+}
+.event-when-editor input {
+  margin: 0;
+}
+.event-when-editor > .field-help {
+  margin: 0;
+}
+.event-when-editor > button {
+  justify-self: start;
+}
+.event-cover-editor {
+  position: relative;
+  aspect-ratio: var(--event-photo-ratio);
+}
+.event-cover-editor:has(input:focus-visible) {
+  outline: 2px solid var(--ink);
+  outline-offset: -4px;
+}
+.event-cover-choose {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+.event-cover-editor:has(input:disabled) .event-cover-choose {
+  cursor: default;
+}
+.event-cover-empty {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 4px;
+  height: 100%;
+  padding: 16px;
+  color: var(--muted);
+  font-size: 15px;
+  text-align: center;
+}
+.event-cover-empty strong {
+  color: var(--ink);
+  font-size: 17px;
+}
+.event-cover-empty svg {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 4px;
+}
+.event-cover-choose:hover .event-cover-empty {
+  color: var(--ink);
+}
+.event-cover-actions {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 8px;
+  pointer-events: none;
+}
+.event-cover-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--control-line);
+  border-radius: 22px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.event-cover-action:hover {
+  background: var(--hover);
+}
+.event-form-footer {
+  margin-top: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+.event-form-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.event-form-actions > button {
+  width: 100%;
+  min-height: 48px;
+  margin: 0;
+}
 @media (max-width: 899px) {
-  .photo-screen .event-details {
+  .photo-screen .event-details,
+  .photo-screen .event-appearance-controls {
     padding-inline: 16px;
   }
   .photo-screen .event-photo {
@@ -2019,10 +2197,23 @@ a.profile-tab {
 }
 /* Wide screens keep the details at feed width and pin the cover beside them,
    scaled down to fit the viewport below the 48px content offset. */
+@media (min-width: 900px) {
+  .event-title {
+    font-size: 50px;
+  }
+}
 @media (min-width: 1100px) {
   /* The member app sits inside the 640px account column; widen both. */
-  .account-section:has(.member-content.photo-screen[data-page='event']),
-  .member-content.photo-screen[data-page='event'] {
+  .account-section:has(
+    .member-content.photo-screen:is(
+        [data-page='event'],
+        [data-page='new-event']
+      )
+  ),
+  .member-content.photo-screen:is(
+      [data-page='event'],
+      [data-page='new-event']
+    ) {
     max-width: 1120px;
   }
   .event {
@@ -2180,18 +2371,12 @@ textarea::placeholder {
   align-items: center;
 }
 
+/* The editor's one addition to the event page: theme controls above it. */
 .event-appearance-controls {
   min-width: 0;
-  margin: 18px 0;
+  margin: 0 0 16px;
   padding: 0;
   border: 0;
-}
-.event-appearance-controls legend {
-  font-size: 15px;
-  font-weight: 600;
-}
-.event-appearance-controls .actions {
-  margin-top: 7px;
 }
 .event-appearance-controls .event-color-button,
 .event-appearance-controls .event-color-button:enabled:hover {

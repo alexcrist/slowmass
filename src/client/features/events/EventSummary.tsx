@@ -1,7 +1,7 @@
 import { useId, useState, type ReactNode } from 'react';
 import { profileHref } from '../../navigation';
 import { ImageViewer } from '../../ui/ImageViewer';
-import { EventDateIcon, EventLocationIcon } from './EventIcons';
+import { EventDateIcon, EventLocationIcon, EventTimeIcon } from './EventIcons';
 import { eventWhen } from './time';
 import {
   answerEmoji,
@@ -93,6 +93,54 @@ export function EventCover({ event }: { event: EventDetails }) {
   );
 }
 
+// The editor shows hosts without profile links, so a click can't drop a draft.
+export function EventHostRow({
+  hosts,
+  linked,
+}: {
+  hosts: Host[];
+  linked: boolean;
+}) {
+  return (
+    <div className="event-hosts">
+      <svg
+        className="event-host-crown"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="m3 6 4.5 4L12 3l4.5 7L21 6l-2 12H5L3 6Z" />
+        <path d="M5 21h14" />
+      </svg>
+      <span className="event-host-photos">
+        {hosts.map((host) => (
+          <PersonPhoto
+            key={host.handle}
+            name={host.displayName}
+            profileHandle={linked && host.hasAvatar ? host.handle : undefined}
+            src={
+              host.hasAvatar
+                ? `/media/avatar/${encodeURIComponent(host.handle)}`
+                : null
+            }
+            size={32}
+          />
+        ))}
+      </span>
+      <p>
+        Hosted by{' '}
+        {new Intl.ListFormat(undefined, { type: 'conjunction' }).format(
+          hosts.map((host) => host.displayName),
+        )}
+      </p>
+    </div>
+  );
+}
+
 export function EventSummary({
   event,
   hosts,
@@ -123,18 +171,7 @@ export function EventSummary({
           <strong>{when.date}</strong>
         </p>
         <p className="event-detail-row event-when">
-          <svg
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 7v5l3 2" />
-          </svg>
+          <EventTimeIcon />
           <span>{when.time}</span>
         </p>
         {event.location && (
@@ -164,44 +201,7 @@ export function EventSummary({
             Add to calendar
           </button>
         )}
-        {hosts.length > 0 && (
-          <div className="event-hosts">
-            <svg
-              className="event-host-crown"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="m3 6 4.5 4L12 3l4.5 7L21 6l-2 12H5L3 6Z" />
-              <path d="M5 21h14" />
-            </svg>
-            <span className="event-host-photos">
-              {hosts.map((host) => (
-                <PersonPhoto
-                  key={host.handle}
-                  name={host.displayName}
-                  profileHandle={host.hasAvatar ? host.handle : undefined}
-                  src={
-                    host.hasAvatar
-                      ? `/media/avatar/${encodeURIComponent(host.handle)}`
-                      : null
-                  }
-                  size={32}
-                />
-              ))}
-            </span>
-            <p>
-              Hosted by{' '}
-              {new Intl.ListFormat(undefined, { type: 'conjunction' }).format(
-                hosts.map((host) => host.displayName),
-              )}
-            </p>
-          </div>
-        )}
+        {hosts.length > 0 && <EventHostRow hosts={hosts} linked />}
         {event.description && (
           <p className="event-description">{event.description}</p>
         )}

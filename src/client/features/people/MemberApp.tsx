@@ -112,7 +112,8 @@ function MemberPages({
       href: `#${route}`,
       label: `Back to ${(titles[route.split('/')[0]] || 'Feed').toLowerCase()}`,
     });
-    // Event pages have no back control: Events is always in the navigation.
+    // Event pages, including creating and editing one, have no back control:
+    // Events is always in the navigation, and the editors end with Cancel.
     if (eventOnly) {
       if (needsPhoto) return null;
       if (page === 'edit')
@@ -120,10 +121,6 @@ function MemberPages({
       if (page === 'profile') return toList(backRoute);
       return null;
     }
-    if (page === 'new-event')
-      return { href: '#events', label: 'Back to events' };
-    if (page === 'event' && profileTab === 'edit')
-      return { href: eventHref(handle ?? ''), label: 'Back to event' };
     if (page === 'settings' || page === 'following' || page === 'followers')
       return { href: profileRoute, label: 'Back to profile' };
     if (['edit', 'blocked'].includes(page))
@@ -285,8 +282,20 @@ function MemberPages({
       case 'new-event':
         return (
           <EventForm
+            hosts={[
+              {
+                handle: profile.handle,
+                displayName: profile.displayName,
+                hasAvatar: Boolean(profile.hasAvatar),
+                isCreator: true,
+                isViewer: true,
+              },
+            ]}
             onSaved={(id) => {
               location.hash = eventHref(id);
+            }}
+            onCancel={() => {
+              location.hash = '#events';
             }}
           />
         );
@@ -296,6 +305,9 @@ function MemberPages({
             id={handle}
             onSaved={(id) => {
               location.hash = eventHref(id);
+            }}
+            onCancel={() => {
+              location.hash = eventHref(handle);
             }}
           />
         ) : (
@@ -401,7 +413,7 @@ function MemberPages({
         <section
           key={active ? `${pageKey}:${pageVersion}` : 'onboarding'}
           data-page={active ? page : 'onboarding'}
-          className={`member-content ${!active || needsPhoto ? 'onboarding' : ['feed', 'profile', 'post'].includes(page) || (page === 'event' && profileTab !== 'edit') ? 'photo-screen' : ''}${eventOnly ? ' event-only' : ''}`}
+          className={`member-content ${!active || needsPhoto ? 'onboarding' : ['feed', 'profile', 'post', 'event', 'new-event'].includes(page) ? 'photo-screen' : ''}${eventOnly ? ' event-only' : ''}`}
           aria-labelledby="screen-title"
         >
           {active && back && <BackControl {...back} />}

@@ -14,9 +14,10 @@ import { Notifications } from '../src/client/features/notifications/Notification
 import { EventPage } from '../src/client/features/events/EventPage';
 import { EditEvent, EventForm } from '../src/client/features/events/EventForm';
 import { PostCropEditor, fullPhoto } from '../src/client/features/posts';
-import { fromZoned } from '../src/client/features/events/time';
+import { eventWhen, fromZoned } from '../src/client/features/events/time';
 import { AvatarForm } from '../src/client/features/avatars/AvatarForm';
 import { EventPreview } from '../src/client/features/events/EventPreview';
+import { EventHostRow } from '../src/client/features/events/EventSummary';
 import {
   originalAppearance,
   fontPairings,
@@ -196,6 +197,22 @@ async function type(id: string, value: string) {
     renderer.root.findByProps({ id }).props.onChange({ target: { value } }),
   );
 }
+// The editor has its own Cancel beside the dialog's.
+async function cancelDialog() {
+  const cancel = renderer.root
+    .findByType('dialog')
+    .findAllByType('button')
+    .find((item) => item.children.join('') === 'Cancel');
+  expect(cancel, 'Dialog Cancel').toBeDefined();
+  await act(async () => cancel!.props.onClick());
+}
+// The date and time read like the event page until selected.
+async function editWhen() {
+  const target = renderer.root.findByProps({
+    className: 'event-when-button event-editable',
+  });
+  await act(async () => target.props.onClick());
+}
 async function submit() {
   await act(async () =>
     renderer.root
@@ -224,14 +241,17 @@ it('previews creation appearance locally and preserves it through cover retries'
     vi.fn(async () => ({ width: 10, height: 10, close: vi.fn() })),
   );
   const saved = vi.fn();
-  await mount(createElement(EventForm, { onSaved: saved }));
+  await mount(
+    createElement(EventForm, { hosts: [], onSaved: saved, onCancel: vi.fn() }),
+  );
   await type('event-title', 'Dinner');
+  await editWhen();
   await type('event-date', '2030-01-04');
   await type('event-start', '19:00');
   await click('Color theme');
   await chooseAppearance('event-color', 'wine');
   expect(rootStyle('--paper')).toBe(palettes.wine.paper);
-  await click('Cancel');
+  await cancelDialog();
   expect(rootStyle('--paper')).toBe(palettes.original.paper);
   await click('Color theme');
   await chooseAppearance('event-color', 'evergreen');
@@ -311,7 +331,9 @@ it('previews creation appearance locally and preserves it through cover retries'
 });
 
 it('edits colors and fonts in separate dialogs without losing event details', async () => {
-  await mount(createElement(EditEvent, { id, onSaved: vi.fn() }));
+  await mount(
+    createElement(EditEvent, { id, onSaved: vi.fn(), onCancel: vi.fn() }),
+  );
   await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
   await type('event-title', 'Unsaved dinner title');
   await type('event-location', 'Unsaved location');
@@ -326,7 +348,7 @@ it('edits colors and fonts in separate dialogs without losing event details', as
   expect(requests.some((request) => request.path.endsWith('/appearance'))).toBe(
     false,
   );
-  await click('Cancel');
+  await cancelDialog();
   expect(rootStyle('--paper')).toBe('#ffffff');
   await click('Fonts');
   expect(renderer.root.findAllByProps({ name: 'event-color' })).toHaveLength(0);
@@ -350,7 +372,7 @@ it('edits colors and fonts in separate dialogs without losing event details', as
       String(pairings[pairing].headingWeight),
     );
   }
-  await click('Cancel');
+  await cancelDialog();
   expect(rootStyle('--heading-font')).toBe(pairings.original.heading);
   await click('Color theme');
   await chooseAppearance('event-color', 'evergreen');
@@ -405,7 +427,9 @@ it('edits colors and fonts in separate dialogs without losing event details', as
 });
 
 it('keeps failed appearance edits retryable and aborts saves when editing unmounts', async () => {
-  await mount(createElement(EditEvent, { id, onSaved: vi.fn() }));
+  await mount(
+    createElement(EditEvent, { id, onSaved: vi.fn(), onCancel: vi.fn() }),
+  );
   await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
   await click('Color theme');
   await chooseAppearance('event-color', 'after-hours');
@@ -428,7 +452,9 @@ it('keeps failed appearance edits retryable and aborts saves when editing unmoun
 });
 
 it('reloads conflicting appearance without dropping the event draft and uses the new save guard', async () => {
-  await mount(createElement(EditEvent, { id, onSaved: vi.fn() }));
+  await mount(
+    createElement(EditEvent, { id, onSaved: vi.fn(), onCancel: vi.fn() }),
+  );
   await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
   await type('event-description', 'Keep this unfinished description');
   await click('Fonts');
@@ -467,7 +493,9 @@ it.each([
 ])(
   'keeps appearance editing unavailable for an ineligible editor: %j',
   async (event) => {
-    await mount(createElement(EditEvent, { id, onSaved: vi.fn() }));
+    await mount(
+      createElement(EditEvent, { id, onSaved: vi.fn(), onCancel: vi.fn() }),
+    );
     await reply(pending(`/api/events/${id}`), { event: view(event) });
     expect(renderer.root.findAllByType('form')).toHaveLength(0);
     expect(rootStyle('--paper')).toBe('');
@@ -993,7 +1021,9 @@ it('describes event activity and links to the event', async () => {
 
 it('edits details silently in the event time zone', async () => {
   const saved = vi.fn();
-  await mount(createElement(EditEvent, { id, onSaved: saved }));
+  await mount(
+    createElement(EditEvent, { id, onSaved: saved, onCancel: vi.fn() }),
+  );
   await reply(pending(`/api/events/${id}`), {
     event: view({ viewer: host }),
   });
@@ -1001,6 +1031,7 @@ it('edits details silently in the event time zone', async () => {
   expect(cover.props.src).toBe(details.photoUrl);
   expect(cover.props.width).toBe(details.width);
   expect(cover.props.height).toBe(details.height);
+  await editWhen();
   expect(renderer.root.findByProps({ id: 'event-date' }).props.value).toBe(
     '2030-01-04',
   );
@@ -1024,6 +1055,89 @@ it('edits details silently in the event time zone', async () => {
   expect(visibleText()).not.toMatch(/notif(?:y|ies|ication)/i);
   await reply(patch, { ok: true });
   expect(saved).toHaveBeenCalledWith(id);
+});
+
+it('creates an event on a preview of its page, edited in place', async () => {
+  location.hash = '#new-event';
+  await mount(
+    createElement(MemberApp, {
+      initialProfile: {
+        handle: 'alice',
+        displayName: 'Alice',
+        bio: '',
+        hasAvatar: 1,
+      },
+      onSignOut: vi.fn(),
+      signingOut: false,
+    }),
+  );
+  // Cancel at the bottom replaces the back control.
+  expect(renderer.root.findAllByProps({ className: 'back-control' })).toEqual(
+    [],
+  );
+  expect(visibleText()).toContain('Add cover photo');
+  expect(visibleText()).toContain('Choose a date');
+  expect(visibleText()).toContain('Choose a start time');
+  expect(visibleText()).toMatch(/Hosted by\s+Alice/);
+  // Leaving the editor from a host avatar would drop the draft.
+  expect(
+    renderer.root.findAllByProps({ className: 'event-person-link' }),
+  ).toHaveLength(0);
+  expect(renderer.root.findAllByProps({ id: 'event-date' })).toHaveLength(0);
+  await type('event-title', 'Dinner\nparty');
+  expect(renderer.root.findByProps({ id: 'event-title' }).props.value).toBe(
+    'Dinner party',
+  );
+  await submit();
+  expect(visibleText()).toContain('Choose a date and start time.');
+  expect(renderer.root.findByProps({ id: 'event-date' })).toBeDefined();
+  await type('event-date', '2030-01-04');
+  await type('event-start', '19:00');
+  await type('event-end', '01:00');
+  await click('Done');
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const when = eventWhen({
+    startsAt: fromZoned('2030-01-04', '19:00', timeZone)!,
+    endsAt: fromZoned('2030-01-05', '01:00', timeZone),
+    timeZone,
+  });
+  expect(visibleText()).toContain(when.date);
+  expect(visibleText()).toContain(when.time);
+  expect(renderer.root.findAllByProps({ id: 'event-date' })).toHaveLength(0);
+  expect(button('Create event')).toBeDefined();
+  await click('Cancel');
+  expect(location.hash).toBe('#events');
+});
+
+it('edits an event on its page and cancels back to it', async () => {
+  location.hash = `#event/${id}/edit`;
+  await mount(
+    createElement(MemberApp, {
+      initialProfile: {
+        handle: 'alice',
+        displayName: 'Alice',
+        bio: '',
+        hasAvatar: 1,
+      },
+      onSignOut: vi.fn(),
+      signingOut: false,
+    }),
+  );
+  await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
+  expect(renderer.root.findAllByProps({ className: 'back-control' })).toEqual(
+    [],
+  );
+  expect(visibleText()).toContain(eventWhen(details).date);
+  expect(visibleText()).toMatch(/Hosted by\s+Alice/);
+  expect(
+    renderer.root.findByProps({ id: 'event-photo' }).props['aria-label'],
+  ).toBe('Change cover photo');
+  expect(button('Save')).toBeDefined();
+  await click('Cancel');
+  expect(location.hash).toBe(`#event/${id}`);
+  expect(requests.some((request) => request.options?.method === 'PATCH')).toBe(
+    false,
+  );
 });
 
 it.each([true, false])(
@@ -1687,8 +1801,10 @@ it.each([false, true])(
       (child) => child.props.className === 'event-detail-row event-location',
     );
     expect(children[locationIndex + 1]).toBe(button('Add to calendar'));
-    expect(children[locationIndex + 2].props.className).toBe('event-hosts');
-    const hosts = children[locationIndex + 2];
+    expect(children[locationIndex + 2].type).toBe(EventHostRow);
+    const hosts = children[locationIndex + 2].findByProps({
+      className: 'event-hosts',
+    });
     expect(hosts.findByType('svg').props['aria-hidden']).toBe('true');
     expect(hosts.children[0]).toBe(hosts.findByType('svg'));
     const before = requests.length;
@@ -1746,9 +1862,7 @@ it('keeps the calendar action above multiple hosts when there is no location', a
   ).toHaveLength(1);
   const info = renderer.root.findByProps({ className: 'event-information' });
   expect(info.children.indexOf(button('Add to calendar'))).toBeLessThan(
-    info.children.indexOf(
-      renderer.root.findByProps({ className: 'event-hosts' }),
-    ),
+    info.children.indexOf(renderer.root.findByType(EventHostRow)),
   );
   await act(async () => renderer.unmount());
 });
