@@ -14,7 +14,12 @@ import { Notifications } from '../src/client/features/notifications/Notification
 import { EventPage } from '../src/client/features/events/EventPage';
 import { EditEvent, EventForm } from '../src/client/features/events/EventForm';
 import { PostCropEditor, fullPhoto } from '../src/client/features/posts';
-import { eventWhen, fromZoned } from '../src/client/features/events/time';
+import {
+  clockTime,
+  eventWhen,
+  fromZoned,
+  zoneName,
+} from '../src/client/features/events/time';
 import { AvatarForm } from '../src/client/features/avatars/AvatarForm';
 import { EventPreview } from '../src/client/features/events/EventPreview';
 import { EventHostRow } from '../src/client/features/events/EventSummary';
@@ -206,12 +211,13 @@ async function cancelDialog() {
   expect(cancel, 'Dialog Cancel').toBeDefined();
   await act(async () => cancel!.props.onClick());
 }
-// The date and time read like the event page until selected.
-async function editWhen() {
-  const target = renderer.root.findByProps({
-    className: 'event-when-button event-editable',
-  });
-  await act(async () => target.props.onClick());
+// The picker fields' native inputs, rather than their wrappers.
+function nativeInput(id: string) {
+  const found = renderer.root
+    .findAllByProps({ id })
+    .find((item) => item.type === 'input');
+  expect(found, `Input ${id}`).toBeDefined();
+  return found!;
 }
 async function submit() {
   await act(async () =>
@@ -245,7 +251,6 @@ it('previews creation appearance locally and preserves it through cover retries'
     createElement(EventForm, { hosts: [], onSaved: saved, onCancel: vi.fn() }),
   );
   await type('event-title', 'Dinner');
-  await editWhen();
   await type('event-date', '2030-01-04');
   await type('event-start', '19:00');
   await click('Color theme');
@@ -1031,7 +1036,6 @@ it('edits details silently in the event time zone', async () => {
   expect(cover.props.src).toBe(details.photoUrl);
   expect(cover.props.width).toBe(details.width);
   expect(cover.props.height).toBe(details.height);
-  await editWhen();
   expect(renderer.root.findByProps({ id: 'event-date' }).props.value).toBe(
     '2030-01-04',
   );
@@ -1083,27 +1087,52 @@ it('creates an event on a preview of its page, edited in place', async () => {
   expect(
     renderer.root.findAllByProps({ className: 'event-person-link' }),
   ).toHaveLength(0);
-  expect(renderer.root.findAllByProps({ id: 'event-date' })).toHaveLength(0);
+  // The end time waits for a start time.
+  expect(renderer.root.findAllByProps({ id: 'event-end' })).toHaveLength(0);
   await type('event-title', 'Dinner\nparty');
   expect(renderer.root.findByProps({ id: 'event-title' }).props.value).toBe(
     'Dinner party',
   );
   await submit();
   expect(visibleText()).toContain('Choose a date and start time.');
-  expect(renderer.root.findByProps({ id: 'event-date' })).toBeDefined();
+  // Selecting the date opens the native picker, as do Enter and Space.
+  const showPicker = vi.fn();
+  const date = nativeInput('event-date');
+  await act(async () => date.props.onClick({ currentTarget: { showPicker } }));
+  const enter = {
+    key: 'Enter',
+    preventDefault: vi.fn(),
+    currentTarget: { showPicker },
+  };
+  await act(async () => date.props.onKeyDown(enter));
+  expect(enter.preventDefault).toHaveBeenCalledOnce();
+  expect(showPicker).toHaveBeenCalledTimes(2);
+  // Without picker support, the focused field still takes typed input.
+  await act(async () =>
+    date.props.onClick({
+      currentTarget: {
+        showPicker: () => {
+          throw new Error('Unsupported');
+        },
+      },
+    }),
+  );
   await type('event-date', '2030-01-04');
   await type('event-start', '19:00');
   await type('event-end', '01:00');
-  await click('Done');
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const when = eventWhen({
-    startsAt: fromZoned('2030-01-04', '19:00', timeZone)!,
-    endsAt: fromZoned('2030-01-05', '01:00', timeZone),
-    timeZone,
-  });
-  expect(visibleText()).toContain(when.date);
-  expect(visibleText()).toContain(when.time);
-  expect(renderer.root.findAllByProps({ id: 'event-date' })).toHaveLength(0);
+  const start = fromZoned('2030-01-04', '19:00', timeZone)!;
+  expect(visibleText()).toContain(
+    eventWhen({ startsAt: start, endsAt: null, timeZone }).date,
+  );
+  expect(visibleText()).toContain(clockTime('19:00'));
+  expect(visibleText()).toContain(clockTime('01:00'));
+  expect(visibleText()).toContain('next day');
+  expect(visibleText()).toContain(zoneName(start, timeZone));
+  await click('Remove end time');
+  expect(nativeInput('event-end').props.value).toBe('');
+  expect(visibleText()).toContain('End time');
+  expect(visibleText()).not.toContain('next day');
   expect(button('Create event')).toBeDefined();
   await click('Cancel');
   expect(location.hash).toBe('#events');

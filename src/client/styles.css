@@ -2006,11 +2006,6 @@ a.profile-tab {
 .event-host-pending > .event-list-meta {
   display: block;
 }
-.event-times {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
 /* The editor is the event page with each part editable in place. Editable
    parts carry a dashed outline, solid while focused, instead of form chrome. */
 .event-editable {
@@ -2064,45 +2059,48 @@ a.profile-tab {
 .event-placeholder {
   color: var(--muted);
 }
-.event-when-button {
-  display: grid;
-  gap: 16px;
+/* Date and time read as page text. A transparent native input covers each
+   part, so selecting it opens the browser's own picker in place. */
+.event-picker {
+  position: relative;
+  display: inline-block;
+}
+.event-picker input {
+  position: absolute;
+  inset: 0;
   width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
   padding: 0;
   border: 0;
-  background: transparent;
-  color: inherit;
-  font-weight: inherit;
-  text-align: left;
+  opacity: 0;
+  /* iOS zooms into fields set below 16px. */
+  font-size: 16px;
+  cursor: pointer;
 }
-.event-when-button:disabled {
-  opacity: 1;
+.event-picker input:disabled {
+  cursor: default;
 }
-.event-when-editor {
-  display: grid;
+.event-time-parts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 12px;
+  min-width: 0;
 }
-.event-when-editor .event-detail-row {
-  align-items: flex-end;
+/* Keep the 44px target without raising the row or widening the gap. */
+.event-clear-time {
+  margin-block: -12px;
+  margin-inline-start: -10px;
+  color: var(--muted);
 }
-/* Center the icons on the 48px fields beneath the labels. */
-.event-when-editor .event-detail-row svg {
-  margin-block: 0 14px;
+.event-clear-time svg {
+  width: 18px;
+  height: 18px;
 }
-.event-when-editor .event-detail-row > span {
-  flex: 1;
-}
-.event-when-editor .field-label {
-  margin-top: 0;
-}
-.event-when-editor input {
-  margin: 0;
-}
-.event-when-editor > .field-help {
-  margin: 0;
-}
-.event-when-editor > button {
-  justify-self: start;
+.event-clear-time:enabled:hover {
+  color: var(--ink);
 }
 .event-cover-editor {
   position: relative;
@@ -2169,16 +2167,11 @@ a.profile-tab {
 .event-cover-action:hover {
   background: var(--hover);
 }
-.event-form-footer {
-  margin-top: 8px;
-  padding-top: 4px;
-  border-top: 1px solid var(--line);
-}
 .event-form-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  margin-top: 16px;
+  margin-top: 8px;
 }
 .event-form-actions > button {
   width: 100%;

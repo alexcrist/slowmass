@@ -111,6 +111,24 @@ export function eventWhen({ startsAt, endsAt, timeZone }: When) {
     }).formatRange(startsAt, endsAt),
   };
 }
+// A time input's wall-clock value, such as 19:00, in the viewer's format.
+export function clockTime(value: string) {
+  const clock = /^(\d{2}):(\d{2})$/.exec(value);
+  if (!clock) return '';
+  return new Intl.DateTimeFormat(undefined, {
+    timeZone: 'UTC',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(Date.UTC(2000, 0, 1, Number(clock[1]), Number(clock[2])));
+}
+// The time zone's short name at an instant, such as PST or PDT.
+export function zoneName(ms: number, timeZone: string) {
+  return (
+    new Intl.DateTimeFormat(undefined, { timeZone, timeZoneName: 'short' })
+      .formatToParts(ms)
+      .find((part) => part.type === 'timeZoneName')?.value ?? timeZone
+  );
+}
 // One line for lists and Activity.
 export function eventStart({ startsAt, timeZone }: When) {
   return new Intl.DateTimeFormat(undefined, {

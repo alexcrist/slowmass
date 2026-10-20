@@ -3,6 +3,8 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type InputHTMLAttributes,
+  type ReactNode,
   type TextareaHTMLAttributes,
 } from 'react';
 import { api, jsonRequest } from '../../api';
@@ -12,7 +14,14 @@ import {
 } from '../../images/PhotoProgress';
 import { useApiResource } from '../../api/useApiResource';
 import { PostCropEditor, fullPhoto, type Rectangle } from '../posts';
-import { currentTimeZone, eventWhen, fromZoned, zonedInput } from './time';
+import {
+  clockTime,
+  currentTimeZone,
+  eventWhen,
+  fromZoned,
+  zonedInput,
+  zoneName,
+} from './time';
 import type { EventView, Host } from './types';
 import {
   originalAppearance,
@@ -30,8 +39,11 @@ function nextDay(date: string) {
     .slice(0, 10);
 }
 
-// The draft's instants, or null until it has a date and start time. An end
-// time before the start means the event ends the next day.
+// An end time at or before the start means the event ends the next day.
+const endsNextDay = (startTime: string, endTime: string) =>
+  endTime !== '' && endTime <= startTime;
+
+// The draft's instants, or null until it has a date and start time.
 function draftTimes(
   date: string,
   startTime: string,
@@ -40,10 +52,45 @@ function draftTimes(
 ) {
   const startsAt = fromZoned(date, startTime, timeZone);
   if (startsAt === null) return null;
-  let endsAt = endTime ? fromZoned(date, endTime, timeZone) : null;
-  if (endsAt !== null && endsAt <= startsAt)
-    endsAt = fromZoned(nextDay(date), endTime, timeZone);
+  const endsAt = endTime
+    ? fromZoned(
+        endsNextDay(startTime, endTime) ? nextDay(date) : date,
+        endTime,
+        timeZone,
+      )
+    : null;
   return { startsAt, endsAt };
+}
+
+function openPicker(input: HTMLInputElement) {
+  try {
+    input.showPicker();
+  } catch {
+    // Without picker support, the focused field still takes typed input.
+  }
+}
+
+// Page text over a transparent native input, so selecting the text opens the
+// browser's own date or time picker in place.
+function PickerField({
+  children,
+  ...input
+}: InputHTMLAttributes<HTMLInputElement> & { children: ReactNode }) {
+  return (
+    <span className="event-picker event-editable">
+      <span aria-hidden="true">{children}</span>
+      <input
+        {...input}
+        onClick={(click) => openPicker(click.currentTarget)}
+        onKeyDown={(key) => {
+          // Enter would otherwise submit the form.
+          if (key.key !== 'Enter' && key.key !== ' ') return;
+          key.preventDefault();
+          openPicker(key.currentTarget);
+        }}
+      />
+    </span>
+  );
 }
 
 // Text edited in place, in the type of the page text it previews. A hidden
@@ -169,7 +216,6 @@ export function EventForm({
   const [location, setLocation] = useState(event?.location ?? '');
   const [description, setDescription] = useState(event?.description ?? '');
   const times = draftTimes(date, startTime, endTime, timeZone);
-  const [editingWhen, setEditingWhen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState('');
   const [previewSize, setPreviewSize] = useState<{
@@ -218,7 +264,6 @@ export function EventForm({
     setError('');
     if (times === null) {
       setError('Choose a date and start time.');
-      setEditingWhen(true);
       return;
     }
     if (!event && !file) {
@@ -286,14 +331,15 @@ export function EventForm({
       }
     }
   }
-  // Until the draft has a start time, the date reads alone.
-  const when = times && eventWhen({ ...times, timeZone });
+  // The date reads as on the page as soon as it is chosen, before any time.
   const day = date ? fromZoned(date, '12:00', timeZone) : null;
   const dateText =
-    when?.date ??
-    (day === null
+    day === null
       ? null
-      : eventWhen({ startsAt: day, endsAt: null, timeZone }).date);
+      : eventWhen({ startsAt: day, endsAt: null, timeZone }).date;
+  // The abbreviation depends on the date (PST or PDT), so it waits for one.
+  const zoneAt = times?.startsAt ?? day;
+  const zone = zoneAt === null ? null : zoneName(zoneAt, timeZone);
   return (
     <>
       <form onSubmit={(submit) => void save(submit)}>
@@ -412,110 +458,98 @@ export function EventForm({
                 </h2>
               </div>
               <div className="event-information">
-                {editingWhen ? (
-                  <div
-                    className="event-when-editor"
-                    role="group"
-                    aria-label="Date and time"
-                    onBlur={(blur) => {
-                      // Picker dismissals leave no next focus; keep editing.
-                      if (
-                        blur.relatedTarget &&
-                        !blur.currentTarget.contains(blur.relatedTarget)
-                      )
-                        setEditingWhen(false);
-                    }}
+                <p className="event-detail-row event-when">
+                  <EventDateIcon />
+                  <PickerField
+                    id="event-date"
+                    type="date"
+                    aria-label="Date"
+                    required
+                    value={date}
+                    disabled={busy}
+                    onChange={(change) => changed(setDate)(change.target.value)}
                   >
-                    <div className="event-detail-row">
-                      <EventDateIcon />
-                      <span>
-                        <label htmlFor="event-date" className="field-label">
-                          Date
-                        </label>
-                        <input
-                          id="event-date"
-                          type="date"
-                          autoFocus
-                          value={date}
+                    <strong
+                      className={dateText ? undefined : 'event-placeholder'}
+                    >
+                      {dateText ?? 'Choose a date'}
+                    </strong>
+                  </PickerField>
+                </p>
+                <p className="event-detail-row event-when">
+                  <EventTimeIcon />
+                  <span className="event-time-parts">
+                    <PickerField
+                      id="event-start"
+                      type="time"
+                      aria-label="Start time"
+                      required
+                      value={startTime}
+                      disabled={busy}
+                      onChange={(change) =>
+                        changed(setStartTime)(change.target.value)
+                      }
+                    >
+                      {startTime ? (
+                        clockTime(startTime)
+                      ) : (
+                        <span className="event-placeholder">
+                          Choose a start time
+                        </span>
+                      )}
+                    </PickerField>
+                    {startTime && (
+                      <>
+                        <span aria-hidden="true">–</span>
+                        <PickerField
+                          id="event-end"
+                          type="time"
+                          aria-label="End time (optional)"
+                          value={endTime}
                           disabled={busy}
                           onChange={(change) =>
-                            changed(setDate)(change.target.value)
+                            changed(setEndTime)(change.target.value)
                           }
-                        />
-                      </span>
-                    </div>
-                    <div className="event-detail-row">
-                      <EventTimeIcon />
-                      <span className="event-times">
-                        <span>
-                          <label htmlFor="event-start" className="field-label">
-                            Starts
-                          </label>
-                          <input
-                            id="event-start"
-                            type="time"
-                            value={startTime}
+                        >
+                          {endTime ? (
+                            <>
+                              {clockTime(endTime)}
+                              {endsNextDay(startTime, endTime) && (
+                                <span className="event-placeholder">
+                                  {' '}
+                                  next day
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="event-placeholder">End time</span>
+                          )}
+                        </PickerField>
+                        {zone && <span>{zone}</span>}
+                        {endTime && (
+                          <button
+                            type="button"
+                            className="icon-button event-clear-time"
+                            aria-label="Remove end time"
                             disabled={busy}
-                            onChange={(change) =>
-                              changed(setStartTime)(change.target.value)
-                            }
-                          />
-                        </span>
-                        <span>
-                          <label htmlFor="event-end" className="field-label">
-                            Ends (optional)
-                          </label>
-                          <input
-                            id="event-end"
-                            type="time"
-                            value={endTime}
-                            disabled={busy}
-                            onChange={(change) =>
-                              changed(setEndTime)(change.target.value)
-                            }
-                          />
-                        </span>
-                      </span>
-                    </div>
-                    <p className="field-help">
-                      Times are in {event ? 'the event’s' : 'your'} time zone (
-                      {timeZone}). An end time earlier than the start is the
-                      next day.
-                    </p>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => setEditingWhen(false)}
-                    >
-                      Done
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    className="event-when-button event-editable"
-                    disabled={busy}
-                    onClick={() => setEditingWhen(true)}
-                  >
-                    <span className="visually-hidden">
-                      Edit date and time:{' '}
-                    </span>
-                    <span className="event-detail-row event-when">
-                      <EventDateIcon />
-                      <strong
-                        className={dateText ? undefined : 'event-placeholder'}
-                      >
-                        {dateText ?? 'Choose a date'}
-                      </strong>
-                    </span>
-                    <span className="event-detail-row event-when">
-                      <EventTimeIcon />
-                      <span className={when ? undefined : 'event-placeholder'}>
-                        {when?.time ?? 'Choose a start time'}
-                      </span>
-                    </span>
-                  </button>
-                )}
+                            onClick={() => changed(setEndTime)('')}
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              aria-hidden="true"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                            >
+                              <path d="M6 6l12 12M18 6 6 18" />
+                            </svg>
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </span>
+                </p>
                 <p className="event-detail-row event-location">
                   <EventLocationIcon />
                   <InlineField
@@ -550,25 +584,19 @@ export function EventForm({
               </div>
             </div>
             <div className="event-details">
-              <div className="event-form-footer">
-                <p className="status-copy">
-                  Anyone with the link can preview the cover photo, title, and
-                  date. Other details require sign-in.
+              {busy && <PhotoProgress progress={progress} />}
+              {error && (
+                <p role="alert" className="error-message">
+                  {error}
                 </p>
-                {busy && <PhotoProgress progress={progress} />}
-                {error && (
-                  <p role="alert" className="error-message">
-                    {error}
-                  </p>
-                )}
-                <div className="event-form-actions">
-                  <button type="button" disabled={busy} onClick={onCancel}>
-                    Cancel
-                  </button>
-                  <button className="primary-button" disabled={busy}>
-                    {busy ? 'Saving…' : event ? 'Save' : 'Create event'}
-                  </button>
-                </div>
+              )}
+              <div className="event-form-actions">
+                <button type="button" disabled={busy} onClick={onCancel}>
+                  Cancel
+                </button>
+                <button className="primary-button" disabled={busy}>
+                  {busy ? 'Saving…' : event ? 'Save' : 'Create event'}
+                </button>
               </div>
             </div>
           </div>

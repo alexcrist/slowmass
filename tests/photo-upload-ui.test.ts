@@ -34,11 +34,6 @@ async function mount(kind: 'post' | 'event', saved = vi.fn()) {
     );
   });
   if (kind === 'event') {
-    await act(async () =>
-      renderer.root
-        .findByProps({ className: 'event-when-button event-editable' })
-        .props.onClick(),
-    );
     for (const [id, value] of [
       ['event-title', 'Dinner'],
       ['event-date', '2030-01-01'],

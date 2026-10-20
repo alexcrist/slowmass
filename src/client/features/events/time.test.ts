@@ -1,5 +1,12 @@
 import { expect, it } from 'vitest';
-import { eventStart, eventWhen, fromZoned, zonedInput } from './time';
+import {
+  clockTime,
+  eventStart,
+  eventWhen,
+  fromZoned,
+  zonedInput,
+  zoneName,
+} from './time';
 
 it('converts wall-clock inputs in the event time zone, including across DST', () => {
   const zone = 'America/Los_Angeles';
@@ -62,4 +69,13 @@ it('formats event times in the event time zone with its name', () => {
   expect(eventStart({ startsAt: start, endsAt: null, timeZone: zone })).toMatch(
     /Jan 4.*7:00/,
   );
+});
+
+it('formats time-input values and zone names for the event editor', () => {
+  expect(clockTime('19:05')).toMatch(/7:05/);
+  expect(clockTime('00:30')).toMatch(/12:30/);
+  expect(clockTime('7:05')).toBe('');
+  const zone = 'America/Los_Angeles';
+  expect(zoneName(Date.UTC(2030, 0, 5, 3, 0), zone)).toBe('PST');
+  expect(zoneName(Date.UTC(2030, 6, 5, 3, 0), zone)).toBe('PDT');
 });
