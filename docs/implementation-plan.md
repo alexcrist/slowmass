@@ -95,6 +95,8 @@ Implemented behavior, permissions, and failure handling live in the [client even
 
 ## Remaining operational verification
 
+- [x] Provision the SES sender identity, DNS authentication, à-la-carte pricing, account suppression, and confirmed bounce/complaint alerts; verify both feedback paths with the SES mailbox simulator.
+- [ ] Complete the [SES migration](setup.md#amazon-ses-migration): production access is not approved; the requested support-case follow-up is submitted and awaits AWS's response. Implement and verify the Worker transport, scoped credentials, and bounded retry/cost behavior before switching from Resend. Optional event email requires separate consent, unsubscribe, authorization, and delivery work.
 - [ ] Identify or rule out recurring signed-in startup stalls using affected-request diagnostics; measure the CPU cost of request-local authentication. The captured older timeout does not establish every reported failure's cause.
 - [ ] Verify production session-cookie renewal after a day of use and diagnostic retention/expiry cleanup.
 - [ ] Collect representative signed-in feed, profile, Activity, and image latency distributions, hosted cache hit rates, and storage/download measurements before choosing further performance work. Keep dated measurements in the operations runbook.

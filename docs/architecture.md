@@ -40,7 +40,9 @@ An initial-profile trigger creates mutual accepted follows between a former pers
 
 Email delivery uses Resend with explicit application-wide and per-recipient budgets, without tracking pixels or link tracking. Better Auth stores one-time tokens hashed and rate-limits requests through D1. Real hosted delivery is an external setup gate.
 
-When Resend's free daily ceiling becomes binding, the chosen upgrade is Cloudflare Email Service. As of October 2026 it requires Workers Paid and includes 3,000 emails a month, with no stated daily cap. It was still described as beta. Before switching, replace the Resend idempotency key that invitation retries rely on, verify sender authentication and deliverability, and change the daily budget to a monthly allowance that keeps sign-in mail available. Combining several free providers is rejected because the second setup, failure mode and data processor cost more than they save.
+The chosen migration target is Amazon SES in `us-west-2`, using à-la-carte sending without a monthly minimum. This replaces the proposed Cloudflare Email Service upgrade so email capacity does not require a Workers subscription. SES domain verification and feedback handling are configured; production access is not approved and the application still uses Resend. See [SES setup and cutover prerequisites](setup.md#amazon-ses-migration).
+
+Before switching transports, implement narrowly scoped sending credentials, verify delivery from the Worker, and define retry behavior when SES accepts a request but its response is lost; do not assume Resend's idempotency header has an SES equivalent. Keep application spending limits and reserve capacity for sign-in mail. Optional event email remains unimplemented and requires explicit consent, unsubscribe controls, and bounded delivery before launch. Combining several free providers is rejected because the extra failure modes and data processors cost more than they save.
 
 ## Photo lifecycle
 
