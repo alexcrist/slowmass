@@ -35,6 +35,8 @@ async function verify() {
     ['/media/posts/deployment-probe', 404],
     ['/media/events/deployment-probe', 404],
     ['/api/event-link/photo', 404],
+    ['/event/deployment-probe', 404],
+    ['/event/deployment-probe/photo', 404],
   ]) {
     const response = await fetch(new URL(path, origin), {
       signal: AbortSignal.timeout(15000),

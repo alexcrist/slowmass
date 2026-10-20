@@ -74,7 +74,7 @@ async function link(id: string, actor = 'alice') {
     event: { url: string | null };
   };
   if (!event.url) return null;
-  return { url: event.url, token: event.url.split('#event/')[1] };
+  return { url: event.url, token: new URL(event.url).pathname.split('/')[2] };
 }
 async function linkVersion(id: string) {
   return runtime.db
@@ -518,11 +518,153 @@ it('creates events idempotently for members with a profile photo', async () => {
   expect((await draft()).response.status).toBe(429);
 });
 
+it('unfurls only the event title and processed cover without a session or side effects', async () => {
+  const title = 'Dinner & "friends" <script>alert(1)</script>';
+  const input = details({ title });
+  const { id, token, url } = await event(input);
+  const bucket = await runtime.worker.getR2Bucket('PHOTOS');
+  await bucket.put(`events/${id}-thumb.webp`, 'processed thumbnail');
+  await bucket.put(`events/${id}.webp`, 'full cover');
+  const counts = async () =>
+    Promise.all(
+      ['event_access', 'event_response', 'membership', 'invitation'].map(
+        async (table) =>
+          runtime.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first('n'),
+      ),
+    );
+  const before = await counts();
+  // A crawler supplies no cookies, Origin header, or JavaScript execution.
+  const response = await runtime.worker.dispatchFetch(url);
+  expect(response.status).toBe(200);
+  expect(response.headers.get('Content-Type')).toContain('text/html');
+  expect(response.headers.get('Cache-Control')).toContain('no-store');
+  expect(response.headers.get('Cache-Control')).toContain('no-transform');
+  expect(response.headers.get('Referrer-Policy')).toBe('no-referrer');
+  expect(response.headers.get('X-Robots-Tag')).toBe('noindex, nofollow');
+  expect(response.headers.has('ETag')).toBe(false);
+  expect(response.headers.has('Set-Cookie')).toBe(false);
+  const html = await response.text();
+  expect(html).toContain(
+    'property="og:title" content="Dinner &amp; &quot;friends&quot; &lt;script&gt;alert(1)&lt;/script&gt;"',
+  );
+  expect(html).toContain(`property="og:url" content="${url}"`);
+  expect(html).toContain(`property="og:image" content="${url}/photo"`);
+  expect(html).toContain('name="twitter:card" content="summary_large_image"');
+  expect(html).toContain('id="root"');
+  for (const privateValue of [
+    input.description,
+    input.location,
+    String(input.startsAt),
+    input.timeZone,
+    'Alice',
+    'alice@example.com',
+    id,
+    '<script>alert(1)</script>',
+    'og:description',
+    'name="description"',
+  ])
+    expect(html).not.toContain(privateValue);
+  const photo = await runtime.worker.dispatchFetch(`${url}/photo`);
+  expect(photo.status).toBe(200);
+  expect(photo.headers.get('Content-Type')).toBe('image/webp');
+  expect(photo.headers.get('Cache-Control')).toContain('no-store');
+  expect(await photo.text()).toBe('processed thumbnail');
+  const head = await runtime.worker.dispatchFetch(url, { method: 'HEAD' });
+  expect(head.status).toBe(200);
+  expect(await head.text()).toBe('');
+  expect(await counts()).toEqual(before);
+  expect((await runtime.request(null, `/api/events/${id}`)).status).toBe(401);
+  expect((await runtime.request(null, `/media/events/${id}`)).status).toBe(404);
+  expect(
+    (await runtime.request(null, `/event/${token}/calendar.ics`)).status,
+  ).toBe(404);
+});
+
+it('rechecks event share availability and blocks, including warm cover bytes', async () => {
+  const { id, token } = await event();
+  const bucket = await runtime.worker.getR2Bucket('PHOTOS');
+  await bucket.put(`events/${id}-thumb.webp`, 'thumbnail');
+  const statuses = async (credential = token, actor: string | null = null) =>
+    Promise.all(
+      ['', '/photo'].map(async (suffix) => {
+        const response = await runtime.request(
+          actor,
+          `/event/${credential}${suffix}`,
+        );
+        await response.arrayBuffer();
+        return response.status;
+      }),
+    );
+  expect(await statuses()).toEqual([200, 200]);
+  expect(await statuses('bad')).toEqual([404, 404]);
+  expect(await statuses('z'.repeat(48))).toEqual([404, 404]);
+  expect(await statuses(id)).toEqual([404, 404]);
+  await runtime.db
+    .prepare(
+      "INSERT INTO block(blocker_id,target_id,created_at) VALUES ('alice','bob',?)",
+    )
+    .bind(Date.now())
+    .run();
+  expect(await statuses(token, 'bob')).toEqual([404, 404]);
+  // Public previews still work signed out; blocking is not a privacy promise.
+  expect(await statuses()).toEqual([200, 200]);
+  for (const state of ['pending', 'deleted']) {
+    await runtime.db
+      .prepare('UPDATE event SET state=? WHERE id=?')
+      .bind(state, id)
+      .run();
+    expect(await statuses()).toEqual([404, 404]);
+  }
+  await publish(id);
+  await runtime.db
+    .prepare("UPDATE membership SET status='deleted' WHERE user_id='alice'")
+    .run();
+  expect(await statuses()).toEqual([404, 404]);
+  await runtime.db
+    .prepare("UPDATE membership SET status='active' WHERE user_id='alice'")
+    .run();
+  expect(await statuses()).toEqual([200, 200]);
+  await newLinkVersion(id);
+  expect(await statuses()).toEqual([404, 404]);
+});
+
+it('retains title/cover previews for closed events but denies them after creator deletion', async () => {
+  const { id, token } = await event();
+  const bucket = await runtime.worker.getR2Bucket('PHOTOS');
+  await bucket.put(`events/${id}-thumb.webp`, 'thumbnail');
+  await runtime.db
+    .prepare('UPDATE event SET starts_at=?,cancelled_at=? WHERE id=?')
+    .bind(Date.now() - 2 * day, Date.now(), id)
+    .run();
+  expect((await check(token))?.open).toBe(false);
+  for (const suffix of ['', '/photo']) {
+    const response = await runtime.request(null, `/event/${token}${suffix}`);
+    expect(response.status).toBe(200);
+    await response.arrayBuffer();
+  }
+  expect(
+    (await runtime.request('alice', `/api/events/${id}`, 'DELETE')).status,
+  ).toBe(200);
+  for (const suffix of ['', '/photo'])
+    expect(
+      (await runtime.request(null, `/event/${token}${suffix}`)).status,
+    ).toBe(404);
+});
+
+it('keeps share previews closed during maintenance', async () => {
+  await runtime.worker.dispose();
+  runtime = await testRuntime(true);
+  for (const suffix of ['', '/photo'])
+    expect(
+      (await runtime.request(null, `/event/${'a'.repeat(48)}${suffix}`)).status,
+    ).toBe(503);
+});
+
 it('previews a linked event, shows details after sign-in, and guests after answering', async () => {
   const { id, token, url } = await event();
-  expect(new URL(url).pathname).toBe('/');
+  expect(new URL(url).pathname).toBe(`/event/${token}`);
   expect(new URL(url).search).toBe('');
-  expect(new URL(url).hash).toBe(`#event/${token}`);
+  expect(new URL(url).hash).toBe('');
   // Signed out, expose only the preview (not times, location or people).
   expect(await check(token)).toEqual({
     id,
@@ -880,6 +1022,76 @@ it('closes answers when the event is over and lists upcoming and past events', a
     400,
   );
   void soon;
+});
+
+it('keeps events unlisted until a member opens their link, even for followers and pending hosts', async () => {
+  const future = await event(details({ title: 'Unlisted future event' }));
+  const past = await event(
+    details({ title: 'Unlisted past event', startsAt: Date.now() - day }),
+  );
+  await runtime.db
+    .prepare(
+      "INSERT INTO follow(follower_id,target_id,status,created_at) VALUES ('bob','alice','accepted',?)",
+    )
+    .bind(Date.now())
+    .run();
+  expect(
+    (
+      await runtime.request('alice', `/api/events/${future.id}/hosts`, 'POST', {
+        email: 'bob@example.com',
+      })
+    ).status,
+  ).toBe(200);
+  await message('alice', future.id, 'Private host message');
+  for (const actor of ['bob', 'carol', 'david']) {
+    for (const when of ['upcoming', 'past']) {
+      expect(
+        await (await runtime.request(actor, `/api/events?when=${when}`)).json(),
+      ).toEqual({ items: [], next: null });
+    }
+    expect((await activity(actor)).filter((item) => item.eventId)).toEqual([]);
+    for (const { id } of [future, past]) {
+      for (const path of [
+        `/api/events/${id}`,
+        `/api/events/${id}/calendar.ics`,
+        `/media/events/${id}`,
+        `/media/events/${id}?size=thumb`,
+      ])
+        expect((await runtime.request(actor, path)).status).toBe(404);
+      for (const path of [
+        `/api/events/${id}/guests?status=going`,
+        `/api/events/${id}/activity`,
+      ]) {
+        const response = await runtime.request(actor, path);
+        expect(await response.json()).toEqual({ items: [], next: null });
+      }
+    }
+  }
+  expect(
+    (await runtime.request('bob', `/api/events/${future.id}/hosting`, 'POST'))
+      .status,
+  ).toBe(409);
+  expect((await respond('carol', future.id, 'going')).status).toBe(409);
+  // Previews don't silently add an event to a signed-in member's account.
+  await (await runtime.request('bob', `/event/${future.token}`)).text();
+  expect(await (await runtime.request('bob', '/api/events')).json()).toEqual({
+    items: [],
+    next: null,
+  });
+  expect((await open('bob', future.token)).status).toBe(200);
+  expect(
+    await (await runtime.request('bob', '/api/events')).json(),
+  ).toMatchObject({ items: [{ id: future.id }], next: null });
+  expect(
+    (await runtime.request('bob', `/api/events/${future.id}`)).status,
+  ).toBe(200);
+  expect((await runtime.request('bob', `/api/events/${past.id}`)).status).toBe(
+    404,
+  );
+  expect(await (await runtime.request('carol', '/api/events')).json()).toEqual({
+    items: [],
+    next: null,
+  });
 });
 
 it('pages events and their merged answers and messages', async () => {

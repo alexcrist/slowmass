@@ -8,15 +8,16 @@ import { EventPreview, type EventPreviewDetails } from '../events';
 import { api, jsonRequest, onUnauthorized } from '../../api';
 import { clearLocalPush } from '../push';
 import { loadStartup, type Bootstrap } from './startup';
+import { currentRoute, normalizeEventPath } from '../../navigation';
 
 const auth = createAuthClient({ plugins: [magicLinkClient()] });
 type State = 'loading' | 'ready' | 'unavailable' | 'error';
 
-// Invite and event links carry their credential in the URL fragment. Signed
-// out, event links show a limited preview before asking for an email.
+// Event paths support unfurling; old fragment links still work. Signed out,
+// event links show a limited preview before asking for an email.
 type Link = { kind: 'event' | 'invite'; token: string };
 function currentLink(): Link | null {
-  const match = /^#(event|invite)\/([a-zA-Z0-9]{48})$/.exec(location.hash);
+  const match = /^(event|invite)\/([a-zA-Z0-9]{48})$/.exec(currentRoute());
   return match
     ? { kind: match[1] === 'event' ? 'event' : 'invite', token: match[2] }
     : null;
@@ -150,6 +151,7 @@ export function Welcome() {
   useLayoutEffect(() => {
     if (!signedOut) return;
     const changed = () => {
+      normalizeEventPath();
       const next = currentLink();
       if (next?.kind === link?.kind && next?.token === link?.token) return;
       setLink(next);
@@ -160,7 +162,11 @@ export function Welcome() {
     };
     changed();
     window.addEventListener('hashchange', changed);
-    return () => window.removeEventListener('hashchange', changed);
+    window.addEventListener('popstate', changed);
+    return () => {
+      window.removeEventListener('hashchange', changed);
+      window.removeEventListener('popstate', changed);
+    };
   }, [signedOut, link]);
   useEffect(() => {
     if (!signedOut || !link) return;

@@ -66,7 +66,7 @@ async function event() {
   const { event: published } = (await (
     await runtime.request('alice', `/api/events/${id}`)
   ).json()) as { event: { url: string } };
-  const token = published.url.split('#event/')[1];
+  const token = new URL(published.url).pathname.split('/')[2];
   expect(
     (await runtime.request('bob', '/api/events/open', 'POST', { token }))
       .status,

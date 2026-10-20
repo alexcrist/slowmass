@@ -6,6 +6,7 @@ import { AvatarForm } from '../src/client/features/avatars/AvatarForm';
 import { ProfileForm } from '../src/client/features/people/ProfileForm';
 import { PostList } from '../src/client/features/posts/Posts';
 import { InstallApp } from '../src/client/features/install/InstallApp';
+import { currentRoute, useRoute } from '../src/client/navigation';
 vi.mock('../src/client/api', () => ({
   api: vi.fn(async (path: string) =>
     path === '/api/people/self'
@@ -37,6 +38,56 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
+it('opens event share paths and keeps hash navigation and Back/Forward on the right URL', async () => {
+  const token = 'a'.repeat(48);
+  const address = new URL(`https://slowmass.com/event/${token}`);
+  const events = new EventTarget();
+  vi.stubGlobal('location', address);
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  vi.stubGlobal('window', {
+    history: {
+      state: null,
+      replaceState: (_state: unknown, _unused: string, path: string) => {
+        address.href = new URL(path, address).href;
+      },
+    },
+    addEventListener: events.addEventListener.bind(events),
+    removeEventListener: events.removeEventListener.bind(events),
+    scrollTo: vi.fn(),
+  });
+  function Route() {
+    const { route } = useRoute();
+    return createElement('output', null, route);
+  }
+  await act(async () => {
+    renderer = create(createElement(Route));
+  });
+  expect(currentRoute()).toBe(`event/${token}`);
+  expect(renderer!.root.findByType('output').children).toEqual([
+    `event/${token}`,
+  ]);
+  await act(async () => {
+    address.hash = '#profile/alice';
+    events.dispatchEvent(new Event('hashchange'));
+  });
+  expect(address.href).toBe('https://slowmass.com/#profile/alice');
+  expect(renderer!.root.findByType('output').children).toEqual([
+    'profile/alice',
+  ]);
+  await act(async () => {
+    address.href = `https://slowmass.com/event/${token}`;
+    events.dispatchEvent(new Event('popstate'));
+  });
+  expect(renderer!.root.findByType('output').children).toEqual([
+    `event/${token}`,
+  ]);
+  await act(async () => {
+    address.href = `https://slowmass.com/#event/${token}`;
+    events.dispatchEvent(new Event('hashchange'));
+  });
+  expect(currentRoute()).toBe(`event/${token}`);
+});
+
 it('unmounts edit forms across repeated feed/profile/settings navigation without duplicate React keys', async () => {
   const events = new EventTarget();
   const location = { hash: '#edit', origin: 'https://slowmass.com' };

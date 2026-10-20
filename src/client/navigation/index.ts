@@ -6,12 +6,25 @@ export function profileHref(handle: string, tab = 'posts') {
   return `#profile/${encodeURIComponent(handle)}${tab === 'following' || tab === 'followers' ? `/${tab}` : ''}`;
 }
 export function currentRoute() {
-  const route = location.hash.slice(1) || 'feed';
+  const event = /^\/event\/([a-zA-Z0-9]{48})$/.exec(location.pathname);
+  const route =
+    location.hash.slice(1) || (event ? `event/${event[1]}` : 'feed');
   return route === 'requests' ? 'notifications' : route;
+}
+// Hash navigation away from a shared event must remove its server path so
+// copying or reloading the new destination cannot unfurl the previous event.
+export function normalizeEventPath() {
+  if (location.pathname?.startsWith('/event/') && location.hash)
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `/${location.search}${location.hash}`,
+    );
 }
 export function useRoute() {
   const [routes, setRoutes] = useState(() => [currentRoute()]);
   const change = useCallback(() => {
+    normalizeEventPath();
     const next = currentRoute();
     setRoutes((previous) => {
       const current = previous[previous.length - 1];
@@ -31,8 +44,13 @@ export function useRoute() {
     window.scrollTo(0, 0);
   }, []);
   useEffect(() => {
+    normalizeEventPath();
     window.addEventListener('hashchange', change);
-    return () => window.removeEventListener('hashchange', change);
+    window.addEventListener('popstate', change);
+    return () => {
+      window.removeEventListener('hashchange', change);
+      window.removeEventListener('popstate', change);
+    };
   }, [change]);
   return {
     navigate(href: string) {

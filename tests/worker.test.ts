@@ -169,7 +169,7 @@ async function hostEvent(cookie: string) {
     .prepare('SELECT link_id FROM event WHERE id=?')
     .bind(id)
     .first<string>('link_id');
-  return { id, linkId, token: event.url.split('#event/')[1] };
+  return { id, linkId, token: new URL(event.url).pathname.split('/')[2] };
 }
 
 function lastLink(email: string) {

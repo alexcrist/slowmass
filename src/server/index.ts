@@ -17,7 +17,12 @@ import { people } from './features/people/router';
 import { push, pushAfterMutation } from './features/push/router';
 import { dispatchPush } from './features/push';
 import { deviceSetup } from './features/device-setup/router';
-import { events, eventMedia, eventLinks } from './features/events/router';
+import {
+  events,
+  eventMedia,
+  eventLinks,
+  eventShares,
+} from './features/events/router';
 import { cleanupEvents } from './features/events';
 import { inviteLinks } from './features/invite-links/router';
 import { cleanupInviteLinks } from './features/invite-links';
@@ -32,7 +37,7 @@ app.use('*', async (c, next) => {
   const requestId = crypto.randomUUID();
   c.header('X-Request-Id', requestId);
   c.header('X-Content-Type-Options', 'nosniff');
-  c.header('Referrer-Policy', 'same-origin');
+  c.header('Referrer-Policy', 'no-referrer');
   c.header('Cache-Control', 'private, no-store');
   c.header(
     'Content-Security-Policy',
@@ -40,7 +45,9 @@ app.use('*', async (c, next) => {
   );
   if (
     c.env.MAINTENANCE_MODE === 'true' &&
-    (c.req.path.startsWith('/api/') || c.req.path.startsWith('/media/'))
+    (c.req.path.startsWith('/api/') ||
+      c.req.path.startsWith('/media/') ||
+      c.req.path.startsWith('/event/'))
   )
     return c.json(
       { error: 'Maintenance in progress. Please try again shortly.' },
@@ -90,6 +97,7 @@ app.route('/api/push', push);
 app.route('/api/device-setup', deviceSetup);
 app.route('/api/events', events);
 app.route('/api/event-link', eventLinks);
+app.route('/event', eventShares);
 app.route('/api/invite-link', inviteLinks);
 app.route('/media/posts', postMedia);
 app.route('/media/avatar', avatarMedia);

@@ -63,7 +63,6 @@ export function ProfileForm({
     <form onSubmit={(event) => void save(event)}>
       {!profile && mode === 'profile' && (
         <p className="status-copy">
-          Your username, name, and profile photo are visible to other members.
           Your bio is visible only to accepted followers.
         </p>
       )}

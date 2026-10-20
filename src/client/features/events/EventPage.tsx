@@ -107,9 +107,10 @@ export function EventPage({
   // Show the shareable URL in the address bar, so copying it works too.
   useEffect(() => {
     if (!url) return;
-    const hash = new URL(url).hash;
-    if (location.hash !== hash)
-      window.history?.replaceState(window.history.state, '', hash);
+    const target = new URL(url);
+    const path = target.pathname + target.hash;
+    if (location.pathname + location.hash !== path)
+      window.history?.replaceState(window.history.state, '', path);
   }, [url]);
   async function run(action: () => Promise<void>) {
     if (running.current) return;

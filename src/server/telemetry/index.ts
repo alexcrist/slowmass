@@ -182,7 +182,11 @@ export const performanceMetrics: MiddlewareHandler<{ Bindings: Env }> = async (
   c,
   next,
 ) => {
-  if (!c.req.path.startsWith('/api/') && !c.req.path.startsWith('/media/'))
+  if (
+    !c.req.path.startsWith('/api/') &&
+    !c.req.path.startsWith('/media/') &&
+    !c.req.path.startsWith('/event/')
+  )
     return next();
   const metrics = emptyMetrics();
   const start = performance.now();
@@ -253,9 +257,11 @@ export const performanceMetrics: MiddlewareHandler<{ Bindings: Env }> = async (
         status: c.res.status,
         durationMs,
         ...metrics,
-        mediaBytes: c.req.path.startsWith('/media/')
-          ? Number(c.res.headers.get('Content-Length') ?? 0)
-          : 0,
+        mediaBytes:
+          c.req.path.startsWith('/media/') ||
+          (c.req.path.startsWith('/event/') && c.req.path.endsWith('/photo'))
+            ? Number(c.res.headers.get('Content-Length') ?? 0)
+            : 0,
         sampleRate,
         sampling: sampled ? 'random' : 'slow_or_error',
       }),

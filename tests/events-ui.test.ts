@@ -75,7 +75,7 @@ const details = {
     },
   ],
 };
-const url = `https://slowmass.com/#event/${token}`;
+const url = `https://slowmass.com/event/${token}`;
 function view(overrides: Record<string, unknown> = {}) {
   return {
     ...details,
@@ -906,57 +906,61 @@ it('shows the shareable URL in the address bar', async () => {
   location.hash = `#event/${id}`;
   await mount(createElement(EventPage, { id, linkProfiles: true }));
   await reply(pending(`/api/events/${id}`), { event: view() });
-  expect(replaceState).toHaveBeenCalledWith(null, '', `#event/${token}`);
+  expect(replaceState).toHaveBeenCalledWith(null, '', `/event/${token}`);
 });
 
-it('shows a limited event preview and ties email sign-in to its link', async () => {
-  location.hash = `#event/${token}`;
-  await mount(createElement(Welcome));
-  await reply(pending('/api/bootstrap'), {
-    signInAvailable: true,
-    user: null,
-    profile: null,
-  });
-  const check = pending('/api/event-link');
-  expect(JSON.parse(String(check.options?.body))).toEqual({ token });
-  await reply(check, {
-    event: {
-      id,
-      open: true,
-      preview: {
-        title: 'Dinner',
-        date: 'Friday, January 4, 2030',
-        width: 4,
-        height: 3,
+it.each(['path', 'fragment'])(
+  'shows a limited event preview and ties email sign-in to its %s link',
+  async (kind) => {
+    location.hash = kind === 'fragment' ? `#event/${token}` : '';
+    location.pathname = kind === 'path' ? `/event/${token}` : '/';
+    await mount(createElement(Welcome));
+    await reply(pending('/api/bootstrap'), {
+      signInAvailable: true,
+      user: null,
+      profile: null,
+    });
+    const check = pending('/api/event-link');
+    expect(JSON.parse(String(check.options?.body))).toEqual({ token });
+    await reply(check, {
+      event: {
+        id,
+        open: true,
+        preview: {
+          title: 'Dinner',
+          date: 'Friday, January 4, 2030',
+          width: 4,
+          height: 3,
+        },
       },
-    },
-  });
-  expect(visibleText()).toContain('Dinner');
-  expect(visibleText()).toContain('Friday, January 4, 2030');
-  expect(visibleText()).toContain('Enter your email to see details and RSVP');
-  expect(visibleText()).not.toContain('Bring a dish');
-  expect(visibleText()).not.toContain('1 Main St');
-  expect(visibleText()).not.toContain('Alice');
-  const cover = pending('/api/event-link/photo');
-  expect(JSON.parse(String(cover.options?.body))).toEqual({ token });
-  expect(
-    requests.some(
-      (request) =>
-        request.path.startsWith('/media/') ||
-        request.path.startsWith('/api/events'),
-    ),
-  ).toBe(false);
-  await type('email', 'Erin@Example.com ');
-  authMocks.magicLink.mockResolvedValue({ error: null });
-  await submit();
-  expect(authMocks.magicLink).toHaveBeenCalledWith({
-    email: 'erin@example.com',
-    callbackURL: `/#event/${id}`,
-    errorCallbackURL: '/?error=event',
-    metadata: { eventLink: token },
-  });
-  expect(visibleText()).toContain('Open the sign-in link in your email.');
-});
+    });
+    expect(visibleText()).toContain('Dinner');
+    expect(visibleText()).toContain('Friday, January 4, 2030');
+    expect(visibleText()).toContain('Enter your email to see details and RSVP');
+    expect(visibleText()).not.toContain('Bring a dish');
+    expect(visibleText()).not.toContain('1 Main St');
+    expect(visibleText()).not.toContain('Alice');
+    const cover = pending('/api/event-link/photo');
+    expect(JSON.parse(String(cover.options?.body))).toEqual({ token });
+    expect(
+      requests.some(
+        (request) =>
+          request.path.startsWith('/media/') ||
+          request.path.startsWith('/api/events'),
+      ),
+    ).toBe(false);
+    await type('email', 'Erin@Example.com ');
+    authMocks.magicLink.mockResolvedValue({ error: null });
+    await submit();
+    expect(authMocks.magicLink).toHaveBeenCalledWith({
+      email: 'erin@example.com',
+      callbackURL: `/#event/${id}`,
+      errorCallbackURL: '/?error=event',
+      metadata: { eventLink: token },
+    });
+    expect(visibleText()).toContain('Open the sign-in link in your email.');
+  },
+);
 
 it('falls back to normal sign-in for a link that no longer works', async () => {
   location.hash = `#event/${token}`;
@@ -1619,7 +1623,7 @@ it.each(['feed', 'compose', 'profile/erin'])(
       window.dispatchEvent(new Event('hashchange'));
     });
     expect(visibleText()).toContain('Set up your account');
-    expect(visibleText()).toContain('follow requests need your approval');
+    expect(visibleText()).toContain('Follow requests need your approval');
     expect(renderer.root.findAllByType(AvatarForm)).toHaveLength(0);
     const back = renderer.root.findByProps({
       className: 'button-link',

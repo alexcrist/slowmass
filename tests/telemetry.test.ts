@@ -70,53 +70,56 @@ it('keeps concurrent request metrics separate and preserves first/all/raw and ba
   ).toBeNull();
 });
 
-it('records safe route templates, timings and media size without retaining request data', async () => {
-  const log = vi.spyOn(console, 'info').mockImplementation(() => {});
-  try {
-    const app = new Hono<{ Bindings: Env }>();
-    app.use('*', performanceMetrics);
-    app.get('/media/posts/:id', async (c) => {
-      recordMediaCache('hit', 2.34);
-      await c.env.DB.prepare('SELECT id FROM user WHERE id=?')
-        .bind('alice')
-        .first();
-      return new Response('data', { headers: { 'Content-Length': '4' } });
-    });
-    const response = await app.request(
-      '/media/posts/private-id?token=secret',
-      { headers: { Cookie: 'private-cookie' } },
-      { DB: db, PERFORMANCE_SAMPLE_RATE: '1' } as Env,
-    );
-    expect(response.headers.get('Server-Timing')).toMatch(
-      /app;dur=[\d.]+, db;dur=[\d.]+/,
-    );
-    expect(response.headers.get('Server-Timing')).toContain(
-      'media-cache;dur=2.3;desc="hit"',
-    );
-    const serialized = log.mock.calls[0][0];
-    const data = JSON.parse(serialized);
-    expect(data).toMatchObject({
-      event: 'request.performance',
-      route: '/media/posts/:id',
-      status: 200,
-      mediaBytes: 4,
-      queries: 1,
-      unmeasuredQueries: 0,
-      mediaCache: 'hit',
-      mediaCacheMs: 2.3,
-    });
-    for (const privateValue of [
-      'private-id',
-      'secret',
-      'private-cookie',
-      'alice',
-      'SELECT',
-    ])
-      expect(serialized).not.toContain(privateValue);
-  } finally {
-    log.mockRestore();
-  }
-});
+it.each(['/media/posts/:id', '/event/:token/photo'])(
+  'records safe route templates, timings and media size for %s without retaining request data',
+  async (route) => {
+    const log = vi.spyOn(console, 'info').mockImplementation(() => {});
+    try {
+      const app = new Hono<{ Bindings: Env }>();
+      app.use('*', performanceMetrics);
+      app.get(route, async (c) => {
+        recordMediaCache('hit', 2.34);
+        await c.env.DB.prepare('SELECT id FROM user WHERE id=?')
+          .bind('alice')
+          .first();
+        return new Response('data', { headers: { 'Content-Length': '4' } });
+      });
+      const response = await app.request(
+        `${route.replace(/:(?:id|token)/, 'private-id')}?token=secret`,
+        { headers: { Cookie: 'private-cookie' } },
+        { DB: db, PERFORMANCE_SAMPLE_RATE: '1' } as Env,
+      );
+      expect(response.headers.get('Server-Timing')).toMatch(
+        /app;dur=[\d.]+, db;dur=[\d.]+/,
+      );
+      expect(response.headers.get('Server-Timing')).toContain(
+        'media-cache;dur=2.3;desc="hit"',
+      );
+      const serialized = log.mock.calls[0][0];
+      const data = JSON.parse(serialized);
+      expect(data).toMatchObject({
+        event: 'request.performance',
+        route,
+        status: 200,
+        mediaBytes: 4,
+        queries: 1,
+        unmeasuredQueries: 0,
+        mediaCache: 'hit',
+        mediaCacheMs: 2.3,
+      });
+      for (const privateValue of [
+        'private-id',
+        'secret',
+        'private-cookie',
+        'alice',
+        'SELECT',
+      ])
+        expect(serialized).not.toContain(privateValue);
+    } finally {
+      log.mockRestore();
+    }
+  },
+);
 
 it('distinguishes an unfinished database call from a stall before database access', async () => {
   vi.useFakeTimers();

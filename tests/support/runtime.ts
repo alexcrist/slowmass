@@ -22,6 +22,7 @@ export async function testRuntime(
   },
   migrationCount?: number,
 ) {
+  const assetShell = await readFile('index.html', 'utf8');
   const result = await build({
     entryPoints: ['src/server/index.ts'],
     bundle: true,
@@ -40,6 +41,16 @@ export async function testRuntime(
       compatibilityFlags: ['nodejs_compat'],
       d1Databases: ['DB'],
       r2Buckets: ['PHOTOS'],
+      serviceBindings: {
+        ASSETS: async () =>
+          new RuntimeResponse(assetShell, {
+            headers: {
+              'Content-Type': 'text/html; charset=utf-8',
+              'Cache-Control': 'public, max-age=3600',
+              ETag: '"static-shell"',
+            },
+          }),
+      },
       ...(images ? { images: { binding: 'IMAGES' } } : {}),
       bindings: {
         APP_ORIGIN: 'http://localhost:8787',

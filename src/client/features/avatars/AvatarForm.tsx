@@ -286,8 +286,6 @@ export function AvatarForm(props: AvatarFormProps) {
         <p id="avatar-file-help" className="avatar-help">
           JPEG, PNG, or WebP. Up to 32 MB and 40 megapixels. Photos are resized
           automatically before upload.
-          <br />
-          Visible to signed-in members.
         </p>
       </div>
       {message && <p role="status">{message}</p>}

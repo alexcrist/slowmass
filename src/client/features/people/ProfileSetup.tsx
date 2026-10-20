@@ -102,8 +102,8 @@ export function ProfileSetup({
         <>
           <p className="onboarding-intro">
             To use the rest of slowmass, choose a username and add a profile
-            photo. Then you can share photos and follow friends. Your profile is
-            private, and follow requests need your approval.
+            photo. Then you can share photos and follow friends. Follow requests
+            need your approval.
           </p>
           <div className="setup-actions">
             <button

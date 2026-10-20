@@ -1,9 +1,10 @@
-import { Hono } from 'hono';
+import { Hono, type MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { Env } from '../../env';
 import { getActiveSession } from '../../auth';
 import { authConfigured } from '../../auth/options';
 import { PhotoError, privatePhoto } from '../../photos';
+import { eventShareHtml } from './share';
 import {
   MAX_EVENT_HOSTS,
   acceptHosting,
@@ -18,6 +19,7 @@ import {
   eventCalendar,
   eventMediaKey,
   eventPreviewMediaKey,
+  eventShareTitle,
   findEvent,
   listEvents,
   listGuests,
@@ -48,6 +50,10 @@ export const eventLinks = new Hono<{
   Variables: { viewer: string | null };
 }>();
 export const eventMedia = new Hono<{ Bindings: Env }>();
+export const eventShares = new Hono<{
+  Bindings: Env;
+  Variables: { viewer: string | null };
+}>();
 
 const notFound = { error: 'Event not found.' };
 
@@ -401,15 +407,50 @@ events.delete('/:id/hosting', async (c) => {
   return c.json({ ok: true });
 });
 
-// Preview access requires the current link in a POST body, never a public
-// media URL. For known members, preserve blocking on preview requests too.
-eventLinks.use('*', async (c, next) => {
+// Both app previews and crawler previews respect blocks for known members.
+const previewSession: MiddlewareHandler<{
+  Bindings: Env;
+  Variables: { viewer: string | null };
+}> = async (c, next) => {
   const session = authConfigured(c.env)
     ? await getActiveSession(c.env, c.req.raw.headers)
     : null;
   c.set('viewer', session?.user.id ?? null);
   await next();
+};
+eventLinks.use('*', previewSession);
+eventShares.use('*', async (c, next) => {
+  c.header('Referrer-Policy', 'no-referrer');
+  c.header('X-Robots-Tag', 'noindex, nofollow');
+  c.header('Cache-Control', 'private, no-store, no-transform');
+  await previewSession(c, next);
 });
+eventShares.get('/:token', async (c) => {
+  const token = c.req.param('token');
+  const title = validLinkToken(token)
+    ? await eventShareTitle(c.env.DB, token, c.get('viewer'))
+    : null;
+  if (title === null) return c.notFound();
+  const shell = await c.env.ASSETS.fetch(
+    new Request(new URL('/', c.env.APP_ORIGIN)),
+  );
+  if (!shell.ok) return c.text('Event preview is unavailable.', 503);
+  const response = eventShareHtml(
+    shell,
+    title,
+    `${c.env.APP_ORIGIN}/event/${token}`,
+  );
+  return c.newResponse(response.body, response);
+});
+eventShares.get('/:token/photo', async (c) => {
+  const token = c.req.param('token');
+  const key = validLinkToken(token)
+    ? await eventPreviewMediaKey(c.env.DB, token, c.get('viewer'))
+    : null;
+  const response = key ? await privatePhoto(c.env, key, c.executionCtx) : null;
+  return response ? c.newResponse(response.body, response) : c.notFound();
+});
+eventShares.all('*', (c) => c.notFound());
 const linkBodyLimit = bodyLimit({
   maxSize: 1024,
   onError: (c) => c.json({ error: 'Event link request is too large.' }, 413),

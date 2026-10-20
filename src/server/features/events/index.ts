@@ -569,6 +569,21 @@ export async function removeHost(
 // A link authorizes only the preview before sign-in. Never select private
 // details here. Known members still respect blocks with the creator.
 const previewable = `${available} AND (? IS NULL OR NOT ${blocked('?', 'e.creator_id')})`;
+// Link unfurling deliberately selects only the public title. Never reuse the
+// signed-in event view or put private details into the HTML document.
+export async function eventShareTitle(
+  db: D1Database,
+  token: string,
+  viewer: string | null = null,
+) {
+  return db
+    .prepare(
+      `SELECT e.title FROM event e WHERE e.link_hash=? AND ${previewable}`,
+    )
+    .bind(await invitationTokenHash(token), viewer, viewer, viewer)
+    .first<string>('title');
+}
+
 export async function checkLink(
   db: D1Database,
   token: string,
@@ -1068,8 +1083,8 @@ export async function listEvents(
   };
 }
 
-// The event's one URL. The credential stays in the fragment, so it never
-// reaches server logs or referrers.
+// Server-visible links let crawlers fetch the limited title/cover preview.
+// Older fragment links keep the same credential and remain usable.
 async function linkUrl(env: Env, encrypted: string | null) {
   if (!encrypted) return null;
   try {
@@ -1077,7 +1092,7 @@ async function linkUrl(env: Env, encrypted: string | null) {
       key: env.AUTH_SECRET!,
       data: encrypted,
     });
-    return `${env.APP_ORIGIN}/#event/${token}`;
+    return `${env.APP_ORIGIN}/event/${token}`;
   } catch {
     return null;
   }
