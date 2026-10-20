@@ -9,7 +9,7 @@ export type CalendarEvent = {
 };
 
 // Give calendar copies a useful duration when the host supplied only a start.
-// The picker discloses this default; it does not change the slowmass event.
+// This does not change the slowmass event.
 function endTime(event: CalendarEvent) {
   return event.endsAt ?? event.startsAt + 60 * 60 * 1000;
 }
@@ -31,7 +31,9 @@ function description(event: CalendarEvent, origin: string) {
 }
 
 export function calendarLinks(event: CalendarEvent, origin: string) {
-  const google = new URL('https://calendar.google.com/calendar/r/eventedit');
+  // The eventedit route can open the Android app without creating an event.
+  // Keep the template entry point so mobile handlers receive the event draft.
+  const google = new URL('https://calendar.google.com/calendar/render');
   google.search = new URLSearchParams({
     action: 'TEMPLATE',
     text: event.title,

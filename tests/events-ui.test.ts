@@ -1488,9 +1488,10 @@ it.each([false, true])(
       'Apple Calendar',
       'Outlook',
     ]);
-    expect(new URL(providers[0].props.href).searchParams.get('text')).toBe(
-      'Dinner',
-    );
+    const google = new URL(providers[0].props.href);
+    expect(google.pathname).toBe('/calendar/render');
+    expect(google.searchParams.get('action')).toBe('TEMPLATE');
+    expect(google.searchParams.get('text')).toBe('Dinner');
     expect(providers[1].props.href).toBe(`/api/events/${id}/calendar.ics`);
     expect(new URL(providers[2].props.href).searchParams.get('subject')).toBe(
       'Dinner',
@@ -1500,7 +1501,6 @@ it.each([false, true])(
       expect(provider.props.rel).toBe('noopener noreferrer');
       expect(decodeURIComponent(provider.props.href)).not.toContain(token);
     }
-    expect(visibleText()).toContain('one hour');
     expect(requests.slice(before)).toEqual([]);
     await act(async () =>
       renderer.root
@@ -1514,7 +1514,7 @@ it.each([false, true])(
   },
 );
 
-it('keeps the calendar action above multiple hosts when there is no location and omits the default-duration note for explicit ends', async () => {
+it('keeps the calendar action above multiple hosts when there is no location', async () => {
   await mount(createElement(EventPage, { id, linkProfiles: true }));
   await reply(pending(`/api/events/${id}`), {
     event: view({
@@ -1537,8 +1537,6 @@ it('keeps the calendar action above multiple hosts when there is no location and
       renderer.root.findByProps({ className: 'event-hosts' }),
     ),
   );
-  await click('Add to calendar');
-  expect(visibleText()).not.toContain('one hour');
   await act(async () => renderer.unmount());
 });
 

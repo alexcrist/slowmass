@@ -1,6 +1,6 @@
 # Product contract
 
-Status: core MVP and account deletion are implemented. See the implementation plan for verification, deployment, and remaining operational work.
+Status: core MVP and account deletion are implemented. See the implementation plan for remaining work and verification gaps.
 
 ## Experience
 
@@ -49,7 +49,7 @@ Right after adding a profile photo, phones and tablets show one device-setup sug
 
 ## Events
 
-Status: implemented on October 17, 2026 (co-hosts, host answers, and the link dialog on October 18) and deployed with migrations 0030 and 0031; see the implementation plan for rollout.
+Status: implemented. The client and server event READMEs describe current behavior; the implementation plan tracks remaining verification.
 
 Partiful-style events help friends meet up without changing the photo-only feed.
 
@@ -59,7 +59,7 @@ Partiful-style events help friends meet up without changing the photo-only feed.
 
 - **Appearance.** On Edit event, separate Color theme and Fonts buttons open dialogs where hosts choose one of nine color themes (five light and four evening) and, independently, one of six font pairings, including Original. Appearance previews immediately and saves for everyone viewing that event. It covers the full app shell, text, icons, controls, borders, menus, dialogs, and wordmark while viewing or editing the event, including the signed-out link preview. Leaving the event restores normal slowmass styling. Changes are silent. Photos and avatars retain their colors; fonts are locally hosted. The Fonts dialog previews each pairing in its own typefaces; other event screens use only the active pairing.
 
-- **Calendar copies.** Signed-in viewers can use Add to calendar beneath the location and above the hosts, who have a crown icon beside them. A dialog offers Google Calendar, Apple Calendar, and Outlook; Google and Outlook open a prefilled calendar entry, and Apple provides a calendar file to import. These are one-time copies, with a disclosed one-hour duration if the host set no end time. They include event details and an access-controlled link back, without the invitation credential or guest/host data. Cancelled events and signed-out previews omit the action.
+- **Calendar copies.** Signed-in viewers can use Add to calendar, with a calendar icon on its left, beneath the location and above the hosts, who have a crown icon beside them. The dialog contains its title, close control, and Google Calendar, Apple Calendar, and Outlook choices. Google and Outlook open a prefilled calendar entry, and Apple provides a calendar file to import. These are one-time copies, with a one-hour duration if the host set no end time. They include event details and an access-controlled link back, without the invitation credential or guest/host data. Cancelled events and signed-out previews omit the action.
 
 - **Co-hosts.** Any host adds another by email. Hosts see the email as pending; adding never reveals whether the email has an account. The person, signed in with that email and a profile photo, sees a prompt on the event (after opening its link) to become a host or decline; accepting is their consent to appear as a host to everyone with the link. An event has at most ten hosts including pending emails. The creator always hosts; any host can remove other hosts, and co-hosts can stop hosting. Pending emails lapse when the event ends.
 - **New people.** The URL is also an invitation to slowmass. Signing in through it by email creates a membership with the event creator as inviter, recording the event and link version—useful for tracing mass sign-ups to one link. New members then give only a name. Existing members signing in through it keep their attribution.

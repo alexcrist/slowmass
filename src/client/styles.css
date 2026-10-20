@@ -1744,11 +1744,18 @@ a.profile-tab {
 }
 .event-calendar-button {
   justify-self: start;
+  gap: 8px;
   font-size: 14px;
+}
+.event-calendar-button svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 .event-calendar-options {
   display: grid;
   gap: 12px;
+  margin-top: 12px;
 }
 .event-host-crown {
   width: 20px;

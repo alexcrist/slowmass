@@ -46,6 +46,8 @@ The repository contains email-link authentication, event-link joining, profiles,
 
 Read relevant docs before changing code; update changed contracts in the same change. Document purpose, tradeoffs, invariants, failure behavior, and useful troubleshooting. Do not duplicate schemas, signatures, route inventories, configuration values, or code narration.
 
+Use Git history and GitHub Actions for deployment history. Do not append per-deployment diary entries, Worker versions, CI run summaries, or documentation-only release commits. Update docs when behavior, operating procedures, or outstanding limitations change; retain useful dated measurements and incident evidence.
+
 Each feature/shared module gets a proportionate README, even if only a few sentences. Package READMEs map features and dependency order. Cross-cutting decisions live in `docs/` and are indexed above. Use repository docs instead of agent auto-memory. Plans describe intended work; implemented docs describe verified current behavior. Keep historical measurements in explicitly dated records.
 
 ## Implementation workflow

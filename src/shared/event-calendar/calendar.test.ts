@@ -19,6 +19,9 @@ it('encodes provider links with exact UTC instants across daylight saving and a 
   const google = new URL(links.google);
   const outlook = new URL(links.outlook);
   expect(google.origin).toBe('https://calendar.google.com');
+  // The eventedit path opens only the calendar app on affected mobile devices.
+  expect(google.pathname).toBe('/calendar/render');
+  expect(google.searchParams.get('action')).toBe('TEMPLATE');
   expect(google.searchParams.get('text')).toBe(event.title);
   expect(google.searchParams.get('dates')).toBe(
     '20300310T093000Z/20300310T103000Z',
@@ -30,6 +33,10 @@ it('encodes provider links with exact UTC instants across daylight saving and a 
     `${event.description}\n\n${origin}/#event/${event.id}`,
   );
   expect(outlook.origin).toBe('https://outlook.live.com');
+  expect(outlook.pathname).toBe('/calendar/0/deeplink/compose');
+  expect(outlook.searchParams.get('path')).toBe('/calendar/action/compose');
+  expect(outlook.searchParams.get('rru')).toBe('addevent');
+  expect(outlook.searchParams.get('allday')).toBe('false');
   expect(outlook.searchParams.get('subject')).toBe(event.title);
   expect(outlook.searchParams.get('startdt')).toBe('2030-03-10T09:30:00.000Z');
   expect(outlook.searchParams.get('enddt')).toBe('2030-03-10T10:30:00.000Z');
@@ -41,7 +48,7 @@ it('encodes provider links with exact UTC instants across daylight saving and a 
     expect(decodeURIComponent(value)).not.toContain(event.url);
 });
 
-it('uses the same disclosed one-hour default across calendars, including midnight rollover', () => {
+it('uses the same one-hour default across calendars, including midnight rollover', () => {
   const startOnly = {
     ...event,
     startsAt: Date.UTC(2030, 11, 31, 23, 30),
