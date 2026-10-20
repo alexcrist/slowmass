@@ -73,7 +73,8 @@ export function MemberNavigation({
       <div className="primary-nav">
         {destinations.map((item) => {
           const needsSetup =
-            eventOnly && !['events', 'notifications'].includes(item.page);
+            eventOnly &&
+            !['people', 'events', 'notifications'].includes(item.page);
           const href =
             item.page === 'profile'
               ? profileHref(profile.handle)

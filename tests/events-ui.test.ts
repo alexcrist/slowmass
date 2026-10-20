@@ -237,11 +237,14 @@ it('previews creation appearance locally and preserves it through cover retries'
   await chooseAppearance('event-color', 'evergreen');
   await submit();
   await click('Fonts');
-  await chooseAppearance('event-font', 'rounded');
+  await chooseAppearance('event-font', 'fascinate-inline');
   await submit();
-  const appearance = { colorTheme: 'evergreen', fontPairing: 'rounded' };
+  const appearance = {
+    colorTheme: 'evergreen',
+    fontPairing: 'fascinate-inline',
+  };
   expect(rootStyle('--paper')).toBe(palettes.evergreen.paper);
-  expect(rootStyle('--body-font')).toBe(pairings.rounded.body);
+  expect(rootStyle('--body-font')).toBe(pairings['fascinate-inline'].body);
   expect(renderer.root.findByProps({ id: 'event-title' }).props.value).toBe(
     'Dinner',
   );
@@ -253,7 +256,7 @@ it('previews creation appearance locally and preserves it through cover retries'
       .findByType('dialog')
       .props.onCancel({ preventDefault: vi.fn() }),
   );
-  expect(rootStyle('--body-font')).toBe(pairings.rounded.body);
+  expect(rootStyle('--body-font')).toBe(pairings['fascinate-inline'].body);
 
   const file = new File(['synthetic photo'], 'cover.webp', {
     type: 'image/webp',
@@ -326,16 +329,27 @@ it('edits colors and fonts in separate dialogs without losing event details', as
   const previews = renderer.root.findAllByProps({
     className: 'appearance-font',
   });
+  expect(previews).toHaveLength(7);
   for (const [index, pairing] of fontPairings.entries()) {
-    expect(previews[index].findByType('strong').props.style.fontFamily).toBe(
-      pairings[pairing].heading,
+    const title = previews[index].findByType('strong');
+    expect(title.children).toEqual([pairings[pairing].name]);
+    expect(title.props.style).toEqual({
+      fontFamily: pairings[pairing].heading,
+      fontWeight: pairings[pairing].headingWeight,
+    });
+    expect(previews[index].findAllByType('small')).toHaveLength(0);
+  }
+  for (const pairing of fontPairings) {
+    await chooseAppearance('event-font', pairing);
+    expect(rootStyle('--heading-font')).toBe(pairings[pairing].heading);
+    expect(rootStyle('--wordmark-font')).toBe(pairings[pairing].wordmark);
+    expect(rootStyle('--heading-weight')).toBe(
+      String(pairings[pairing].headingWeight),
     );
-    expect(previews[index].findByType('small').props.style.fontFamily).toBe(
-      pairings[pairing].body,
+    expect(rootStyle('--wordmark-weight')).toBe(
+      String(pairings[pairing].wordmarkWeight),
     );
   }
-  await chooseAppearance('event-font', 'classic');
-  expect(rootStyle('--wordmark-font')).toContain('Fraunces');
   await click('Cancel');
   expect(rootStyle('--wordmark-font')).toContain('Caveat');
   await click('Color theme');
@@ -356,16 +370,19 @@ it('edits colors and fonts in separate dialogs without losing event details', as
   expect(rootStyle('--paper')).toBe(palettes.evergreen.paper);
   expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
   await click('Fonts');
-  await chooseAppearance('event-font', 'rounded');
+  await chooseAppearance('event-font', 'fascinate-inline');
   await submit();
   const fonts = pending(`/api/events/${id}/appearance`);
-  const appearance = { colorTheme: 'evergreen', fontPairing: 'rounded' };
+  const appearance = {
+    colorTheme: 'evergreen',
+    fontPairing: 'fascinate-inline',
+  };
   expect(JSON.parse(String(fonts.options?.body))).toEqual({
     appearance,
     expected: color,
   });
   await reply(fonts, { appearance });
-  expect(rootStyle('--body-font')).toContain('Nunito Sans');
+  expect(rootStyle('--body-font')).toContain('Source Sans 3');
   expect(renderer.root.findByProps({ id: 'event-title' }).props.value).toBe(
     'Unsaved dinner title',
   );
@@ -422,16 +439,16 @@ it('reloads conflicting appearance without dropping the event draft and uses the
   );
   await click('Reload appearance');
   expect(button('Loading…').props.disabled).toBe(true);
-  const current = { colorTheme: 'pool', fontPairing: 'poster' };
+  const current = { colorTheme: 'pool', fontPairing: 'bungee-shade' };
   await reply(pending(`/api/events/${id}`), {
     event: view({ viewer: host, appearance: current }),
   });
   expect(rootStyle('--paper')).toBe(palettes.pool.paper);
-  expect(rootStyle('--body-font')).toBe(pairings.poster.body);
-  await chooseAppearance('event-font', 'rounded');
+  expect(rootStyle('--body-font')).toBe(pairings['bungee-shade'].body);
+  await chooseAppearance('event-font', 'fascinate-inline');
   await submit();
   const save = pending(`/api/events/${id}/appearance`);
-  const appearance = { colorTheme: 'pool', fontPairing: 'rounded' };
+  const appearance = { colorTheme: 'pool', fontPairing: 'fascinate-inline' };
   expect(JSON.parse(String(save.options?.body))).toEqual({
     appearance,
     expected: current,
@@ -534,11 +551,11 @@ it('restores ordinary app styling on navigation and uses the next event’s own 
     event: view({
       id: other,
       counts: null,
-      appearance: { colorTheme: 'pool', fontPairing: 'poster' },
+      appearance: { colorTheme: 'pool', fontPairing: 'bungee-shade' },
     }),
   });
   expect(rootStyle('--paper')).toBe('#e5f3ff');
-  expect(rootStyle('--body-font')).toContain('Barlow');
+  expect(rootStyle('--body-font')).toContain('Source Sans 3');
 });
 
 it('themes only the current authorized signed-out preview and clears it on leaving the link', async () => {
@@ -558,13 +575,13 @@ it('themes only the current authorized signed-out preview and clears it on leavi
         date: 'Friday',
         width: 4,
         height: 3,
-        appearance: { colorTheme: 'candlelight', fontPairing: 'geometric' },
+        appearance: { colorTheme: 'candlelight', fontPairing: 'monoton' },
       },
     },
   });
   expect(rootStyle('--paper')).toBe('#33211e');
-  expect(rootStyle('--wordmark-font')).toContain('Space Grotesk');
-  expect(rootStyle('--body-font')).toContain('DM Sans');
+  expect(rootStyle('--wordmark-font')).toContain('Monoton');
+  expect(rootStyle('--body-font')).toContain('Source Sans 3');
   await act(async () => {
     location.hash = '';
     window.dispatchEvent(new Event('hashchange'));
@@ -574,7 +591,7 @@ it('themes only the current authorized signed-out preview and clears it on leavi
   expect(renderer.root.findAllByType(EventPreview)).toHaveLength(0);
 });
 
-it('links available event avatars to profile setup for viewers without a photo', async () => {
+it('opens profile previews from event avatars and gates following for viewers without a photo', async () => {
   location.hash = `#event/${id}`;
   await mount(
     createElement(MemberApp, {
@@ -622,9 +639,96 @@ it('links available event avatars to profile setup for viewers without a photo',
     location.hash = profileLinks[0].props.href;
     window.dispatchEvent(new Event('hashchange'));
   });
+  await reply(pending('/api/people/alice'), {
+    profile: {
+      handle: 'alice',
+      displayName: 'Alice',
+      bio: null,
+      relationship: 'none',
+    },
+  });
+  expect(visibleText()).toMatch(/@\s*alice/);
+  expect(visibleText()).toContain('This account is private');
+  expect(visibleText()).not.toContain('Set up your account');
+  expect(
+    renderer.root.findByProps({ className: 'back-control' }).props.href,
+  ).toBe(`#event/${id}`);
+  expect(
+    requests.some((request) => request.path.startsWith('/api/posts')),
+  ).toBe(false);
+  await click('Request to follow');
   expect(visibleText()).toContain('Set up your account');
   expect(
-    requests.some((request) => request.path.startsWith('/api/people/alice')),
+    renderer.root.findByProps({ className: 'button-link' }).props.href,
+  ).toBe(`#event/${id}`);
+  expect(
+    requests.some((request) => request.path === '/api/people/alice/request'),
+  ).toBe(false);
+});
+
+it('lets event-only members browse, paginate, search, and open profiles from Find', async () => {
+  location.hash = '#people';
+  await mount(
+    createElement(MemberApp, {
+      initialProfile: {
+        handle: 'erin',
+        displayName: 'Erin',
+        bio: '',
+        hasAvatar: 0,
+      },
+      onSignOut: vi.fn(),
+      signingOut: false,
+    }),
+  );
+  expect(
+    renderer.root.findByProps({ 'aria-label': 'Find' }).props[
+      'aria-description'
+    ],
+  ).toBeUndefined();
+  expect(visibleText()).not.toContain('Set up your account');
+  const first = pending('/api/people/discover');
+  const seed = new URL(first.path, location.origin).searchParams.get('seed');
+  const cursor = `0:${'a'.repeat(32)}`;
+  await reply(first, { items: [{ handle: 'alice' }], next: cursor });
+  await click('Next');
+  const second = pending('/api/people/discover');
+  const params = new URL(second.path, location.origin).searchParams;
+  expect(params.get('seed')).toBe(seed);
+  expect(params.get('after')).toBe(cursor);
+  await reply(second, { items: [{ handle: 'bob' }], next: null });
+  vi.useFakeTimers();
+  try {
+    await type('find-person', 'alc');
+    await act(async () => vi.advanceTimersByTimeAsync(350));
+  } finally {
+    vi.useRealTimers();
+  }
+  const search = pending('/api/people/discover');
+  expect(new URL(search.path, location.origin).searchParams.get('q')).toBe(
+    'alc',
+  );
+  await reply(search, { items: [{ handle: 'alice' }], next: null });
+  const link = renderer.root
+    .findAllByType('a')
+    .find((item) => item.props.href === '#profile/alice')!;
+  await act(async () => {
+    location.hash = link.props.href;
+    window.dispatchEvent(new Event('hashchange'));
+  });
+  await reply(pending('/api/people/alice'), {
+    profile: {
+      handle: 'alice',
+      displayName: 'Alice',
+      bio: null,
+      relationship: 'none',
+    },
+  });
+  expect(button('Request to follow')).toBeDefined();
+  expect(
+    renderer.root.findByProps({ className: 'back-control' }).props.href,
+  ).toBe('#people');
+  expect(
+    requests.some((request) => request.path.startsWith('/api/posts')),
   ).toBe(false);
 });
 
@@ -1261,7 +1365,7 @@ it('lets members without a photo change just their name', async () => {
   expect(location.hash).toBe('#settings');
 });
 
-it.each(['feed', 'people', 'compose', 'profile/erin'])(
+it.each(['feed', 'compose', 'profile/erin'])(
   'gates %s without private reads and resumes it after photo setup',
   async (destination) => {
     location.hash = `#event/${id}`;
@@ -1498,6 +1602,15 @@ it('keeps username conflicts in setup and preserves another member’s destinati
       signingOut: false,
     }),
   );
+  await reply(pending('/api/people/alice'), {
+    profile: {
+      handle: 'alice',
+      displayName: 'Alice',
+      bio: null,
+      relationship: 'none',
+    },
+  });
+  await click('Request to follow');
   expect(visibleText()).toContain('Set up your account');
   expect(
     renderer.root.findByProps({ className: 'button-link' }).props.href,
@@ -1526,10 +1639,22 @@ it('keeps username conflicts in setup and preserves another member’s destinati
       hasAvatar: 0,
     },
   });
-  expect(location.hash).toBe('#profile/alice');
+  expect(location.hash).toBe('#profile/alice/join');
   await reply(pending('/api/avatar'), { ok: true });
   expect(location.hash).toBe('#profile/alice');
-  expect(pending('/api/people/alice')).toBeDefined();
+  await reply(pending('/api/people/alice'), {
+    profile: {
+      handle: 'alice',
+      displayName: 'Alice',
+      bio: null,
+      relationship: 'none',
+    },
+  });
+  expect(
+    requests.some((request) => request.path === '/api/people/alice/request'),
+  ).toBe(false);
+  await click('Request to follow');
+  expect(pending('/api/people/alice/request', 'POST')).toBeDefined();
 });
 
 async function selectSetupPhoto() {

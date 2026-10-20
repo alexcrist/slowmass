@@ -26,6 +26,12 @@ import {
 } from '../../membership';
 
 const overAt = `COALESCE(e.ends_at,e.starts_at+${EVENT_OVER_AFTER})`;
+// Preserve the previous Worker's constrained column across deployment/rollback.
+// Use the same effective value for reads, creation retries and save guards.
+const eventFont = (alias: 'event' | 'e') =>
+  `COALESCE(${alias}.font_pairing_v2,CASE ${alias}.font_pairing
+    WHEN 'poster' THEN 'bungee-shade' WHEN 'rounded' THEN 'fascinate-inline'
+    WHEN 'geometric' THEN 'monoton' ELSE ${alias}.font_pairing END)`;
 const blocked = (a: string, b: string) =>
   `EXISTS(SELECT 1 FROM block WHERE (blocker_id=${a} AND target_id=${b}) OR (blocker_id=${b} AND target_id=${a}))`;
 // Every read and write rechecks the creator, the viewer, blocks and publication.
@@ -149,7 +155,7 @@ export async function createEvent(
   // the same ID, details and appearance converges on the first write.
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO event(id,creator_id,title,description,location,starts_at,ends_at,time_zone,color_theme,font_pairing,link_id,link_hash,link_encrypted,created_at)
+      `INSERT INTO event(id,creator_id,title,description,location,starts_at,ends_at,time_zone,color_theme,font_pairing_v2,link_id,link_hash,link_encrypted,created_at)
       SELECT ?,m.user_id,?,?,?,?,?,?,?,?,?,?,?,? FROM membership m JOIN avatar a ON a.user_id=m.user_id
       WHERE m.user_id=? AND m.status='active'
         AND (SELECT COUNT(*) FROM event WHERE creator_id=m.user_id AND created_at>?)<10
@@ -192,7 +198,7 @@ async function existingEvent(
     .prepare(
       `SELECT creator_id AS creator,state,title,description,location,starts_at AS startsAt,
       ends_at AS endsAt,time_zone AS timeZone,color_theme AS colorTheme,
-      font_pairing AS fontPairing FROM event WHERE id=?`,
+      ${eventFont('event')} AS fontPairing FROM event WHERE id=?`,
     )
     .bind(id)
     .first<
@@ -297,7 +303,7 @@ type EventRow = EventDetails &
   };
 const detailColumns = `e.id,e.title,e.description,e.location,e.starts_at AS startsAt,
  e.ends_at AS endsAt,e.time_zone AS timeZone,e.cancelled_at AS cancelledAt,e.width,e.height,
- e.color_theme AS colorTheme,e.font_pairing AS fontPairing`;
+ e.color_theme AS colorTheme,${eventFont('e')} AS fontPairing`;
 function publicDetails(row: EventRow) {
   const { cancelledAt, colorTheme, fontPairing, ...details } = row;
   return {
@@ -571,7 +577,7 @@ export async function checkLink(
   const row = await db
     .prepare(
       `SELECT e.id,e.title,e.starts_at AS startsAt,e.time_zone AS timeZone,e.width,e.height,
-      e.color_theme AS colorTheme,e.font_pairing AS fontPairing,
+      e.color_theme AS colorTheme,${eventFont('e')} AS fontPairing,
       e.cancelled_at IS NULL AND ${overAt}>?
         AND EXISTS(SELECT 1 FROM avatar WHERE user_id=e.creator_id) AS open FROM event e
       WHERE e.link_hash=? AND ${previewable}`,
@@ -896,9 +902,9 @@ export async function updateAppearance(
   const result = await db
     .prepare(
       `WITH viewer AS (SELECT ? AS id)
-    UPDATE event SET color_theme=?,font_pairing=?
+    UPDATE event SET color_theme=?,font_pairing_v2=?
     WHERE id=? AND cancelled_at IS NULL
-      AND ((color_theme=? AND font_pairing=?) OR (color_theme=? AND font_pairing=?))
+      AND ((color_theme=? AND ${eventFont('event')}=?) OR (color_theme=? AND ${eventFont('event')}=?))
       AND EXISTS(SELECT 1 FROM event e CROSS JOIN viewer WHERE e.id=event.id AND ${hostOf})`,
     )
     .bind(

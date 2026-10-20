@@ -23,13 +23,21 @@ it('requires onboarding photos, validates uploads, preserves replacements and pr
     ['/api/posts', 'POST', {}],
     ['/api/interactions/example/like', 'PUT', undefined],
     ['/api/people/bob/request', 'POST', undefined],
-    ['/api/people/discover', 'GET', undefined],
+    ['/api/people/connections?kind=following', 'GET', undefined],
   ] as const)
     expect(
       (await runtime.request('alice', path, method, body)).status,
       path,
     ).toBe(409);
   expect((await runtime.request('alice', '/api/people/self')).status).toBe(200);
+  expect(
+    (
+      await runtime.request(
+        'alice',
+        '/api/people/discover?seed=' + '0'.repeat(32),
+      )
+    ).status,
+  ).toBe(200);
   // Activity stays readable so members without a photo can follow events.
   expect((await runtime.request('alice', '/api/notifications')).status).toBe(
     200,

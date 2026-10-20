@@ -127,6 +127,7 @@ export async function findProfile(
     FROM profile p JOIN avatar a ON a.user_id=p.user_id JOIN membership m ON m.user_id = p.user_id
     JOIN membership v ON v.user_id = ? AND v.status = 'active'
     LEFT JOIN follow f ON f.target_id = p.user_id AND f.follower_id = ?
+      AND EXISTS (SELECT 1 FROM avatar WHERE user_id = f.follower_id)
     WHERE p.handle = ? AND m.status = 'active'
     AND NOT EXISTS (SELECT 1 FROM block WHERE (blocker_id = ? AND target_id = p.user_id) OR (blocker_id = p.user_id AND target_id = ?))`,
     )

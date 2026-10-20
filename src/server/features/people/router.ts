@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { getActiveSession } from '../../auth';
 import { authConfigured } from '../../auth/options';
@@ -17,24 +17,29 @@ import {
   type FollowAction,
 } from './index';
 
-export const people = new Hono<{
+type PeopleEnv = {
   Bindings: Env;
-  Variables: { userId: string };
-}>();
+  Variables: { userId: string; hasProfilePhoto: boolean };
+};
+export const people = new Hono<PeopleEnv>();
 people.use('*', async (c, next) => {
   if (!authConfigured(c.env))
     return c.json({ error: 'Sign-in is not available yet.' }, 503);
   const session = await getActiveSession(c.env, c.req.raw.headers);
   const user = session?.user;
   if (!user) return c.json({ error: 'Sign in to continue.' }, 401);
-  if (c.req.path !== '/api/people/self' && !session?.hasProfilePhoto)
+  c.set('userId', user.id);
+  c.set('hasProfilePhoto', session.hasProfilePhoto);
+  await next();
+});
+const requireProfilePhoto: MiddlewareHandler<PeopleEnv> = async (c, next) => {
+  if (!c.get('hasProfilePhoto'))
     return c.json(
       { error: 'Add a profile photo to finish setting up your account.' },
       409,
     );
-  c.set('userId', user.id);
   await next();
-});
+};
 people.use('*', bodyLimit({ maxSize: 4096 }));
 people.get('/self', async (c) =>
   c.json({ profile: await ownProfile(c.env.DB, c.get('userId')) }),
@@ -61,7 +66,7 @@ people.put('/self', async (c) => {
     );
   return c.json({ profile: await ownProfile(c.env.DB, c.get('userId')) });
 });
-people.get('/connections', async (c) => {
+people.get('/connections', requireProfilePhoto, async (c) => {
   const kind = c.req.query('kind') ?? 'requests';
   const after = c.req.query('after') ?? '';
   if (
@@ -105,7 +110,7 @@ people.get('/discover', async (c) => {
     );
   return c.json(page);
 });
-people.get('/:handle/connections', async (c) => {
+people.get('/:handle/connections', requireProfilePhoto, async (c) => {
   const kind = c.req.query('kind');
   const after = c.req.query('after') ?? '';
   if (
@@ -138,7 +143,7 @@ people.get('/:handle', async (c) => {
   void _id;
   return c.json({ profile: visible });
 });
-people.post('/:handle/:action', async (c) => {
+people.post('/:handle/:action', requireProfilePhoto, async (c) => {
   const action = c.req.param('action');
   if (!actions.includes(action as FollowAction))
     return c.json({ error: 'Unknown action.' }, 400);

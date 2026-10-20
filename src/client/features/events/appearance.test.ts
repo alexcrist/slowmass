@@ -127,17 +127,23 @@ it('applies the two font roles only during an event and restores root styles and
   await act(async () =>
     renderer?.update(
       createElement(Page, {
-        appearance: { colorTheme: 'pool', fontPairing: 'poster' },
+        appearance: { colorTheme: 'pool', fontPairing: 'bungee-shade' },
       }),
     ),
   );
-  expect(root.style.getPropertyValue('--body-font')).toBe(pairings.poster.body);
+  expect(root.style.getPropertyValue('--body-font')).toBe(
+    pairings['bungee-shade'].body,
+  );
+  expect(root.style.getPropertyValue('--heading-weight')).toBe('400');
+  expect(root.style.getPropertyValue('--wordmark-weight')).toBe('400');
   expect(root.getAttribute('data-event-appearance')).toBe('pool');
   await act(async () => renderer?.update(createElement(Page)));
   expect(root.style.getPropertyValue('--paper')).toBe('ivory');
   expect(root.style.getPropertyPriority('--paper')).toBe('important');
   expect(root.style.getPropertyValue('--unrelated')).toBe('keep');
   expect(root.style.getPropertyValue('--body-font')).toBe('');
+  expect(root.style.getPropertyValue('--heading-weight')).toBe('');
+  expect(root.style.getPropertyValue('--wordmark-weight')).toBe('');
   expect(root.getAttribute('data-event-appearance')).toBeNull();
   expect(root.getAttribute('data-event-font')).toBeNull();
   expect(themeColor.getAttribute('content')).toBe('#ffffff');
@@ -145,7 +151,8 @@ it('applies the two font roles only during an event and restores root styles and
 it('ships local content-addressed fonts without preloading unselected faces', () => {
   const css = readFileSync('src/client/features/events/fonts.css', 'utf8');
   const faces = [...css.matchAll(/@font-face\s*\{([^}]+)\}/g)];
-  expect(faces).toHaveLength(9);
+  expect(faces).toHaveLength(5);
+  let totalBytes = 0;
   for (const [, face] of faces) {
     expect(face).toContain('font-display: swap');
     const url = /url\(([^)]+)\)/.exec(face)?.[1];
@@ -155,8 +162,12 @@ it('ships local content-addressed fonts without preloading unselected faces', ()
     expect(url).toContain(
       createHash('sha256').update(bytes).digest('hex').slice(0, 12),
     );
-    expect(bytes.byteLength).toBeLessThan(40_000);
+    expect(bytes.byteLength).toBeLessThan(80_000);
+    totalBytes += bytes.byteLength;
   }
+  // The intricate Rubik outlines are larger, but the full picker stays below
+  // the previous catalog's 205 KB and only selected faces load on event pages.
+  expect(totalBytes).toBeLessThan(170_000);
   // Normal app styles never select extra faces. Opening the Fonts dialog
   // references the catalog for previews; there is still no global preload.
   const global = readFileSync('src/client/styles.css', 'utf8');
@@ -164,11 +175,10 @@ it('ships local content-addressed fonts without preloading unselected faces', ()
   expect(html).not.toMatch(/rel=["']preload["']/);
   for (const name of [
     'Fraunces',
-    'Fredoka',
-    'Barlow',
-    'Nunito Sans',
-    'Space Grotesk',
-    'DM Sans',
+    'Bungee Shade',
+    'Monoton',
+    'Fascinate Inline',
+    'Rubik Wet Paint',
   ])
     expect(global).not.toContain(name);
 });

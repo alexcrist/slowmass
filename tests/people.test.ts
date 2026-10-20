@@ -45,6 +45,149 @@ const read = async (actor: string, target: string) =>
   (await runtime.request(actor, `/api/people/${target}`)).json() as Promise<{
     profile: { bio: string | null; relationship: string };
   }>;
+it('lets unfinished members browse identities while keeping relationships and posts gated', async () => {
+  await runtime.request('david', '/api/people/self', 'PUT', {
+    displayName: 'David',
+  });
+  // Legacy personal invitations create follows before photo completion.
+  expect(
+    await runtime.db
+      .prepare(
+        "SELECT status FROM follow WHERE follower_id='david' AND target_id='alice'",
+      )
+      .first('status'),
+  ).toBe('accepted');
+  const response = await runtime.request('david', '/api/people/alice');
+  expect(response.status).toBe(200);
+  expect(response.headers.get('cache-control')).toBe('private, no-store');
+  expect(await response.json()).toEqual({
+    profile: {
+      handle: 'alice',
+      displayName: 'alice',
+      bio: null,
+      relationship: 'none',
+    },
+  });
+  expect((await read('david', 'bob')).profile).toMatchObject({
+    bio: null,
+    relationship: 'none',
+  });
+  const bucket = await runtime.worker.getR2Bucket('PHOTOS');
+  await bucket.put('test-avatar/bob', 'synthetic avatar bytes');
+  const avatar = await runtime.request('david', '/media/avatar/bob');
+  expect(avatar.status).toBe(200);
+  expect(avatar.headers.get('cache-control')).toBe('private, no-store');
+  await avatar.arrayBuffer();
+  for (const path of [
+    '/api/people/connections?kind=following',
+    '/api/people/connections?kind=requests',
+    '/api/people/alice/connections?kind=followers',
+    '/api/posts',
+    '/api/posts?handle=alice',
+  ])
+    expect((await runtime.request('david', path)).status).toBe(409);
+  for (const command of [
+    'request',
+    'request',
+    'cancel',
+    'accept',
+    'deny',
+    'unfollow',
+    'remove',
+    'block',
+    'unblock',
+  ])
+    expect((await action('david', 'bob', command)).status).toBe(409);
+  expect(
+    (await runtime.request('david', '/api/posts', 'POST', {})).status,
+  ).toBe(409);
+  expect(
+    await runtime.db
+      .prepare(
+        "SELECT 1 FROM follow WHERE follower_id='david' AND target_id='bob'",
+      )
+      .first(),
+  ).toBeNull();
+  await seedProfilePhotos(runtime.db);
+  expect((await action('david', 'bob', 'request')).status).toBe(200);
+});
+
+it('keeps event-only discovery and profile reads private, filtered, and rate limited', async () => {
+  await runtime.request('david', '/api/people/self', 'PUT', {
+    displayName: 'David',
+  });
+  const directory = '/api/people/discover?seed=' + '0'.repeat(32);
+  const browse = async (query = '') =>
+    (await (await runtime.request('david', directory + query)).json()) as {
+      items: { handle: string }[];
+      next: string | null;
+    };
+  expect((await browse()).items.map((person) => person.handle).sort()).toEqual([
+    'alice',
+    'bob',
+    'carol',
+  ]);
+  expect((await browse('&q=alc')).items).toEqual([
+    { handle: 'alice', displayName: 'alice' },
+  ]);
+  await action('bob', 'david', 'block');
+  expect((await runtime.request('david', '/api/people/bob')).status).toBe(404);
+  expect((await runtime.request('david', '/media/avatar/bob')).status).toBe(
+    404,
+  );
+  expect((await browse()).items.some((person) => person.handle === 'bob')).toBe(
+    false,
+  );
+  // Blocks in either direction continue to apply to unfinished viewers.
+  await action('bob', 'david', 'unblock');
+  await runtime.db
+    .prepare(
+      "INSERT INTO block(blocker_id,target_id,created_at) VALUES('david','bob',0)",
+    )
+    .run();
+  expect((await runtime.request('david', '/api/people/bob')).status).toBe(404);
+  for (const status of ['disabled', 'deleted']) {
+    await runtime.db
+      .prepare('UPDATE membership SET status=? WHERE user_id=?')
+      .bind(status, 'carol')
+      .run();
+    try {
+      expect((await runtime.request('david', '/api/people/carol')).status).toBe(
+        404,
+      );
+      expect((await browse()).items.map((person) => person.handle)).toEqual([
+        'alice',
+      ]);
+    } finally {
+      await runtime.db
+        .prepare("UPDATE membership SET status='active' WHERE user_id='carol'")
+        .run();
+    }
+  }
+  // Consume the remaining allowance in the current discovery window.
+  await runtime.db
+    .prepare(
+      'UPDATE "rateLimit" SET count=30, lastRequest=? WHERE key=\'discovery:david\'',
+    )
+    .bind(Date.now())
+    .run();
+  expect((await runtime.request('david', directory)).status).toBe(429);
+  await runtime.db
+    .prepare(
+      "INSERT INTO session(id,userId,token,expiresAt,createdAt,updatedAt) VALUES('event-expired','david','event-expired-token','2020-01-01T00:00:00.000Z',0,0)",
+    )
+    .run();
+  for (const viewer of [null, 'event-expired']) {
+    expect((await runtime.request(viewer, '/api/people/alice')).status).toBe(
+      401,
+    );
+    expect((await runtime.request(viewer, directory)).status).toBe(401);
+    expect((await runtime.request(viewer, '/media/avatar/alice')).status).toBe(
+      404,
+    );
+  }
+});
+
 it('requires a session and preserves private bios until the owner accepts', async () => {
   expect((await runtime.request(null, '/api/people/bob')).status).toBe(401);
   expect((await read('alice', 'bob')).profile.bio).toBeNull();

@@ -87,6 +87,7 @@ Exit: an invited friend can sign in, post, follow another friend, and interact w
 - [x] Implement event creation with processed private covers, details, co-host invitations, guest answers, activity/messages, and bounded host notifications.
 - [x] Make event links invite new members with permanent inviter/link-version provenance; limit signed-out previews and gate the photo app on profile setup.
 - [x] Implement curated event appearance, combined username/photo setup, calendar copies, cancellation, and creator-only deletion.
+- [x] Allow event-only members to browse Find and other members’ profile previews; open account setup on Request to follow while retaining Feed/New post gates.
 - [x] Include event media in backups and restore verification, and preserve upload identities across timeout/lost-response recovery.
 
 Implemented behavior, permissions, and failure handling live in the [client events](../src/client/features/events/README.md), [server events](../src/server/features/events/README.md), and [calendar formatting](../src/shared/event-calendar/README.md) READMEs.

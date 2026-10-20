@@ -76,23 +76,22 @@ function MemberPages({
   const [avatarVersion, setAvatarVersion] = useState(0);
   const [pageVersion, setPageVersion] = useState(0);
   const ready = Boolean(profile?.hasAvatar);
-  // Until they add a profile photo, members use only events, Activity and
-  // Settings.
+  // Members without a photo can browse people but must finish setup to follow.
   const eventOnly = Boolean(profile && !ready);
   const needsPhoto =
     eventOnly &&
-    [
+    ([
       'feed',
-      'people',
       'compose',
-      'profile',
       'post',
       'following',
       'followers',
       'blocked',
       'new-event',
       'photo',
-    ].includes(page);
+    ].includes(page) ||
+      (page === 'profile' &&
+        (!handle || handle === profile?.handle || profileTab === 'join')));
   const active = ready || eventOnly;
   const heading = useRef<HTMLHeadingElement>(null);
   const wasReady = useRef(ready);
@@ -118,6 +117,7 @@ function MemberPages({
       if (needsPhoto) return null;
       if (page === 'edit')
         return { href: '#settings', label: 'Back to settings' };
+      if (page === 'profile') return toList(backRoute);
       return null;
     }
     if (page === 'new-event')
@@ -156,11 +156,13 @@ function MemberPages({
     setAvatarVersion((version) => version + 1);
     // Preserve the requested destination, including an own-profile rename.
     if (ownDestination) navigate(profileHref(value.handle, profileTab));
+    else if (page === 'profile' && profileTab === 'join')
+      navigate(profileHref(handle));
     else if (page === 'photo') navigate('#feed');
   }
   function eventPage() {
     return handle ? (
-      <EventRoute param={handle} linkProfiles={ready} />
+      <EventRoute param={handle} linkProfiles />
     ) : (
       <p>Event not found.</p>
     );
@@ -176,6 +178,16 @@ function MemberPages({
         />
       );
     switch (page) {
+      case 'people':
+        return <Discover />;
+      case 'profile':
+        return (
+          <ProfilePage
+            handle={handle}
+            tab={profileTab}
+            onJoin={() => navigate(`${profileHref(handle)}/join`)}
+          />
+        );
       case 'events':
         return (
           <EventsPage

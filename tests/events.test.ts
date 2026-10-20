@@ -6,6 +6,7 @@ import { cleanupAccounts } from '../src/server/features/account';
 import { cleanupEvents, deleteEvent } from '../src/server/features/events';
 import { invitationTokenHash } from '../src/server/membership';
 import {
+  fontPairings,
   originalAppearance,
   type EventAppearance,
 } from '../src/shared/event-appearance';
@@ -171,7 +172,7 @@ it('saves appearance separately, exposes only curated IDs in previews, and rejec
   } satisfies EventAppearance;
   const other = {
     colorTheme: 'pool',
-    fontPairing: 'poster',
+    fontPairing: 'bungee-shade',
   } satisfies EventAppearance;
   const save = (next: EventAppearance, expected = originalAppearance) =>
     runtime.request('alice', `/api/events/${id}/appearance`, 'PATCH', {
@@ -232,11 +233,77 @@ it('saves appearance separately, exposes only curated IDs in previews, and rejec
   expect((await save(other, winner)).status).toBe(409);
 });
 
+it('persists every current font on creation, in event reads and signed-out previews', async () => {
+  for (const fontPairing of fontPairings) {
+    const appearance = { colorTheme: 'pool', fontPairing };
+    const input = { id: crypto.randomUUID(), ...details(), appearance };
+    const create = () => runtime.request('alice', '/api/events', 'POST', input);
+    expect((await create()).status).toBe(200);
+    expect((await create()).status).toBe(200);
+    await publish(input.id);
+    expect(
+      await (await runtime.request('alice', `/api/events/${input.id}`)).json(),
+    ).toMatchObject({ event: { appearance } });
+    const credential = await link(input.id);
+    expect(await check(credential!.token)).toMatchObject({
+      preview: { appearance },
+    });
+  }
+});
+
+it('resolves retired saved fonts consistently for reads, previews and conditional saves', async () => {
+  const { id, token } = await event();
+  for (const [legacy, current] of [
+    ['original', 'original'],
+    ['handwritten', 'handwritten'],
+    ['classic', 'classic'],
+    ['poster', 'bungee-shade'],
+    ['rounded', 'fascinate-inline'],
+    ['geometric', 'monoton'],
+  ]) {
+    // Replays an appearance write by the previous Worker, including after a
+    // new-Worker save. Its trigger must let the legacy selection take effect.
+    await runtime.db
+      .prepare("UPDATE event SET color_theme='wine',font_pairing=? WHERE id=?")
+      .bind(legacy, id)
+      .run();
+    const expected = { colorTheme: 'wine', fontPairing: current };
+    expect(
+      await (await runtime.request('alice', `/api/events/${id}`)).json(),
+    ).toMatchObject({ event: { appearance: expected } });
+    expect(await check(token)).toMatchObject({
+      preview: { appearance: expected },
+    });
+    const appearance = { colorTheme: 'wine', fontPairing: 'rubik-wet-paint' };
+    const save = () =>
+      runtime.request('alice', `/api/events/${id}/appearance`, 'PATCH', {
+        appearance,
+        expected,
+      });
+    expect((await save()).status).toBe(200);
+    expect((await save()).status).toBe(200);
+    expect(await check(token)).toMatchObject({ preview: { appearance } });
+    expect(
+      (
+        await runtime.request(
+          'alice',
+          `/api/events/${id}/appearance`,
+          'PATCH',
+          {
+            appearance: { colorTheme: 'pool', fontPairing: 'monoton' },
+            expected,
+          },
+        )
+      ).status,
+    ).toBe(409);
+  }
+});
+
 it('allows only current unblocked hosts to change appearance, including accepted co-hosts', async () => {
   const { id, token } = await event();
   const appearance = {
     colorTheme: 'evergreen',
-    fontPairing: 'rounded',
+    fontPairing: 'fascinate-inline',
   } satisfies EventAppearance;
   const save = (actor: string | null) =>
     runtime.request(actor, `/api/events/${id}/appearance`, 'PATCH', {
@@ -289,6 +356,10 @@ it('validates appearance at both HTTP and storage boundaries and denies expired 
     {},
     { colorTheme: '#fff', fontPairing: 'original' },
     { colorTheme: 'wine', fontPairing: 'https://example.com/font' },
+    ...['poster', 'rounded', 'geometric'].map((fontPairing) => ({
+      colorTheme: 'wine',
+      fontPairing,
+    })),
   ])
     expect(
       (
@@ -307,7 +378,7 @@ it('validates appearance at both HTTP and storage boundaries and denies expired 
       })
     ).status,
   ).toBe(400);
-  for (const column of ['color_theme', 'font_pairing'])
+  for (const column of ['color_theme', 'font_pairing', 'font_pairing_v2'])
     await expect(
       runtime.db
         .prepare(`UPDATE event SET ${column}='unknown' WHERE id=?`)
@@ -338,7 +409,9 @@ it('creates appearance atomically and rejects conflicting or invalid creation re
   expect(attempts.map((response) => response.status)).toEqual([200, 200]);
   expect(
     await runtime.db
-      .prepare('SELECT state,color_theme,font_pairing FROM event WHERE id=?')
+      .prepare(
+        'SELECT state,color_theme,font_pairing_v2 AS font_pairing FROM event WHERE id=?',
+      )
       .bind(id)
       .first(),
   ).toEqual({ state: 'pending', color_theme: 'wine', font_pairing: 'classic' });

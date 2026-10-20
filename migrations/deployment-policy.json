@@ -31,5 +31,6 @@
   "0030_events.sql": "manual",
   "0031_event_cohosts.sql": "automatic",
   "0032_invite_links.sql": "automatic",
-  "0033_event_appearance.sql": "automatic"
+  "0033_event_appearance.sql": "automatic",
+  "0034_event_party_fonts.sql": "automatic"
 }

@@ -15,9 +15,10 @@ export const fontPairings = [
   'original',
   'handwritten',
   'classic',
-  'poster',
-  'rounded',
-  'geometric',
+  'bungee-shade',
+  'monoton',
+  'fascinate-inline',
+  'rubik-wet-paint',
 ] as const;
 export type ColorTheme = (typeof colorThemes)[number];
 export type FontPairing = (typeof fontPairings)[number];

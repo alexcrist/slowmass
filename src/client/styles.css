@@ -103,7 +103,7 @@ button:disabled {
   font-family: var(--wordmark-font);
   font-style: normal;
   font-size: 37px;
-  font-weight: 700;
+  font-weight: var(--wordmark-weight, 700);
   line-height: 1.2;
   color: var(--ink);
   text-decoration: none;
@@ -2065,6 +2065,20 @@ a.profile-tab {
 [data-event-appearance] .event-detail-row svg {
   color: var(--detail);
 }
+@media (min-width: 900px) {
+  :is(
+      [data-event-font='bungee-shade'],
+      [data-event-font='monoton'],
+      [data-event-font='fascinate-inline'],
+      [data-event-font='rubik-wet-paint']
+    )
+    .nav-brand {
+    /* Wide display faces must fit both the 48px monogram space and the
+       expanded sidebar. Keep the existing link height/touch target. */
+    padding-inline: 0;
+    font-size: 25px;
+  }
+}
 [data-event-appearance] [role='alert'] {
   color: var(--danger);
 }
@@ -2149,11 +2163,6 @@ textarea::placeholder {
 }
 .appearance-font {
   align-items: center;
-}
-.appearance-font small {
-  display: block;
-  color: var(--muted);
-  font-size: 13px;
 }
 
 .event-appearance-controls {

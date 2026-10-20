@@ -19,9 +19,11 @@ type VisibleProfile = {
 export function ProfilePage({
   handle,
   tab = 'posts',
+  onJoin,
 }: {
   handle: string;
   tab?: string;
+  onJoin?: () => void;
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState('');
@@ -73,7 +75,7 @@ export function ProfilePage({
     </>
   );
   const self = profile?.relationship === 'self',
-    canViewContent = self || profile?.relationship === 'accepted',
+    canViewContent = !onJoin && (self || profile?.relationship === 'accepted'),
     action = profile?.relationship === 'pending' ? 'cancel' : 'request';
   return (
     <>
@@ -109,7 +111,7 @@ export function ProfilePage({
                     <SettingsIcon />
                   </a>
                 </div>
-              ) : (
+              ) : !onJoin ? (
                 <OverflowMenu
                   label="Profile options"
                   disabled={busy || loading}
@@ -135,12 +137,12 @@ export function ProfilePage({
                     },
                   ]}
                 />
-              )}
+              ) : null}
             </div>
-            {profile.bio !== null && profile.bio && (
+            {!onJoin && profile.bio !== null && profile.bio && (
               <p className="bio">{profile.bio}</p>
             )}
-            {!self && profile.relationship !== 'accepted' && (
+            {!self && (onJoin || profile.relationship !== 'accepted') && (
               <div className="profile-follow-actions">
                 <button
                   className="compact-button"
@@ -151,7 +153,7 @@ export function ProfilePage({
                   }
                   disabled={busy || loading}
                   aria-busy={busy || loading}
-                  onClick={() => void act(action)}
+                  onClick={() => (onJoin ? onJoin() : void act(action))}
                 >
                   <span>
                     {action === 'request'
@@ -191,7 +193,10 @@ export function ProfilePage({
         loadingState
       )}
       {canViewContent ||
-      (!profile && !loadError && !['following', 'followers'].includes(tab)) ? (
+      (!onJoin &&
+        !profile &&
+        !loadError &&
+        !['following', 'followers'].includes(tab)) ? (
         <div hidden={!profile}>
           <ProfileTabs
             handle={handle}

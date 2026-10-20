@@ -39,7 +39,8 @@ export function useEventAppearance(appearance?: EventAppearance) {
       '--body-font': fonts.body,
       '--heading-font': fonts.heading,
       '--wordmark-font': fonts.wordmark,
-      '--heading-weight': fontPairing === 'original' ? '600' : '700',
+      '--heading-weight': String(fonts.headingWeight),
+      '--wordmark-weight': String(fonts.wordmarkWeight),
       'color-scheme': palette.scheme,
     };
     const previous = Object.keys(properties).map((key) => ({

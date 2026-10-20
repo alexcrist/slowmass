@@ -164,14 +164,11 @@ export function EventAppearanceDialog({
                     <strong
                       style={{
                         fontFamily: pairings[id].heading,
-                        fontWeight: id === 'original' ? 600 : 700,
+                        fontWeight: pairings[id].headingWeight,
                       }}
                     >
                       {pairings[id].name}
                     </strong>
-                    <small style={{ fontFamily: pairings[id].body }}>
-                      {pairings[id].description}
-                    </small>
                   </span>
                 </label>
               ))}

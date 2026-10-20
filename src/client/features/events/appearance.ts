@@ -211,52 +211,67 @@ export const pairings: Record<
   FontPairing,
   {
     name: string;
-    description: string;
     heading: string;
+    headingWeight: number;
     wordmark: string;
+    wordmarkWeight: number;
     body: string;
   }
 > = {
   original: {
     name: 'Original',
-    description: 'Caveat wordmark · Source Sans 3',
     heading: sourceSans,
+    headingWeight: 600,
     wordmark: "'Caveat', cursive",
+    wordmarkWeight: 700,
     body: sourceSans,
   },
   handwritten: {
     name: 'Handwritten',
-    description: 'Caveat + Source Sans 3',
     heading: "'Caveat', cursive",
+    headingWeight: 700,
     wordmark: "'Caveat', cursive",
+    wordmarkWeight: 700,
     body: sourceSans,
   },
   classic: {
     name: 'Classic',
-    description: 'Fraunces + Source Sans 3',
     heading: "'Fraunces', Georgia, serif",
+    headingWeight: 700,
     wordmark: "'Fraunces', Georgia, serif",
+    wordmarkWeight: 700,
     body: sourceSans,
   },
-  poster: {
-    name: 'Poster',
-    description: 'Barlow Condensed + Barlow',
-    heading: "'Barlow Condensed', sans-serif",
-    wordmark: "'Barlow Condensed', sans-serif",
-    body: "'Barlow', system-ui, sans-serif",
+  'bungee-shade': {
+    name: 'Bungee Shade',
+    heading: "'Bungee Shade', sans-serif",
+    headingWeight: 400,
+    wordmark: "'Bungee Shade', sans-serif",
+    wordmarkWeight: 400,
+    body: sourceSans,
   },
-  rounded: {
-    name: 'Rounded',
-    description: 'Fredoka + Nunito Sans',
-    heading: "'Fredoka', sans-serif",
-    wordmark: "'Fredoka', sans-serif",
-    body: "'Nunito Sans', system-ui, sans-serif",
+  monoton: {
+    name: 'Monoton',
+    heading: "'Monoton', sans-serif",
+    headingWeight: 400,
+    wordmark: "'Monoton', sans-serif",
+    wordmarkWeight: 400,
+    body: sourceSans,
   },
-  geometric: {
-    name: 'Geometric',
-    description: 'Space Grotesk + DM Sans',
-    heading: "'Space Grotesk', sans-serif",
-    wordmark: "'Space Grotesk', sans-serif",
-    body: "'DM Sans', system-ui, sans-serif",
+  'fascinate-inline': {
+    name: 'Fascinate Inline',
+    heading: "'Fascinate Inline', sans-serif",
+    headingWeight: 400,
+    wordmark: "'Fascinate Inline', sans-serif",
+    wordmarkWeight: 400,
+    body: sourceSans,
+  },
+  'rubik-wet-paint': {
+    name: 'Rubik Wet Paint',
+    heading: "'Rubik Wet Paint', sans-serif",
+    headingWeight: 400,
+    wordmark: "'Rubik Wet Paint', sans-serif",
+    wordmarkWeight: 400,
+    body: sourceSans,
   },
 };
