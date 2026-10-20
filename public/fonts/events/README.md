@@ -2,7 +2,7 @@
 
 Locally hosted, Latin-subset WOFF2 fonts from the Google Fonts CSS API, downloaded October 18, 2026. Each family includes its SIL Open Font License. Content hashes in filenames allow immutable caching; use a new filename if bytes change. No runtime request contacts a font provider. Unsupported characters use the pairing’s system fallback.
 
-Event pages and Edit event use the selected pairing. Opening the Fonts dialog uses every pairing for its heading, body, and wordmark previews, loading those local faces on demand. Ordinary app pages and the Color theme dialog do not load the font catalog. Display fonts use weight 700; body fonts include 400–700 (Barlow uses static 400, 600, and 700 files). Caveat and Source Sans 3 reuse the existing app assets.
+Event pages and Edit event use the selected pairing. Opening the Fonts dialog uses every pairing for its heading and body previews, loading those local faces on demand. The Fonts button reuses the existing Caveat app font. Ordinary app pages and the Color theme dialog do not load the font catalog. Display fonts use weight 700; body fonts include 400–700 (Barlow uses static 400, 600, and 700 files). Caveat and Source Sans 3 reuse the existing app assets.
 
 Sources:
 

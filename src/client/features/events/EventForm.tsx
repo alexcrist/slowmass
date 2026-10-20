@@ -245,6 +245,7 @@ export function EventForm({
             <div className="actions">
               <button
                 type="button"
+                className="event-color-button"
                 aria-haspopup="dialog"
                 onClick={() => setAppearanceDialog('color')}
               >
@@ -252,6 +253,7 @@ export function EventForm({
               </button>
               <button
                 type="button"
+                className="event-font-button"
                 aria-haspopup="dialog"
                 onClick={() => setAppearanceDialog('fonts')}
               >

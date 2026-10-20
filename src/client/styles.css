@@ -2055,7 +2055,7 @@ textarea::placeholder {
   min-width: 0;
   border: 0;
   padding: 0;
-  margin: 24px 0 0;
+  margin: 12px 0 0;
 }
 .appearance-fieldset legend {
   padding: 0;
@@ -2147,6 +2147,29 @@ textarea::placeholder {
 .event-appearance-controls .actions {
   margin-top: 7px;
 }
+.event-appearance-controls .event-color-button,
+.event-appearance-controls .event-color-button:enabled:hover {
+  color: #171717;
+  border-color: #737373;
+  background: linear-gradient(
+    110deg,
+    #ffb3ba,
+    #ffcf9e,
+    #fff3a3,
+    #b8e8c8,
+    #b8d9ff,
+    #d9c2ff
+  );
+}
+.event-appearance-controls .event-color-button:enabled:hover {
+  box-shadow: inset 0 0 0 1px #171717;
+}
+.event-appearance-controls .event-font-button {
+  font-family: 'Caveat', cursive;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+}
 .appearance-font-copy {
   flex: 1;
   min-width: 0;
@@ -2156,13 +2179,6 @@ textarea::placeholder {
   display: block;
   font-size: 22px;
   line-height: 1.3;
-}
-.appearance-font-wordmark {
-  flex-shrink: 0;
-  padding-inline-end: 0.2em;
-  color: var(--detail);
-  font-size: 20px;
-  font-weight: 700;
 }
 [data-event-appearance] input::file-selector-button {
   margin-inline-end: 12px;

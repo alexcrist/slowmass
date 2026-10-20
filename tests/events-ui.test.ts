@@ -247,10 +247,6 @@ it('edits colors and fonts in separate dialogs without losing event details', as
     expect(previews[index].findByType('small').props.style.fontFamily).toBe(
       pairings[pairing].body,
     );
-    expect(
-      previews[index].findByProps({ className: 'appearance-font-wordmark' })
-        .props.style.fontFamily,
-    ).toBe(pairings[pairing].wordmark);
   }
   await chooseAppearance('event-font', 'classic');
   expect(rootStyle('--wordmark-font')).toContain('Fraunces');

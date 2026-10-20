@@ -109,10 +109,6 @@ export function EventAppearanceDialog({
       busy={busy}
     >
       <form onSubmit={(event) => void save(event)}>
-        <p className="status-copy">
-          Preview {kind === 'color' ? 'colors' : 'fonts'}. Save to apply them to
-          this event.
-        </p>
         {kind === 'color' ? (
           <fieldset className="appearance-fieldset" disabled={busy}>
             <legend className="visually-hidden">Color theme</legend>
@@ -170,13 +166,6 @@ export function EventAppearanceDialog({
                     <small style={{ fontFamily: pairings[id].body }}>
                       {pairings[id].description}
                     </small>
-                  </span>
-                  <span
-                    className="appearance-font-wordmark"
-                    aria-hidden="true"
-                    style={{ fontFamily: pairings[id].wordmark }}
-                  >
-                    slowmass
                   </span>
                 </label>
               ))}
