@@ -47,6 +47,18 @@ export function ProfileForm({
       setBusy(false);
     }
   }
+  const joining = !profile && mode === 'name';
+  const nameInput = (
+    <input
+      id="display-name"
+      value={displayName}
+      onChange={(event) => setDisplayName(event.target.value)}
+      required
+      maxLength={60}
+      disabled={busy}
+      autoComplete="name"
+    />
+  );
   return (
     <form onSubmit={(event) => void save(event)}>
       {!profile && mode === 'profile' && (
@@ -66,15 +78,33 @@ export function ProfileForm({
       <label className="field-label" htmlFor="display-name">
         {mode === 'name' ? 'Your name' : 'Profile name'}
       </label>
-      <input
-        id="display-name"
-        value={displayName}
-        onChange={(event) => setDisplayName(event.target.value)}
-        required
-        maxLength={60}
-        disabled={busy}
-        autoComplete="name"
-      />
+      {joining ? (
+        // Naming yourself while joining mirrors the email step before it.
+        <div className="joined-field">
+          {nameInput}
+          <button
+            type="submit"
+            className="joined-submit"
+            disabled={busy}
+            aria-label={busy ? 'Saving…' : 'Continue'}
+            title="Continue"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
+          </button>
+        </div>
+      ) : (
+        nameInput
+      )}
       {mode === 'profile' && (
         <>
           <label className="field-label" htmlFor="bio">
@@ -90,15 +120,17 @@ export function ProfileForm({
           />
         </>
       )}
-      <button className="primary-button" disabled={busy}>
-        {busy
-          ? 'Saving…'
-          : !profile
-            ? 'Continue'
-            : mode === 'name'
-              ? 'Save name'
-              : 'Save profile'}
-      </button>
+      {!joining && (
+        <button className="primary-button" disabled={busy}>
+          {busy
+            ? 'Saving…'
+            : !profile
+              ? 'Continue'
+              : mode === 'name'
+                ? 'Save name'
+                : 'Save profile'}
+        </button>
+      )}
       {message && <p role="status">{message}</p>}
       {error && (
         <p role="alert" className="error-message">

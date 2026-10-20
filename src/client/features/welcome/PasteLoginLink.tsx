@@ -41,7 +41,7 @@ export function PasteLoginLink({
         <label className="field-label" htmlFor="login-link">
           Unused sign-in link
         </label>
-        <div className="login-input">
+        <div className="joined-field">
           <input
             id="login-link"
             type="password"
@@ -56,7 +56,7 @@ export function PasteLoginLink({
           />
           <LoginSubmit label="Sign in here" />
         </div>
-        <p id="login-link-help" className="field-help login-input-help">
+        <p id="login-link-help" className="field-help joined-field-help">
           This link signs you in. Do not share it with anyone.
         </p>
         {error && (

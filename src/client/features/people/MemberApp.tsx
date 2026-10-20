@@ -93,6 +93,7 @@ function MemberPages({
       (page === 'profile' &&
         (!handle || handle === profile?.handle || profileTab === 'join')));
   const active = ready || eventOnly;
+  const joining = !profile && page === 'event' && Boolean(handle);
   const heading = useRef<HTMLHeadingElement>(null);
   const wasReady = useRef(ready);
   useEffect(() => {
@@ -243,12 +244,17 @@ function MemberPages({
   function screen() {
     if (eventOnly) return eventOnlyScreen();
     if (!profile)
-      return (
+      // Someone joining through an event names themselves on its preview.
+      return joining && handle ? (
+        <EventRoute
+          param={handle}
+          linkProfiles
+          join={<ProfileForm profile={null} onSave={saved} mode="name" />}
+        />
+      ) : (
         <>
           <p className="onboarding-intro">
-            {page === 'event'
-              ? 'Hosts and other guests see this name.'
-              : 'Next, you’ll choose a username and add a profile photo.'}
+            Next, you’ll choose a username and add a profile photo.
           </p>
           <ProfileForm profile={null} onSave={saved} mode="name" />
         </>
@@ -413,11 +419,12 @@ function MemberPages({
         <section
           key={active ? `${pageKey}:${pageVersion}` : 'onboarding'}
           data-page={active ? page : 'onboarding'}
-          className={`member-content ${!active || needsPhoto ? 'onboarding' : ['feed', 'profile', 'post', 'event', 'new-event'].includes(page) ? 'photo-screen' : ''}${eventOnly ? ' event-only' : ''}`}
-          aria-labelledby="screen-title"
+          className={`member-content ${joining ? 'event-join' : !active || needsPhoto ? 'onboarding' : ['feed', 'profile', 'post', 'event', 'new-event'].includes(page) ? 'photo-screen' : ''}${eventOnly ? ' event-only' : ''}`}
+          aria-labelledby={joining ? undefined : 'screen-title'}
         >
           {active && back && <BackControl {...back} />}
-          {!needsPhoto && (
+          {/* The event's title heads the join screen. */}
+          {!needsPhoto && !joining && (
             <h1
               id="screen-title"
               ref={heading}

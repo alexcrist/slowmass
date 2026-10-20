@@ -351,28 +351,30 @@ textarea:disabled {
   color: var(--muted);
   background: var(--hover);
 }
-.login-input {
+/* An input joined to its green submit button: email sign-in, and naming
+   yourself when joining. */
+.joined-field {
   display: flex;
   align-items: stretch;
   border: 1px solid var(--control-line);
   border-radius: 5px;
   background: var(--surface);
 }
-.login-input > input {
+.joined-field > input {
   flex: 1;
   min-width: 0;
   border: 0;
   border-radius: 4px 0 0 4px;
   margin: 0;
 }
-.login-input:has(input:focus-visible) {
+.joined-field:has(input:focus-visible) {
   outline: 2px solid var(--ink);
   outline-offset: 3px;
 }
-.login-input > input:focus-visible {
+.joined-field > input:focus-visible {
   outline: none;
 }
-.login-submit {
+.joined-submit {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -384,14 +386,14 @@ textarea:disabled {
   background: var(--brand);
   color: var(--on-brand);
 }
-.login-submit:enabled:hover {
+.joined-submit:enabled:hover {
   background: var(--brand-hover);
 }
-.login-submit svg {
+.joined-submit svg {
   width: 24px;
   height: 24px;
 }
-.login-input + .login-input-help {
+.joined-field + .joined-field-help {
   margin-top: 12px;
 }
 textarea {
@@ -1440,6 +1442,14 @@ summary.settings-row::after {
   .member-shell .masthead {
     display: none;
   }
+  /* Until the sidebar appears (before a member names themselves), keep the
+     header and its wordmark. */
+  .member-shell:not(:has(.app-navigation)) {
+    padding-inline: 0;
+  }
+  .member-shell:not(:has(.app-navigation)) .masthead {
+    display: flex;
+  }
   .member-content {
     margin-top: 48px;
   }
@@ -1594,12 +1604,19 @@ summary.settings-row::after {
   padding: 0;
 }
 .event-preview-shell .sign-in-area,
-.event-preview-shell .event-details,
-.event-preview-intro {
+:is(.event-preview-shell, .event-join) .event-details,
+.event-preview-intro,
+.event-join-form {
   padding-inline: 16px;
 }
-.event-preview-shell .event-title {
+:is(.event-preview-shell, .event-join) .event-title {
   margin: 20px 0 8px;
+}
+/* The join screen matches the signed-out preview's column. */
+.member-content.event-join {
+  width: min(520px, 100%);
+  margin: 24px auto 64px;
+  container-type: inline-size;
 }
 .event-preview-shell .account-section {
   container-type: inline-size;

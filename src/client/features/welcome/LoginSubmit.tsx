@@ -10,7 +10,7 @@ export function LoginSubmit({
   return (
     <button
       type="submit"
-      className="login-submit"
+      className="joined-submit"
       disabled={busy}
       aria-label={label}
       title={label}

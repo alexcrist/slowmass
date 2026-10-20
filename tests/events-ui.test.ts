@@ -1475,6 +1475,79 @@ it('puts the message composer below the event activity', async () => {
   expect(order.indexOf('p')).toBeLessThan(order.indexOf('form'));
 });
 
+it('shows a new member the event preview with a name field, then the event once named', async () => {
+  location.hash = `#event/${id}`;
+  await mount(
+    createElement(MemberApp, {
+      initialProfile: null,
+      onSignOut: vi.fn(),
+      signingOut: false,
+    }),
+  );
+  await reply(pending(`/api/events/${id}`), {
+    event: view({
+      counts: null,
+      appearance: { colorTheme: 'cherry', fontPairing: 'handwritten' },
+    }),
+  });
+  // The signed-out preview's content, with a name field instead of email.
+  expect(visibleText()).toContain('Dinner');
+  expect(visibleText()).toContain(eventWhen(details).date);
+  expect(
+    renderer.root.findByProps({ alt: 'Cover photo for Dinner' }).props.src,
+  ).toBe(details.photoUrl);
+  expect(rootStyle('--paper')).toBe(palettes.cherry.paper);
+  expect(visibleText()).toContain('Enter your name to see details and RSVP.');
+  expect(visibleText()).toContain('Hosts and other guests see this name.');
+  expect(visibleText()).not.toContain('What’s your name?');
+  expect(
+    renderer.root
+      .findByProps({ className: 'joined-field' })
+      .findByProps({ id: 'display-name' }).type,
+  ).toBe('input');
+  expect(button('Continue').props.type).toBe('submit');
+  // Details wait for a name.
+  expect(visibleText()).not.toContain('Bring a dish');
+  expect(visibleText()).not.toContain('1 Main St');
+  expect(visibleText()).not.toMatch(/Hosted by/);
+  expect(renderer.root.findAllByProps({ 'aria-label': 'Your answer' })).toEqual(
+    [],
+  );
+  await type('display-name', 'Bob');
+  await submit();
+  const save = pending('/api/people/self');
+  expect(JSON.parse(String(save.options?.body))).toEqual({
+    displayName: 'Bob',
+    bio: '',
+  });
+  await reply(save, {
+    profile: { handle: 'bob_k3j9z', displayName: 'Bob', bio: '', hasAvatar: 0 },
+  });
+  expect(location.hash).toBe(`#event/${id}`);
+  await reply(pending(`/api/events/${id}`), { event: view({ counts: null }) });
+  expect(visibleText()).toContain('Bring a dish');
+  expect(visibleText()).toMatch(/Hosted by\s+Alice/);
+  expect(button('Going')).toBeDefined();
+});
+
+it('opens an event link for a new member before showing its preview', async () => {
+  location.hash = `#event/${token}`;
+  await mount(
+    createElement(MemberApp, {
+      initialProfile: null,
+      onSignOut: vi.fn(),
+      signingOut: false,
+    }),
+  );
+  const opened = pending('/api/events/open');
+  expect(JSON.parse(String(opened.options?.body))).toEqual({ token });
+  await reply(opened, { id });
+  await reply(pending(`/api/events/${id}`), { event: view({ counts: null }) });
+  expect(visibleText()).toContain('Enter your name to see details and RSVP.');
+  expect(visibleText()).not.toContain('Bring a dish');
+  expect(renderer.root.findByProps({ id: 'display-name' })).toBeDefined();
+});
+
 it('lets members without a photo change just their name', async () => {
   location.hash = '#edit';
   await mount(

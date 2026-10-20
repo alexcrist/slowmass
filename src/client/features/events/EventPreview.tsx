@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { jsonRequest } from '../../api';
 import type { EventAppearance } from '../../../shared/event-appearance';
 import { useEventAppearance } from './useEventAppearance';
@@ -10,6 +10,37 @@ export type EventPreviewDetails = {
   width: number;
   height: number;
 };
+
+// What someone sees before they can see the event's details: its cover,
+// title, and date. The caller supplies the cover's contents.
+export function EventPreviewSummary({
+  title,
+  date,
+  width,
+  height,
+  children,
+}: {
+  title: string;
+  date: string;
+  width: number;
+  height: number;
+  children: ReactNode;
+}) {
+  return (
+    <div className="event-summary">
+      <div
+        className="event-photo event-preview-photo"
+        style={{ aspectRatio: `${width} / ${height}` }}
+      >
+        {children}
+      </div>
+      <div className="event-details">
+        <h1 className="event-title">{title}</h1>
+        <p className="event-when">{date}</p>
+      </div>
+    </div>
+  );
+}
 
 // The link stays in the request body. Only this in-memory object URL reaches
 // the image element; discard it when leaving the preview or retrying.
@@ -48,42 +79,38 @@ export function EventPreview({
     };
   }, [token, attempt]);
   return (
-    <div className="event-summary">
-      <div
-        className="event-photo event-preview-photo"
-        style={{ aspectRatio: `${preview.width} / ${preview.height}` }}
-      >
-        {failed ? (
-          <div role="status">
-            <p>Couldn’t load the event photo.</p>
-            <button
-              type="button"
-              className="text-button"
-              onClick={() => {
-                setPhoto(null);
-                setFailed(false);
-                setAttempt((value) => value + 1);
-              }}
-            >
-              Try photo again
-            </button>
-          </div>
-        ) : photo ? (
-          <img
-            src={photo}
-            width={preview.width}
-            height={preview.height}
-            alt={`Cover photo for ${preview.title}`}
-            onError={() => setFailed(true)}
-          />
-        ) : (
-          <p role="status">Loading event photo…</p>
-        )}
-      </div>
-      <div className="event-details">
-        <h1 className="event-title">{preview.title}</h1>
-        <p className="event-when">{preview.date}</p>
-      </div>
-    </div>
+    <EventPreviewSummary
+      title={preview.title}
+      date={preview.date}
+      width={preview.width}
+      height={preview.height}
+    >
+      {failed ? (
+        <div role="status">
+          <p>Couldn’t load the event photo.</p>
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => {
+              setPhoto(null);
+              setFailed(false);
+              setAttempt((value) => value + 1);
+            }}
+          >
+            Try photo again
+          </button>
+        </div>
+      ) : photo ? (
+        <img
+          src={photo}
+          width={preview.width}
+          height={preview.height}
+          alt={`Cover photo for ${preview.title}`}
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <p role="status">Loading event photo…</p>
+      )}
+    </EventPreviewSummary>
   );
 }

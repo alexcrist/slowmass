@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useEventAppearance } from './useEventAppearance';
 import { api, jsonRequest } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
@@ -13,19 +13,23 @@ import { EventCalendarDialog } from './EventCalendarDialog';
 import { MailIcon } from '../../ui/MailIcon';
 import { LockIcon } from '../../ui/LockIcon';
 import { EventLog } from './EventLog';
+import { EventJoin } from './EventJoin';
 import { eventHref } from './EventsPage';
 import type { Answer, EventView } from './types';
 
 const linkToken = /^[a-zA-Z0-9]{48}$/;
 
 // An event's one URL carries its link. Opening it records the link version for
-// this member, then shows the event; internal links use the event ID.
+// this member, then shows the event; internal links use the event ID. A member
+// who hasn't named themselves sees only the preview, with the `join` form.
 export function EventRoute({
   param,
   linkProfiles,
+  join,
 }: {
   param: string;
   linkProfiles: boolean;
+  join?: ReactNode;
 }) {
   const token = linkToken.test(param) ? param : null;
   const [attempt, setAttempt] = useState(0);
@@ -56,11 +60,17 @@ export function EventRoute({
       });
     return () => controller.abort();
   }, [token, attempt]);
-  if (!token) return <EventPage id={param} linkProfiles={linkProfiles} />;
+  const show = (id: string) =>
+    join ? (
+      <EventJoin id={id}>{join}</EventJoin>
+    ) : (
+      <EventPage id={id} linkProfiles={linkProfiles} />
+    );
+  if (!token) return show(param);
   if (opened?.token !== token || opened.attempt !== attempt)
     return <p role="status">Opening event…</p>;
   return opened.id ? (
-    <EventPage id={opened.id} linkProfiles={linkProfiles} />
+    show(opened.id)
   ) : (
     <div>
       <p role="alert">{opened.error}</p>

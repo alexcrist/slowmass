@@ -410,7 +410,7 @@ export function Welcome() {
               <label className="field-label" htmlFor="email">
                 Your email
               </label>
-              <div className="login-input">
+              <div className="joined-field">
                 <input
                   id="email"
                   type="email"
