@@ -244,7 +244,9 @@ it('previews creation appearance locally and preserves it through cover retries'
     fontPairing: 'fascinate-inline',
   };
   expect(rootStyle('--paper')).toBe(palettes.evergreen.paper);
-  expect(rootStyle('--body-font')).toBe(pairings['fascinate-inline'].body);
+  expect(rootStyle('--heading-font')).toBe(
+    pairings['fascinate-inline'].heading,
+  );
   expect(renderer.root.findByProps({ id: 'event-title' }).props.value).toBe(
     'Dinner',
   );
@@ -256,7 +258,9 @@ it('previews creation appearance locally and preserves it through cover retries'
       .findByType('dialog')
       .props.onCancel({ preventDefault: vi.fn() }),
   );
-  expect(rootStyle('--body-font')).toBe(pairings['fascinate-inline'].body);
+  expect(rootStyle('--heading-font')).toBe(
+    pairings['fascinate-inline'].heading,
+  );
 
   const file = new File(['synthetic photo'], 'cover.webp', {
     type: 'image/webp',
@@ -303,7 +307,7 @@ it('previews creation appearance locally and preserves it through cover retries'
   );
   await act(async () => renderer.unmount());
   expect(rootStyle('--paper')).toBe('');
-  expect(rootStyle('--body-font')).toBe('');
+  expect(rootStyle('--heading-font')).toBe('');
 });
 
 it('edits colors and fonts in separate dialogs without losing event details', async () => {
@@ -318,7 +322,7 @@ it('edits colors and fonts in separate dialogs without losing event details', as
   expect(rootStyle('--surface')).toBe(palettes.wine.surface);
   expect(rootStyle('--line')).toBe(palettes.wine.line);
   expect(rootStyle('--control-line')).toBe(palettes.wine.controlLine);
-  expect(rootStyle('--body-font')).toContain('Source Sans 3');
+  expect(rootStyle('--heading-font')).toBe(pairings.original.heading);
   expect(requests.some((request) => request.path.endsWith('/appearance'))).toBe(
     false,
   );
@@ -342,16 +346,12 @@ it('edits colors and fonts in separate dialogs without losing event details', as
   for (const pairing of fontPairings) {
     await chooseAppearance('event-font', pairing);
     expect(rootStyle('--heading-font')).toBe(pairings[pairing].heading);
-    expect(rootStyle('--wordmark-font')).toBe(pairings[pairing].wordmark);
     expect(rootStyle('--heading-weight')).toBe(
       String(pairings[pairing].headingWeight),
     );
-    expect(rootStyle('--wordmark-weight')).toBe(
-      String(pairings[pairing].wordmarkWeight),
-    );
   }
   await click('Cancel');
-  expect(rootStyle('--wordmark-font')).toContain('Caveat');
+  expect(rootStyle('--heading-font')).toBe(pairings.original.heading);
   await click('Color theme');
   await chooseAppearance('event-color', 'evergreen');
   await submit();
@@ -382,7 +382,9 @@ it('edits colors and fonts in separate dialogs without losing event details', as
     expected: color,
   });
   await reply(fonts, { appearance });
-  expect(rootStyle('--body-font')).toContain('Source Sans 3');
+  expect(rootStyle('--heading-font')).toBe(
+    pairings['fascinate-inline'].heading,
+  );
   expect(renderer.root.findByProps({ id: 'event-title' }).props.value).toBe(
     'Unsaved dinner title',
   );
@@ -399,7 +401,7 @@ it('edits colors and fonts in separate dialogs without losing event details', as
   await act(async () => renderer.unmount());
   expect(rootStyle('--paper')).toBe('');
   expect(rootStyle('--surface')).toBe('');
-  expect(rootStyle('--body-font')).toBe('');
+  expect(rootStyle('--heading-font')).toBe('');
 });
 
 it('keeps failed appearance edits retryable and aborts saves when editing unmounts', async () => {
@@ -444,7 +446,7 @@ it('reloads conflicting appearance without dropping the event draft and uses the
     event: view({ viewer: host, appearance: current }),
   });
   expect(rootStyle('--paper')).toBe(palettes.pool.paper);
-  expect(rootStyle('--body-font')).toBe(pairings['bungee-shade'].body);
+  expect(rootStyle('--heading-font')).toBe(pairings['bungee-shade'].heading);
   await chooseAppearance('event-font', 'fascinate-inline');
   await submit();
   const save = pending(`/api/events/${id}/appearance`);
@@ -530,7 +532,7 @@ it('restores ordinary app styling on navigation and uses the next event’s own 
       appearance: { colorTheme: 'wine', fontPairing: 'classic' },
     }),
   });
-  expect(rootStyle('--wordmark-font')).toContain('Fraunces');
+  expect(rootStyle('--heading-font')).toContain('Fraunces');
   expect(
     renderer.root.findAllByProps({ 'aria-label': 'Event options' }),
   ).toHaveLength(0);
@@ -538,7 +540,7 @@ it('restores ordinary app styling on navigation and uses the next event’s own 
     location.hash = '#settings';
     window.dispatchEvent(new Event('hashchange'));
   });
-  expect(rootStyle('--body-font')).toBe('');
+  expect(rootStyle('--heading-font')).toBe('');
   expect(
     document.documentElement.getAttribute('data-event-appearance'),
   ).toBeNull();
@@ -555,7 +557,7 @@ it('restores ordinary app styling on navigation and uses the next event’s own 
     }),
   });
   expect(rootStyle('--paper')).toBe('#e5f3ff');
-  expect(rootStyle('--body-font')).toContain('Source Sans 3');
+  expect(rootStyle('--heading-font')).toContain('Bungee Shade');
 });
 
 it('themes only the current authorized signed-out preview and clears it on leaving the link', async () => {
@@ -580,14 +582,14 @@ it('themes only the current authorized signed-out preview and clears it on leavi
     },
   });
   expect(rootStyle('--paper')).toBe('#33211e');
-  expect(rootStyle('--wordmark-font')).toContain('Monoton');
-  expect(rootStyle('--body-font')).toContain('Source Sans 3');
+  expect(rootStyle('--heading-font')).toContain('Monoton');
+  expect(rootStyle('--body-font')).toBe('');
   await act(async () => {
     location.hash = '';
     window.dispatchEvent(new Event('hashchange'));
   });
   expect(rootStyle('--paper')).toBe('');
-  expect(rootStyle('--body-font')).toBe('');
+  expect(rootStyle('--heading-font')).toBe('');
   expect(renderer.root.findAllByType(EventPreview)).toHaveLength(0);
 });
 

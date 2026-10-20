@@ -20,7 +20,6 @@
   background: var(--paper);
   --body-font: 'Source Sans 3', system-ui, sans-serif;
   --heading-font: 'Source Sans 3', system-ui, sans-serif;
-  --wordmark-font: 'Caveat', cursive;
   --heading-weight: 600;
   --detail: #171717;
   --control-line: #d4d4d4;
@@ -100,10 +99,11 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   min-height: 48px;
-  font-family: var(--wordmark-font);
+  /* Event fonts stay inside the page; the logo keeps its own face. */
+  font-family: 'Caveat', cursive;
   font-style: normal;
   font-size: 37px;
-  font-weight: var(--wordmark-weight, 700);
+  font-weight: 700;
   line-height: 1.2;
   color: var(--ink);
   text-decoration: none;
@@ -2091,20 +2091,6 @@ a.profile-tab {
 [data-event-appearance] .site-name,
 [data-event-appearance] .event-detail-row svg {
   color: var(--detail);
-}
-@media (min-width: 900px) {
-  :is(
-      [data-event-font='bungee-shade'],
-      [data-event-font='monoton'],
-      [data-event-font='fascinate-inline'],
-      [data-event-font='rubik-wet-paint']
-    )
-    .nav-brand {
-    /* Wide display faces must fit both the 48px monogram space and the
-       expanded sidebar. Keep the existing link height/touch target. */
-    padding-inline: 0;
-    font-size: 25px;
-  }
 }
 [data-event-appearance] [role='alert'] {
   color: var(--danger);

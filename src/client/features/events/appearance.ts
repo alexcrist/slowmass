@@ -213,65 +213,41 @@ export const pairings: Record<
     name: string;
     heading: string;
     headingWeight: number;
-    wordmark: string;
-    wordmarkWeight: number;
-    body: string;
   }
 > = {
   original: {
     name: 'Original',
     heading: sourceSans,
     headingWeight: 600,
-    wordmark: "'Caveat', cursive",
-    wordmarkWeight: 700,
-    body: sourceSans,
   },
   handwritten: {
     name: 'Handwritten',
     heading: "'Caveat', cursive",
     headingWeight: 700,
-    wordmark: "'Caveat', cursive",
-    wordmarkWeight: 700,
-    body: sourceSans,
   },
   classic: {
     name: 'Classic',
     heading: "'Fraunces', Georgia, serif",
     headingWeight: 700,
-    wordmark: "'Fraunces', Georgia, serif",
-    wordmarkWeight: 700,
-    body: sourceSans,
   },
   'bungee-shade': {
     name: 'Bungee Shade',
     heading: "'Bungee Shade', sans-serif",
     headingWeight: 400,
-    wordmark: "'Bungee Shade', sans-serif",
-    wordmarkWeight: 400,
-    body: sourceSans,
   },
   monoton: {
     name: 'Monoton',
     heading: "'Monoton', sans-serif",
     headingWeight: 400,
-    wordmark: "'Monoton', sans-serif",
-    wordmarkWeight: 400,
-    body: sourceSans,
   },
   'fascinate-inline': {
     name: 'Fascinate Inline',
     heading: "'Fascinate Inline', sans-serif",
     headingWeight: 400,
-    wordmark: "'Fascinate Inline', sans-serif",
-    wordmarkWeight: 400,
-    body: sourceSans,
   },
   'rubik-wet-paint': {
     name: 'Rubik Wet Paint',
     heading: "'Rubik Wet Paint', sans-serif",
     headingWeight: 400,
-    wordmark: "'Rubik Wet Paint', sans-serif",
-    wordmarkWeight: 400,
-    body: sourceSans,
   },
 };

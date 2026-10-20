@@ -36,11 +36,8 @@ export function useEventAppearance(appearance?: EventAppearance) {
       '--viewer-hover':
         colorTheme === 'original' ? 'rgb(255 255 255 / 15%)' : palette.overlay,
       '--menu-shadow': `${palette.ink}14`,
-      '--body-font': fonts.body,
       '--heading-font': fonts.heading,
-      '--wordmark-font': fonts.wordmark,
       '--heading-weight': String(fonts.headingWeight),
-      '--wordmark-weight': String(fonts.wordmarkWeight),
       'color-scheme': palette.scheme,
     };
     const previous = Object.keys(properties).map((key) => ({

@@ -84,7 +84,7 @@ it('accepts only the curated contract, with complete presentation definitions', 
   ])
     expect(parseAppearance(value)).toBeNull();
 });
-it('applies the two font roles only during an event and restores root styles and browser color', async () => {
+it('applies heading fonts only during an event and restores root styles and browser color', async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   const { root, themeColor } = appearanceDocument();
   root.style.setProperty('--paper', 'ivory', 'important');
@@ -100,7 +100,7 @@ it('applies the two font roles only during an event and restores root styles and
   await act(async () => {
     renderer = create(createElement(Page));
   });
-  expect(root.style.getPropertyValue('--body-font')).toBe('');
+  expect(root.style.getPropertyValue('--heading-font')).toBe('');
   expect(root.getAttribute('data-event-appearance')).toBeNull();
   await act(async () =>
     renderer?.update(
@@ -109,15 +109,12 @@ it('applies the two font roles only during an event and restores root styles and
       }),
     ),
   );
-  expect(root.style.getPropertyValue('--body-font')).toBe(
-    pairings.classic.body,
-  );
-  expect(root.style.getPropertyValue('--wordmark-font')).toBe(
-    pairings.classic.heading,
-  );
   expect(root.style.getPropertyValue('--heading-font')).toBe(
     pairings.classic.heading,
   );
+  // Body text, navigation, and the logo keep the app's own faces.
+  expect(root.style.getPropertyValue('--body-font')).toBe('');
+  expect(root.style.getPropertyValue('--wordmark-font')).toBe('');
   expect(root.style.getPropertyValue('--ink')).toBe(palettes.wine.ink);
   expect(root.style.getPropertyValue('--control-line')).toBe(
     palettes.wine.controlLine,
@@ -131,19 +128,17 @@ it('applies the two font roles only during an event and restores root styles and
       }),
     ),
   );
-  expect(root.style.getPropertyValue('--body-font')).toBe(
-    pairings['bungee-shade'].body,
+  expect(root.style.getPropertyValue('--heading-font')).toBe(
+    pairings['bungee-shade'].heading,
   );
   expect(root.style.getPropertyValue('--heading-weight')).toBe('400');
-  expect(root.style.getPropertyValue('--wordmark-weight')).toBe('400');
   expect(root.getAttribute('data-event-appearance')).toBe('pool');
   await act(async () => renderer?.update(createElement(Page)));
   expect(root.style.getPropertyValue('--paper')).toBe('ivory');
   expect(root.style.getPropertyPriority('--paper')).toBe('important');
   expect(root.style.getPropertyValue('--unrelated')).toBe('keep');
-  expect(root.style.getPropertyValue('--body-font')).toBe('');
+  expect(root.style.getPropertyValue('--heading-font')).toBe('');
   expect(root.style.getPropertyValue('--heading-weight')).toBe('');
-  expect(root.style.getPropertyValue('--wordmark-weight')).toBe('');
   expect(root.getAttribute('data-event-appearance')).toBeNull();
   expect(root.getAttribute('data-event-font')).toBeNull();
   expect(themeColor.getAttribute('content')).toBe('#ffffff');
@@ -171,6 +166,8 @@ it('ships local content-addressed fonts without preloading unselected faces', ()
   // Normal app styles never select extra faces. Opening the Fonts dialog
   // references the catalog for previews; there is still no global preload.
   const global = readFileSync('src/client/styles.css', 'utf8');
+  // The logo in the sidebar and phone header never takes an event face.
+  expect(global).toMatch(/\.site-name \{[^}]*font-family: 'Caveat', cursive;/);
   const html = readFileSync('index.html', 'utf8');
   expect(html).not.toMatch(/rel=["']preload["']/);
   for (const name of [
