@@ -27,6 +27,9 @@ bootstrap.get('/', async (c) => {
     : [null, false, false];
   return c.json({
     signInAvailable,
+    googleSignInAvailable: Boolean(
+      signInAvailable && c.env.GOOGLE_CLIENT_ID && c.env.GOOGLE_CLIENT_SECRET,
+    ),
     user,
     profile,
     deviceSetupPending: pending,

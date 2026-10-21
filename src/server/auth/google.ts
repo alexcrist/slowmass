@@ -114,8 +114,8 @@ export function signInPolicy(env: Env): BetterAuthPlugin {
             ctx.body.callbackURL = destination;
             ctx.body.newUserCallbackURL = destination;
             ctx.body.errorCallbackURL = source
-              ? `/?error=${source}#${source}/${link}`
-              : '/?error=signin';
+              ? `/?auth=google&error=${source}#${source}/${link}`
+              : '/?auth=google&error=signin';
             // Do not carry client-supplied state fields across the redirect.
             ctx.body.additionalData = undefined;
           }),

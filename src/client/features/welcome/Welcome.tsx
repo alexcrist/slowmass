@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createAuthClient } from 'better-auth/react';
 import { magicLinkClient } from 'better-auth/client/plugins';
 import { PasteLoginLink } from './PasteLoginLink';
+import { GoogleSignIn } from './GoogleSignIn';
 import { LoginSubmit } from './LoginSubmit';
 import { MemberApp } from '../people';
 import { EventPreview, type EventPreviewDetails } from '../events';
@@ -46,13 +47,36 @@ export function Welcome() {
   const [state, setState] = useState<State>('loading');
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [googleAvailable, setGoogleAvailable] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const requestingGoogle = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    const resumed = () => {
+      if (!requestingGoogle.current) return;
+      requestingGoogle.current = false;
+      setBusy(false);
+      setGoogleBusy(false);
+    };
+    window.addEventListener('pageshow', resumed);
+    return () => {
+      mounted.current = false;
+      window.removeEventListener('pageshow', resumed);
+    };
+  }, []);
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
-  const [failedLink, setFailedLink] = useState(() =>
-    new URLSearchParams(location.search).has('error'),
+  const [failedLink, setFailedLink] = useState(
+    () =>
+      new URLSearchParams(location.search).has('error') &&
+      new URLSearchParams(location.search).get('auth') !== 'google',
   );
   const [message, setMessage] = useState(() => {
-    const error = new URLSearchParams(location.search).get('error');
+    const params = new URLSearchParams(location.search);
+    const error = params.get('error');
+    if (error !== null && params.get('auth') === 'google')
+      return 'Google sign-in wasn’t completed. Try again or use an email link. New here? Open your invitation first.';
     return error === 'event'
       ? 'That sign-in link could not be used for this event. It may be over or cancelled, or its link may no longer work.'
       : error === 'invite'
@@ -95,6 +119,7 @@ export function Welcome() {
         const status = await loadStartup(controller.signal);
         if (controller.signal.aborted) return;
         setMember(status.user ? signedIn(status) : null);
+        setGoogleAvailable(status.googleSignInAvailable === true);
         if (!controller.signal.aborted)
           setState(status.signInAvailable ? 'ready' : 'unavailable');
       } catch {
@@ -213,7 +238,7 @@ export function Welcome() {
   // A working link signs in through it; otherwise sign in normally.
   const working = link && checked ? { ...link, ...checked } : null;
   async function requestSignIn() {
-    if (requestingLink.current) return;
+    if (requestingLink.current || requestingGoogle.current) return;
     requestingLink.current = true;
     const revision = linkRevision.current;
     setBusy(true);
@@ -271,6 +296,50 @@ export function Welcome() {
     }
   }
 
+  async function requestGoogleSignIn() {
+    if (requestingGoogle.current || requestingLink.current) return;
+    requestingGoogle.current = true;
+    const revision = linkRevision.current;
+    setBusy(true);
+    setGoogleBusy(true);
+    setMessage('');
+    let redirecting = false;
+    try {
+      const result = await auth.signIn.social({
+        provider: 'google',
+        disableRedirect: true,
+        ...(working
+          ? {
+              additionalData: {
+                [working.kind === 'event' ? 'eventLink' : 'inviteLink']:
+                  working.token,
+              },
+            }
+          : {}),
+      });
+      if (!mounted.current || revision !== linkRevision.current) return;
+      if (result.error || !result.data?.url)
+        throw new Error('Google sign-in failed');
+      // Only the auth library's Google authorization URL can leave this page.
+      const destination = new URL(result.data.url);
+      if (destination.origin !== 'https://accounts.google.com')
+        throw new Error('Unexpected sign-in destination');
+      location.assign(destination.href);
+      redirecting = true;
+    } catch {
+      if (mounted.current && revision === linkRevision.current)
+        setMessage(
+          'Couldn’t start Google sign-in. Try again or use an email link. If your invitation expired, ask for a new link.',
+        );
+    } finally {
+      if (!redirecting) requestingGoogle.current = false;
+      if (mounted.current && !redirecting) {
+        setBusy(false);
+        setGoogleBusy(false);
+      }
+    }
+  }
+
   async function signOut() {
     setBusy(true);
     setMessage('');
@@ -325,9 +394,11 @@ export function Welcome() {
                   <p className="status-copy">
                     {checked?.open === false
                       ? 'This event isn’t taking new members. If you already use slowmass, sign in to see the details.'
-                      : 'Enter your email to see details and RSVP.'}
+                      : googleAvailable
+                        ? 'Sign in to see details and RSVP.'
+                        : 'Enter your email to see details and RSVP.'}
                   </p>
-                  {checked?.open && (
+                  {checked?.open && !googleAvailable && (
                     <p className="status-copy">We’ll send a sign-in link.</p>
                   )}
                 </div>
@@ -338,7 +409,9 @@ export function Welcome() {
               <h1>You’re invited to slowmass</h1>
               {!sent && (
                 <p className="status-copy">
-                  Enter your email to join. We’ll send a sign-in link.
+                  {googleAvailable
+                    ? 'Choose how to sign in to join.'
+                    : 'Enter your email to join. We’ll send a sign-in link.'}
                 </p>
               )}
             </>
@@ -351,7 +424,9 @@ export function Welcome() {
                     ? 'This event link isn’t available. The event may have ended, or the link may no longer work.'
                     : link
                       ? 'This invite link isn’t available. It may have expired; ask your friend for a new one. Members can sign in below.'
-                      : 'Sign in with your email. New here? Ask a member to text you an invite link.'}
+                      : googleAvailable
+                        ? 'New here? Ask a member to text you an invite link.'
+                        : 'Sign in with your email. New here? Ask a member to text you an invite link.'}
                 </p>
               )}
             </>
@@ -436,50 +511,63 @@ export function Welcome() {
               <p role="status">{`Checking this ${link.kind} link…`}</p>
             )
           ) : (
-            <form
-              onSubmit={(submit) => {
-                submit.preventDefault();
-                void requestSignIn();
-              }}
-              aria-busy={busy}
-            >
-              <label className="field-label" htmlFor="email">
-                Your email
-              </label>
-              <div className={failedLink ? undefined : 'joined-field'}>
-                <input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  maxLength={254}
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="you@example.com"
-                  disabled={busy}
-                />
-                {!failedLink && (
-                  <LoginSubmit
-                    label={busy ? 'Requesting your link…' : 'Send sign-in link'}
-                    busy={busy}
+            <>
+              <form
+                onSubmit={(submit) => {
+                  submit.preventDefault();
+                  void requestSignIn();
+                }}
+                aria-busy={busy}
+              >
+                <label className="field-label" htmlFor="email">
+                  Your email
+                </label>
+                <div className={failedLink ? undefined : 'joined-field'}>
+                  <input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    maxLength={254}
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    placeholder="you@example.com"
+                    disabled={busy}
                   />
+                  {!failedLink && (
+                    <LoginSubmit
+                      label={
+                        busy && !googleBusy
+                          ? 'Requesting your link…'
+                          : 'Send sign-in link'
+                      }
+                      busy={busy}
+                    />
+                  )}
+                </div>
+                {failedLink && (
+                  <button
+                    type="submit"
+                    className="primary-button"
+                    disabled={busy}
+                  >
+                    {busy ? 'Sending…' : 'Send a new link'}
+                  </button>
                 )}
-              </div>
-              {failedLink && (
-                <button
-                  type="submit"
-                  className="primary-button"
+                {busy && !googleBusy && (
+                  <p className="visually-hidden" role="status">
+                    Requesting your link…
+                  </p>
+                )}
+              </form>
+              {googleAvailable && (
+                <GoogleSignIn
+                  busy={googleBusy}
                   disabled={busy}
-                >
-                  {busy ? 'Sending…' : 'Send a new link'}
-                </button>
+                  onClick={() => void requestGoogleSignIn()}
+                />
               )}
-              {busy && (
-                <p className="visually-hidden" role="status">
-                  Requesting your link…
-                </p>
-              )}
-            </form>
+            </>
           )}
           {name === null && state === 'ready' && <PasteLoginLink />}
         </div>

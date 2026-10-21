@@ -116,7 +116,9 @@ These device checks require owner observations; do not perform browser or visual
 - [x] Implement backend account linking and consumer Gmail alias matching, preserving stored account IDs and invitation provenance; verify through synthetic Workers/D1 OAuth integration tests.
 - [x] Audit production alias/provider collisions using aggregate read-only queries; no collisions found on October 21, 2026.
 - [x] Draft the public privacy notice and implement the small homepage description/link locally; verify signed-out, script-free access through the Workers assets runtime.
-- [ ] Publish the public privacy page and homepage footer; complete Google's branding review and publishing requirements.
-- [ ] Repeat the audit and apply manual migration 0036 with the backup/maintenance runbook before backend rollout.
-- [ ] Add Google sign-in controls to regular, invite-link, and event-link flows only after the preceding setup is ready.
-- [ ] Deploy and verify hosted Google sign-in and existing email-link recovery. Local tests are not live-provider verification.
+- [x] Publish the public privacy page and homepage footer; complete Google's branding review and publishing requirements.
+- [x] Repeat the audit and apply manual migration 0036 with the backup/maintenance runbook before backend rollout.
+- [x] Implement Google sign-in controls for regular, invite-link, and event-link flows, with provider availability, pending/error recovery, and a synthetic local review page.
+- [x] Complete owner visual review using [the review checklist](google-sign-in-review.md); approved email first, Google second. Release controls only after the migration gate.
+- [x] Deploy Google controls/backend and verify public assets, private boundaries, provider availability, and authorization initiation by HTTP.
+- [ ] Verify completed Google sign-in and magic-link account reuse with real accounts for normal, invite, and event flows. Local tests and authorization initiation are not complete live-provider verification.

@@ -475,3 +475,38 @@ it('preserves the existing provider owner when a Google email changes and denies
       .first(),
   ).toBeNull();
 });
+
+it('advertises configured Google sign-in without exposing credentials', async () => {
+  const response = await runtime.request(null, '/api/bootstrap');
+  const data = await response.json();
+  expect(data).toMatchObject({ googleSignInAvailable: true, user: null });
+  expect(JSON.stringify(data)).not.toContain('synthetic-google-client');
+});
+
+it.each(['normal', 'invite', 'event'] as const)(
+  'preserves %s context and Google recovery copy on cancellation',
+  async (kind) => {
+    const token =
+      kind === 'invite'
+        ? await invite()
+        : kind === 'event'
+          ? await event()
+          : null;
+    const flow = await begin(
+      token
+        ? { [kind === 'event' ? 'eventLink' : 'inviteLink']: token }
+        : undefined,
+    );
+    const response = await runtime.worker.dispatchFetch(
+      `http://localhost:8787/api/auth/callback/google?state=${encodeURIComponent(flow.url.searchParams.get('state')!)}&error=access_denied`,
+      { headers: { Cookie: flow.cookie, ...headers() }, redirect: 'manual' },
+    );
+    const destination = new URL(
+      response.headers.get('Location')!,
+      'http://localhost:8787',
+    );
+    expect(destination.searchParams.get('auth')).toBe('google');
+    expect(destination.hash).toBe(token ? `#${kind}/${token}` : '');
+    expect(signedIn(response)).toBe(false);
+  },
+);

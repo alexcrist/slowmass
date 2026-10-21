@@ -2461,3 +2461,55 @@ textarea::placeholder {
   color: var(--ink);
   font: inherit;
 }
+
+@font-face {
+  font-family: 'Google Sans Sign In';
+  src: url('/identity/google-sans-medium.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+.google-sign-in-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #747775;
+  border-radius: 4px;
+  background: #fff;
+  color: #1f1f1f;
+  font:
+    500 14px/20px 'Google Sans Sign In',
+    sans-serif;
+}
+.google-sign-in-button:hover:not(:disabled) {
+  background: #f2f2f2;
+}
+.google-sign-in-button:disabled {
+  background: #fff;
+  color: #1f1f1f;
+  opacity: 0.6;
+}
+.google-sign-in-button img {
+  object-fit: contain;
+  flex: 0 0 20px;
+  background: #fff;
+}
+.sign-in-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.sign-in-divider::before,
+.sign-in-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}

@@ -94,6 +94,7 @@ it('serves independent signed-in startup requests during cold-start cancellation
           expect(response.status).toBe(200);
           expect(await response.json()).toEqual({
             signInAvailable: true,
+            googleSignInAvailable: false,
             deviceSetupPending: true,
             pushSubscribed: false,
             user: { id, name: id },

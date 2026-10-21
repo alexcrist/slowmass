@@ -11,3 +11,5 @@ Backups may contain earlier content until expiration. Restores are quarantined, 
 Deletion also removes email-bound claims for the deleting account. Inactivity immediately stops their invite and event links from admitting anyone; bounded cleanup also revokes their invite link and clears its encrypted credential. Immutable link/redemption provenance, including recorded link versions, remains.
 
 Deletion removes pending event-link claims for the email immediately. Scheduled cleanup ends events the person created (cover photos to cleanup, link ciphertext cleared, details redacted), removes hosting rows and answers, and redacts their event messages in bounded batches; completion waits for all of them.
+
+Bootstrap also reports `googleSignInAvailable`, true only when authentication and both Google credentials are configured. This public capability flag contains no credential values and does not grant sign-in or admission. Older responses without the flag keep the client email-only.

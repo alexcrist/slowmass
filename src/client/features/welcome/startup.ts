@@ -1,6 +1,7 @@
 import type { Profile } from '../people';
 export type Bootstrap = {
   signInAvailable: boolean;
+  googleSignInAvailable?: boolean;
   user: { id: string; name: string } | null;
   profile: Profile | null;
   // Optional so an earlier Worker's response still starts the app.
@@ -14,6 +15,11 @@ function validBootstrap(value: unknown): value is Bootstrap {
     typeof value.signInAvailable !== 'boolean' ||
     !('user' in value) ||
     !('profile' in value)
+  )
+    return false;
+  if (
+    'googleSignInAvailable' in value &&
+    typeof value.googleSignInAvailable !== 'boolean'
   )
     return false;
   const { user, profile } = value;

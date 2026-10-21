@@ -4,9 +4,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Welcome } from '../src/client/features/welcome/Welcome';
 import { MemberApp } from '../src/client/features/people/MemberApp';
 
-const auth = vi.hoisted(() => ({ magicLink: vi.fn() }));
+const auth = vi.hoisted(() => ({ magicLink: vi.fn(), social: vi.fn() }));
 vi.mock('better-auth/react', () => ({
-  createAuthClient: () => ({ signIn: { magicLink: auth.magicLink } }),
+  createAuthClient: () => ({
+    signIn: { magicLink: auth.magicLink, social: auth.social },
+  }),
 }));
 vi.mock('better-auth/client/plugins', () => ({ magicLinkClient: vi.fn() }));
 
@@ -30,6 +32,7 @@ const eventId = '12345678-1234-4234-8234-123456789abc';
 beforeEach(() => {
   vi.useFakeTimers();
   requests = [];
+  auth.social.mockReset();
   auth.magicLink.mockReset().mockResolvedValue({ error: null });
   const windowEvents = new EventTarget();
   const documentEvents = new EventTarget();
@@ -117,12 +120,15 @@ const confirmation = () =>
       (node) =>
         node.children.join('') === 'Open the sign-in link in your email.',
     );
-async function openSignIn(kind: 'regular' | 'invite' | 'event' = 'regular') {
+async function openSignIn(
+  kind: 'regular' | 'invite' | 'event' = 'regular',
+  google = false,
+) {
   location.hash = kind === 'regular' ? '' : `#${kind}/${token}`;
   await act(async () => {
     renderer = create(createElement(Welcome));
   });
-  await reply(signedOut);
+  await reply({ ...signedOut, googleSignInAvailable: google });
   if (kind === 'invite')
     await reply({ available: true }, 200, pending('/api/invite-link/check'));
   if (kind === 'event')
@@ -409,4 +415,107 @@ it('supports display-mode installed apps and consumes pasted links inside that w
     'https://slowmass.com/api/auth/magic-link/verify?token=unused&callbackURL=%2F&errorCallbackURL=%2F%3Ferror%3Dsignin',
   );
   expect(input.props.value).toBe('');
+});
+
+it.each(['regular', 'invite', 'event'] as const)(
+  'starts Google from %s with the original invitation and no email requirement',
+  async (kind) => {
+    auth.social.mockResolvedValue({
+      data: {
+        url: 'https://accounts.google.com/o/oauth2/v2/auth?state=synthetic',
+      },
+    });
+    await openSignIn(kind, true);
+    await click('Continue with Google');
+    expect(auth.social).toHaveBeenCalledWith({
+      provider: 'google',
+      disableRedirect: true,
+      ...(kind === 'regular'
+        ? {}
+        : {
+            additionalData: {
+              [kind === 'event' ? 'eventLink' : 'inviteLink']: token,
+            },
+          }),
+    });
+    expect(auth.magicLink).not.toHaveBeenCalled();
+    expect(location.assign).toHaveBeenCalledOnce();
+    expect(button('Continue with Google')!.props.disabled).toBe(true);
+    await emit('pageshow');
+    expect(button('Continue with Google')!.props.disabled).toBe(false);
+  },
+);
+
+it('hides Google when unavailable and after choosing email', async () => {
+  await openSignIn();
+  expect(button('Continue with Google')).toBeUndefined();
+  await act(async () => renderer.unmount());
+  await openSignIn('invite', true);
+  await submitEmail();
+  expect(confirmation()).toBe(true);
+  expect(button('Continue with Google')).toBeUndefined();
+});
+
+it('suppresses duplicate Google requests and restores both choices on failure', async () => {
+  let resolve!: (value: unknown) => void;
+  auth.social.mockImplementation(
+    () =>
+      new Promise((done) => {
+        resolve = done;
+      }),
+  );
+  await openSignIn('regular', true);
+  const onClick = button('Continue with Google')!.props.onClick;
+  await act(async () => {
+    onClick();
+    onClick();
+  });
+  expect(auth.social).toHaveBeenCalledOnce();
+  expect(renderer.root.findByProps({ id: 'email' }).props.disabled).toBe(true);
+  await act(async () => resolve({ error: { code: 'FORBIDDEN' } }));
+  expect(button('Continue with Google')!.props.disabled).toBe(false);
+  expect(renderer.root.findByProps({ id: 'email' }).props.disabled).toBe(false);
+  expect(
+    renderer.root.findByProps({ role: 'alert' }).children.join(''),
+  ).toContain('Couldn’t start Google sign-in');
+  expect(location.assign).not.toHaveBeenCalled();
+});
+
+it('ignores a Google response after navigating to a different invitation', async () => {
+  let resolve!: (value: unknown) => void;
+  auth.social.mockImplementation(
+    () =>
+      new Promise((done) => {
+        resolve = done;
+      }),
+  );
+  await openSignIn('invite', true);
+  await click('Continue with Google');
+  location.hash = '#invite/' + 'c'.repeat(48);
+  await emit('hashchange');
+  await act(async () =>
+    resolve({
+      data: { url: 'https://accounts.google.com/o/oauth2/v2/auth?state=old' },
+    }),
+  );
+  expect(location.assign).not.toHaveBeenCalled();
+});
+
+it('shows Google cancellation recovery without describing an expired email', async () => {
+  location.search = '?auth=google&error=access_denied';
+  await openSignIn('event', true);
+  expect(
+    renderer.root.findByProps({ role: 'alert' }).children.join(''),
+  ).toContain('Google sign-in wasn’t completed');
+  expect(button('Continue with Google')).toBeDefined();
+});
+
+it('rejects an unexpected redirect destination', async () => {
+  auth.social.mockResolvedValue({
+    data: { url: 'https://example.com/not-google' },
+  });
+  await openSignIn('regular', true);
+  await click('Continue with Google');
+  expect(location.assign).not.toHaveBeenCalled();
+  expect(button('Continue with Google')!.props.disabled).toBe(false);
 });

@@ -14,6 +14,7 @@ it('returns availability, session and only the current member profile in one pri
   expect(guest.headers.get('Server-Timing')).toContain('app;dur=');
   expect(await guest.json()).toEqual({
     signInAvailable: true,
+    googleSignInAvailable: false,
     deviceSetupPending: false,
     pushSubscribed: false,
     user: null,
@@ -23,6 +24,7 @@ it('returns availability, session and only the current member profile in one pri
     await (await runtime.request('alice', '/api/bootstrap')).json(),
   ).toEqual({
     signInAvailable: true,
+    googleSignInAvailable: false,
     deviceSetupPending: true,
     pushSubscribed: false,
     user: { id: 'alice', name: 'alice' },
@@ -45,6 +47,7 @@ it('returns availability, session and only the current member profile in one pri
   expect(await (await runtime.request('bob', '/api/bootstrap')).json()).toEqual(
     {
       signInAvailable: true,
+      googleSignInAvailable: false,
       deviceSetupPending: true,
       pushSubscribed: false,
       user: { id: 'bob', name: 'bob' },
@@ -60,6 +63,7 @@ it('returns availability, session and only the current member profile in one pri
     await (await runtime.request('alice', '/api/bootstrap')).json(),
   ).toEqual({
     signInAvailable: true,
+    googleSignInAvailable: false,
     deviceSetupPending: false,
     pushSubscribed: false,
     user: null,
@@ -71,6 +75,7 @@ it('returns availability, session and only the current member profile in one pri
   expect(await (await runtime.request('bob', '/api/bootstrap')).json()).toEqual(
     {
       signInAvailable: true,
+      googleSignInAvailable: false,
       deviceSetupPending: false,
       pushSubscribed: false,
       user: null,
