@@ -1,4 +1,5 @@
 import { invitationTokenHash } from './credential';
+import { SIGN_IN_LINK_SECONDS } from '../../shared/sign-in';
 
 // Joining slowmass by signing in through a member's invite link. The
 // invite-links feature issues and renews links; this module decides whether a
@@ -47,7 +48,7 @@ export async function bindInviteVerification(
       await invitationTokenHash(verificationToken),
       crypto.randomUUID(),
       email.trim().toLowerCase(),
-      now + 600_000,
+      now + SIGN_IN_LINK_SECONDS * 1000,
       await invitationTokenHash(link),
       now,
     )

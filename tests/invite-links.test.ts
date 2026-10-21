@@ -359,7 +359,9 @@ it.each([
         .run();
     const response = await verify(message);
     expect(signedIn(response)).toBe(false);
-    expect(response.headers.get('Location')).toMatch(/\/\?error=invite$/);
+    expect(response.headers.get('Location')).toBe(
+      `/?error=invite#invite/${link.token}`,
+    );
     expect(await source('new@example.com')).toBeNull();
     // Bob's own email still works.
     expect(signedIn(await verify())).toBe(true);

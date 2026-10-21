@@ -1,4 +1,5 @@
 import { invitationTokenHash } from './credential';
+import { SIGN_IN_LINK_SECONDS } from '../../shared/sign-in';
 
 // Event admission: who may open or answer an event, and joining slowmass by
 // signing in through an event link. The events feature owns everything else
@@ -98,7 +99,7 @@ export async function bindEventVerification(
       await invitationTokenHash(verificationToken),
       crypto.randomUUID(),
       email.trim().toLowerCase(),
-      now + 600_000,
+      now + SIGN_IN_LINK_SECONDS * 1000,
       await invitationTokenHash(link),
       ...(member ? [] : [now]),
     )

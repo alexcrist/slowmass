@@ -32,6 +32,7 @@ Exit: one authenticated user can submit an image to a private test path and retr
 
 - [x] Implement onboarding, unique handles, private profile reads/edits, exact-handle lookup, and avatar processing.
 - [x] Implement invitation eligibility and permanent inviter attribution, through member invite links and event-link joining.
+- [x] Give newly issued sign-in emails a four-hour lifetime and provide resend recovery for regular, invite, event, and installed-app flows; verify expiry, single use, and preserved invitation provenance against local Workers/D1.
 - [x] Implement follow request/cancel/accept/deny, unfollow, follower removal, and block/unblock.
 - [x] Enforce feature dependency boundaries and active-membership access.
 - [x] Establish private-profile/post access predicates.

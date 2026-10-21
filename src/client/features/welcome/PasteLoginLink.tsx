@@ -2,15 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { loginLinkTarget } from './login-link';
 import { LoginSubmit } from './LoginSubmit';
 
-export function PasteLoginLink({
-  onResend,
-  resending = false,
-  resendStatus = '',
-}: {
-  onResend?: () => void;
-  resending?: boolean;
-  resendStatus?: string;
-}) {
+export function PasteLoginLink() {
   const [link, setLink] = useState('');
   const [error, setError] = useState('');
   function submit(event: FormEvent) {
@@ -65,20 +57,6 @@ export function PasteLoginLink({
           </p>
         )}
       </form>
-      {onResend && (
-        <div>
-          <p>Already opened it, or has it expired?</p>
-          <button
-            type="button"
-            className="text-button"
-            disabled={resending}
-            onClick={onResend}
-          >
-            {resending ? 'Sending…' : 'Send a new link'}
-          </button>
-          {resendStatus && <p role="status">{resendStatus}</p>}
-        </div>
-      )}
     </details>
   );
 }

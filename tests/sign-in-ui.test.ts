@@ -117,7 +117,7 @@ const confirmation = () =>
       (node) =>
         node.children.join('') === 'Open the sign-in link in your email.',
     );
-async function requestLink(kind: 'regular' | 'invite' | 'event' = 'regular') {
+async function openSignIn(kind: 'regular' | 'invite' | 'event' = 'regular') {
   location.hash = kind === 'regular' ? '' : `#${kind}/${token}`;
   await act(async () => {
     renderer = create(createElement(Welcome));
@@ -131,6 +131,8 @@ async function requestLink(kind: 'regular' | 'invite' | 'event' = 'regular') {
       200,
       pending('/api/event-link'),
     );
+}
+async function submitEmail() {
   await act(async () =>
     renderer.root
       .findByProps({ id: 'email' })
@@ -138,6 +140,10 @@ async function requestLink(kind: 'regular' | 'invite' | 'event' = 'regular') {
   );
   const form = renderer.root.findByProps({ id: 'email' }).parent!.parent!;
   await act(async () => form.props.onSubmit({ preventDefault: vi.fn() }));
+}
+async function requestLink(kind: 'regular' | 'invite' | 'event' = 'regular') {
+  await openSignIn(kind);
+  await submitEmail();
 }
 
 it.each(['regular', 'invite', 'event'] as const)(
@@ -152,6 +158,9 @@ it.each(['regular', 'invite', 'event'] as const)(
     expect(button('Try again')).toBeUndefined();
     expect(renderer.root.findAllByType('details')).toHaveLength(0);
     expect(renderer.root.findAllByProps({ id: 'email' })).toHaveLength(0);
+    expect(JSON.stringify(renderer.toJSON())).toContain('hours.');
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('10 minutes');
+    expect(button('Send a new link')).toBeDefined();
     await emit('focus');
     await emit('visibilitychange');
     expect(
@@ -235,21 +244,23 @@ it('aborts a pending resume check and removes listeners on unmount', async () =>
   expect(requests).toHaveLength(2);
 });
 
-it.each(['regular', 'invite', 'event'] as const)(
-  'keeps installed-app %s recovery collapsed and resends the same request',
-  async (kind) => {
-    Object.assign(navigator, { standalone: true });
+it.each(
+  (['regular', 'invite', 'event'] as const).flatMap((kind) =>
+    [false, true].map((installed) => ({ kind, installed })),
+  ),
+)(
+  'resends $kind with the same invitation (installed: $installed)',
+  async ({ kind, installed }) => {
+    Object.assign(navigator, { standalone: installed });
     await requestLink(kind);
-    const help = renderer.root.findByType('details');
-    expect(help.props.open).not.toBe(true);
-    expect(help.findByType('summary').children).toEqual([
-      'Trouble signing in?',
-    ]);
-    expect(
-      help
-        .findAllByType('button')
-        .some((node) => node.children.join('') === 'Send a new link'),
-    ).toBe(true);
+    if (installed) {
+      const help = renderer.root.findByType('details');
+      expect(help.props.open).not.toBe(true);
+      expect(help.findByType('summary').children).toEqual([
+        'Trouble signing in?',
+      ]);
+      expect(help.findAllByProps({ type: 'button' })).toHaveLength(0);
+    }
     const original = auth.magicLink.mock.calls[0][0];
     expect(original.email).toBe('guest@example.com');
     if (kind === 'event')
@@ -273,10 +284,61 @@ it.each(['regular', 'invite', 'event'] as const)(
     expect(button('Sending…')!.props.disabled).toBe(true);
     expect(auth.magicLink.mock.calls[1][0]).toEqual(original);
     await act(async () => finish({ error: null }));
-    expect(help.findByProps({ role: 'status' }).children.join('')).toContain(
-      'New link requested',
-    );
+    expect(
+      renderer.root.findByProps({ role: 'status' }).children.join(''),
+    ).toContain('New link requested');
     expect(renderer.root.findAllByProps({ id: 'email' })).toHaveLength(0);
+  },
+);
+
+it.each(['regular', 'invite', 'event'] as const)(
+  'recovers an expired %s email link in a new browser after asking for the address',
+  async (kind) => {
+    location.search = '?error=INVALID_TOKEN';
+    await openSignIn(kind);
+    expect(auth.magicLink).not.toHaveBeenCalled();
+    expect(renderer.root.findByProps({ id: 'email' }).props.value).toBe('');
+    expect(
+      renderer.root.findByProps({ role: 'alert' }).children.join(''),
+    ).toContain('Enter your email below to send a new link');
+    expect(button('Send a new link')!.props.type).toBe('submit');
+    await submitEmail();
+    expect(confirmation()).toBe(true);
+    expect(renderer.root.findAllByProps({ role: 'alert' })).toHaveLength(0);
+    expect(auth.magicLink).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'guest@example.com',
+        ...(kind === 'regular'
+          ? {}
+          : {
+              metadata:
+                kind === 'invite'
+                  ? { inviteLink: token }
+                  : { eventLink: token },
+            }),
+      }),
+    );
+  },
+);
+
+it.each(['invite', 'event'] as const)(
+  'keeps %s recovery usable when the invitation stops admitting people',
+  async (kind) => {
+    location.search = '?error=INVALID_TOKEN';
+    await openSignIn(kind);
+    auth.magicLink.mockResolvedValueOnce({
+      error: { code: 'INVITATION_REQUIRED' },
+    });
+    await submitEmail();
+    expect(confirmation()).toBe(false);
+    expect(button('Send a new link')!.props.disabled).toBe(false);
+    expect(
+      renderer.root.findByProps({ role: 'alert' }).children.join(''),
+    ).toContain(
+      kind === 'invite'
+        ? 'ask your friend for a new link'
+        : 'ask the host for the current link',
+    );
   },
 );
 
@@ -297,6 +359,32 @@ it('keeps recovery usable after a failed resend without changing the address', a
   expect(auth.magicLink.mock.calls.map(([request]) => request.email)).toEqual(
     Array(3).fill('guest@example.com'),
   );
+});
+
+it('ignores a late resend confirmation after navigating to another invitation', async () => {
+  await requestLink('invite');
+  let finish!: (result: { error: null }) => void;
+  auth.magicLink.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await click('Send a new link');
+  location.hash = `#event/${'c'.repeat(48)}`;
+  await emit('hashchange');
+  await reply(
+    { event: { id: eventId, open: true } },
+    200,
+    pending('/api/event-link'),
+  );
+  await act(async () => finish({ error: null }));
+  expect(confirmation()).toBe(false);
+  expect(renderer.root.findAllByProps({ id: 'email' })).toHaveLength(1);
+  await submitEmail();
+  expect(auth.magicLink.mock.calls.at(-1)![0].metadata).toEqual({
+    eventLink: 'c'.repeat(48),
+  });
 });
 
 it('supports display-mode installed apps and consumes pasted links inside that window', async () => {

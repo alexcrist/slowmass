@@ -9,6 +9,7 @@ import { api, jsonRequest, onUnauthorized } from '../../api';
 import { clearLocalPush } from '../push';
 import { loadStartup, type Bootstrap } from './startup';
 import { currentRoute, normalizeEventPath } from '../../navigation';
+import { SIGN_IN_LINK_HOURS } from '../../../shared/sign-in';
 
 const auth = createAuthClient({ plugins: [magicLinkClient()] });
 type State = 'loading' | 'ready' | 'unavailable' | 'error';
@@ -47,6 +48,9 @@ export function Welcome() {
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
+  const [failedLink, setFailedLink] = useState(() =>
+    new URLSearchParams(location.search).has('error'),
+  );
   const [message, setMessage] = useState(() => {
     const error = new URLSearchParams(location.search).get('error');
     return error === 'event'
@@ -54,7 +58,7 @@ export function Welcome() {
       : error === 'invite'
         ? 'That sign-in link could not be used to join. The invite link may have expired; ask your friend for a new one.'
         : error !== null
-          ? 'That sign-in link could not be used. It may have expired or been used already. Request a new link below.'
+          ? 'That sign-in link could not be used. It may have expired or been used already. Enter your email below to send a new link.'
           : '';
   });
   const [link, setLink] = useState<Link | null>(currentLink);
@@ -67,6 +71,7 @@ export function Welcome() {
   const [resendStatus, setResendStatus] = useState('');
   const confirmationHeading = useRef<HTMLHeadingElement>(null);
   const requestingLink = useRef(false);
+  const linkRevision = useRef(0);
   const [member, setMember] = useState<Bootstrap | null>(null);
   // Member screens place their header controls here.
   const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
@@ -154,11 +159,14 @@ export function Welcome() {
       normalizeEventPath();
       const next = currentLink();
       if (next?.kind === link?.kind && next?.token === link?.token) return;
+      linkRevision.current += 1;
       setLink(next);
       setChecked(undefined);
       setLinkError(false);
       setSent(false);
+      setFailedLink(false);
       setMessage('');
+      setResendStatus('');
     };
     changed();
     window.addEventListener('hashchange', changed);
@@ -207,6 +215,7 @@ export function Welcome() {
   async function requestSignIn() {
     if (requestingLink.current) return;
     requestingLink.current = true;
+    const revision = linkRevision.current;
     setBusy(true);
     setMessage('');
     setResendStatus('');
@@ -227,6 +236,9 @@ export function Welcome() {
               }
             : { callbackURL: '/', errorCallbackURL: '/?error=signin' }),
       });
+      // Navigation to another invitation must not show this request's
+      // confirmation or let a resend silently switch the joining source.
+      if (revision !== linkRevision.current) return;
       if (result.error?.code === 'INVITATION_REQUIRED') {
         setMessage(
           working?.kind === 'event'
@@ -240,17 +252,19 @@ export function Welcome() {
       if (result.error) throw new Error('Sign-in failed');
       if (sent)
         setResendStatus(
-          'New link requested. Copy it from your email without opening it.',
+          'New link requested. Check your email, including spam.',
         );
       else {
         setLoginError(false);
         setLoginAttempt(0);
       }
       setSent(true);
+      setFailedLink(false);
     } catch {
-      setMessage(
-        'We couldn’t request a sign-in link. Wait a minute and try again.',
-      );
+      if (revision === linkRevision.current)
+        setMessage(
+          'We couldn’t request a sign-in link. Wait a minute and try again.',
+        );
     } finally {
       requestingLink.current = false;
       setBusy(false);
@@ -342,6 +356,11 @@ export function Welcome() {
             </>
           ))}
         <div className="sign-in-area">
+          {state === 'ready' && message && (
+            <p className="error-message" role="alert">
+              {message}
+            </p>
+          )}
           {state === 'loading' ? (
             <p role="status">Loading slowmass…</p>
           ) : state === 'error' || state === 'unavailable' ? (
@@ -372,8 +391,18 @@ export function Welcome() {
               </h2>
               <p className="status-copy">
                 Check <strong>{email.trim().toLowerCase()}</strong>, including
-                spam. The link works once and expires in 10 minutes.
+                spam. The link works once and expires in {SIGN_IN_LINK_HOURS}{' '}
+                hours.
               </p>
+              <button
+                type="button"
+                className="text-button"
+                disabled={busy}
+                onClick={() => void requestSignIn()}
+              >
+                {busy ? 'Sending…' : 'Send a new link'}
+              </button>
+              {resendStatus && <p role="status">{resendStatus}</p>}
               {checking && <p role="status">Checking sign-in…</p>}
               {loginError && (
                 <div>
@@ -416,7 +445,7 @@ export function Welcome() {
               <label className="field-label" htmlFor="email">
                 Your email
               </label>
-              <div className="joined-field">
+              <div className={failedLink ? undefined : 'joined-field'}>
                 <input
                   id="email"
                   type="email"
@@ -428,11 +457,22 @@ export function Welcome() {
                   placeholder="you@example.com"
                   disabled={busy}
                 />
-                <LoginSubmit
-                  label={busy ? 'Requesting your link…' : 'Send sign-in link'}
-                  busy={busy}
-                />
+                {!failedLink && (
+                  <LoginSubmit
+                    label={busy ? 'Requesting your link…' : 'Send sign-in link'}
+                    busy={busy}
+                  />
+                )}
               </div>
+              {failedLink && (
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={busy}
+                >
+                  {busy ? 'Sending…' : 'Send a new link'}
+                </button>
+              )}
               {busy && (
                 <p className="visually-hidden" role="status">
                   Requesting your link…
@@ -440,18 +480,7 @@ export function Welcome() {
               )}
             </form>
           )}
-          {name === null && state === 'ready' && (
-            <PasteLoginLink
-              onResend={sent ? () => void requestSignIn() : undefined}
-              resending={busy}
-              resendStatus={resendStatus}
-            />
-          )}
-          {state === 'ready' && message && (
-            <p className="error-message" role="alert">
-              {message}
-            </p>
-          )}
+          {name === null && state === 'ready' && <PasteLoginLink />}
         </div>
       </section>
     </main>

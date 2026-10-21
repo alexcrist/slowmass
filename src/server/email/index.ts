@@ -1,4 +1,5 @@
 import type { Env } from '../env';
+import { SIGN_IN_LINK_HOURS } from '../../shared/sign-in';
 
 export function emailConfigured(env: Env): boolean {
   return Boolean(env.RESEND_API_KEY && env.EMAIL_FROM);
@@ -47,7 +48,7 @@ export async function sendLoginEmail(
       env,
       email,
       'Your slowmass sign-in link',
-      `Use this link to confirm your email and sign in to slowmass:\n\n${url}\n\nIt expires in 10 minutes and can be used once. If you did not request it, you can ignore this email.`,
+      `Use this link to confirm your email and sign in to slowmass:\n\n${url}\n\nIt expires in ${SIGN_IN_LINK_HOURS} hours and can be used once. If you did not request it, you can ignore this email.`,
     ),
   );
 }

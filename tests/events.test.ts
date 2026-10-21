@@ -1631,7 +1631,7 @@ it('lets people join only by signing in through an event link, recording the lin
   await requestEmail('frank@example.com');
   await newLinkVersion(id);
   const rejected = await verify();
-  expect(rejected.headers.get('Location')).toMatch(/\/\?error=event$/);
+  expect(rejected.headers.get('Location')).toBe(`/?error=event#event/${token}`);
   expect(
     await runtime.db
       .prepare(
@@ -1918,7 +1918,9 @@ it('preserves admitted members and link provenance but rejects pending sign-ins 
   expect(
     (await runtime.request('alice', `/api/events/${id}`, 'DELETE')).status,
   ).toBe(200);
-  expect((await verify()).headers.get('Location')).toMatch(/\/\?error=event$/);
+  expect((await verify()).headers.get('Location')).toBe(
+    `/?error=event#event/${token}`,
+  );
   expect(await snapshot()).toEqual(before);
   expect((await requestEmail('new@example.com')).status).toBe(403);
   expect(

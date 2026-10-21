@@ -3,6 +3,7 @@ import { betterAuth } from 'better-auth';
 import type { Env } from '../env';
 import { authOptions } from './options';
 import { memberAccess } from '../membership';
+import { signInRecoveryPath } from '../../shared/sign-in';
 
 type Auth = ReturnType<typeof betterAuth>;
 export function createAuth(env: Env) {
@@ -53,9 +54,27 @@ async function authOperation<T>(
     clearTimeout(timer);
   }
 }
-export function handleAuthRequest(env: Env, request: Request) {
+export async function handleAuthRequest(env: Env, request: Request) {
   // Do not automatically replay auth mutations after an ambiguous timeout.
-  return authOperation(env, 'handler', (auth) => auth.handler(request));
+  const response = await authOperation(env, 'handler', (auth) =>
+    auth.handler(request),
+  );
+  const url = new URL(request.url);
+  if (
+    request.method === 'GET' &&
+    url.pathname === '/api/auth/magic-link/verify' &&
+    response.status >= 400
+  )
+    return new Response(null, {
+      status: 303,
+      headers: {
+        Location: signInRecoveryPath(
+          url.searchParams.get('errorCallbackURL'),
+          env.APP_ORIGIN,
+        ),
+      },
+    });
+  return response;
 }
 
 async function readActiveSession(env: Env, headers: Headers, renew: boolean) {

@@ -70,17 +70,6 @@ app.on(['GET', 'POST'], '/api/auth/*', async (c) => {
   if (!authConfigured(c.env))
     return c.json({ error: 'Sign-in is not available yet.' }, 503);
   const response = await handleAuthRequest(c.env, c.req.raw);
-  if (
-    c.req.method === 'GET' &&
-    c.req.path === '/api/auth/magic-link/verify' &&
-    response.status >= 400
-  )
-    return c.redirect(
-      ['/?error=event', '/?error=invite'].find(
-        (target) => c.req.query('errorCallbackURL') === target,
-      ) ?? '/?error=signin',
-      303,
-    );
   // Preserve our privacy headers when returning the auth library's raw response.
   response.headers.set('Cache-Control', 'private, no-store');
   return c.newResponse(response.body, response);

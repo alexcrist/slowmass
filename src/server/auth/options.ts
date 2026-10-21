@@ -16,6 +16,7 @@ import {
 } from '../membership';
 import { emailConfigured, sendLoginEmail } from '../email';
 import { sessionStage } from '../telemetry';
+import { SIGN_IN_LINK_SECONDS } from '../../shared/sign-in';
 
 export function authConfigured(env: Env): boolean {
   return Boolean(
@@ -98,7 +99,7 @@ export function authOptions(env: Env): BetterAuthOptions {
         },
       },
       magicLink({
-        expiresIn: 600,
+        expiresIn: SIGN_IN_LINK_SECONDS,
         storeToken: 'hashed',
         rateLimit: { window: 60, max: 3 },
         sendMagicLink: async ({ email, url, token, metadata }) => {
@@ -133,7 +134,23 @@ export function authOptions(env: Env): BetterAuthOptions {
               code: 'INVITATION_REQUIRED',
               message: 'Ask a slowmass member to text you an invite link.',
             });
-          await sendLoginEmail(env, email, url);
+          // Recovery must work in a different browser, even after the email
+          // token/claim is consumed or cleaned up. Carry only the original
+          // invitation in the error destination's fragment, never the email.
+          // It is a navigation hint; resending rechecks current eligibility.
+          const recovery = new URL('/?error=signin', env.APP_ORIGIN);
+          const kind = metadata?.eventLink !== undefined ? 'event' : 'invite';
+          const link = metadata?.eventLink ?? metadata?.inviteLink;
+          if (typeof link === 'string' && /^[a-zA-Z0-9]{48}$/.test(link)) {
+            recovery.searchParams.set('error', kind);
+            recovery.hash = `${kind}/${link}`;
+          }
+          const verification = new URL(url);
+          verification.searchParams.set(
+            'errorCallbackURL',
+            recovery.pathname + recovery.search + recovery.hash,
+          );
+          await sendLoginEmail(env, email, verification.href);
         },
       }),
     ],

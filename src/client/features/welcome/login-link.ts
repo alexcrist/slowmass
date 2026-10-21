@@ -1,3 +1,5 @@
+import { signInRecoveryPath } from '../../../shared/sign-in';
+
 /** Restrict pasted links to the existing same-origin verification endpoint. */
 export function loginLinkTarget(input: string, origin: string): string | null {
   if (input.length > 4096) return null;
@@ -22,7 +24,10 @@ export function loginLinkTarget(input: string, origin: string): string | null {
     const target = new URL('/api/auth/magic-link/verify', origin);
     target.searchParams.set('token', tokens[0]);
     target.searchParams.set('callbackURL', '/');
-    target.searchParams.set('errorCallbackURL', '/?error=signin');
+    target.searchParams.set(
+      'errorCallbackURL',
+      signInRecoveryPath(url.searchParams.get('errorCallbackURL'), origin),
+    );
     return target.href;
   } catch {
     return null;
