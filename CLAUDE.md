@@ -40,6 +40,7 @@ The repository contains email-link authentication, event-link joining, profiles,
 - Use a maintained authentication library. Never invent OAuth, token signing, password hashing, or session cryptography. Keep development authentication physically excluded from production configuration.
 - Use secure HTTP-only session cookies, explicit trusted origins, library-supported CSRF protection, and server-side ownership checks. Keep secrets out of source, logs, client bundles, and fixtures.
 - Decode and re-encode accepted images through a trusted server-side processor. Validate format, size, and dimensions; strip metadata. Never fall back to exposing an unvalidated original.
+- Never send members’ content or personal data to AI tools, use it for model training, or authorize a provider to do so. AI-assisted development and troubleshooting use synthetic fixtures and content-free aggregate diagnostics only. Slowmass claims no ownership of member content and uses it only to provide, protect, and maintain the app; never sell/rent data or share it with advertisers or data brokers.
 - Log operational context with request IDs, not photo bytes, captions, comments, tokens, or signed URLs. Return safe client errors and retain diagnostic detail server-side.
 
 ## Documentation

@@ -483,6 +483,12 @@ export function Welcome() {
           {name === null && state === 'ready' && <PasteLoginLink />}
         </div>
       </section>
+      {name === null && (
+        <footer className="welcome-footer">
+          <p>Share photos and organize events with friends.</p>
+          <a href="/privacy/">Privacy</a>
+        </footer>
+      )}
     </main>
   );
 }

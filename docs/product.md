@@ -69,3 +69,5 @@ Partiful-style events help friends meet up without changing the photo-only feed.
 - **Guest privacy.** Hosts and people who answered see each other's names, and avatars when present. Blocking the creator denies the event; other blocks hide each person from the other.
 - **Limits.** Ten new events per member per day, 500 guest answers and ten hosts per event, and 100 event messages per member per day.
 - **Out of scope.** Plus-ones, capacity limits, waitlists, ticketing or payments, public or discoverable events, email or SMS reminders, and event photo albums.
+
+Members retain ownership of their content. Slowmass uses their data only to provide the features they choose and to operate/protect the app. Never sell or rent it, share it with advertisers/data brokers, send it to AI tools, use it for model training, or authorize others to do so. Operational AI assistance must use synthetic data or content-free aggregates. The public privacy notice lives in `public/privacy/index.html`; update it before introducing new data uses or providers.
