@@ -18,7 +18,7 @@ Review each at phone width first, then desktop width. Feedback can name the page
 ## Second pass: interaction states
 
 - Click Google in Ready mode: review the inline error and restored choices.
-- Select “Click Google for loading”, then click Google: review “Opening Google…” and disabled controls.
+- Select “Click Google for loading”, then click Google: review disabled controls; pending status is screen-reader-only.
 - Select “Returned from Google”: review cancellation/failure copy and both retry options.
 - Select “Unavailable invitation”: review existing-member fallback and invitation explanation.
 - Select “Google not configured”: confirm the original email-only layout is still clear.

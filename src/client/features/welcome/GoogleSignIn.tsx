@@ -23,7 +23,11 @@ export function GoogleSignIn({
         <img src="/identity/google-g.png" alt="" width="20" height="20" />
         <span>Continue with Google</span>
       </button>
-      {busy && <p role="status">Opening Google…</p>}
+      {busy && (
+        <p className="visually-hidden" role="status">
+          Opening Google…
+        </p>
+      )}
     </div>
   );
 }
