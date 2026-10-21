@@ -7,6 +7,7 @@ import {
 } from 'better-auth/api';
 import type { Env } from '../env';
 import {
+  canJoin,
   prepareOAuthClaim,
   identifyOAuthClaim,
   type OAuthClaim,
@@ -33,6 +34,9 @@ export function googleProvider(env: Env): BetterAuthOptions['socialProviders'] {
     google: {
       clientId: env.GOOGLE_CLIENT_ID,
       clientSecret: env.GOOGLE_CLIENT_SECRET,
+      disableDefaultScope: true,
+      scope: ['openid', 'email'],
+      includeGrantedScopes: false,
       accessType: 'online',
       prompt: 'select_account',
       overrideUserInfoOnSignIn: false,
@@ -114,8 +118,8 @@ export function signInPolicy(env: Env): BetterAuthPlugin {
             ctx.body.callbackURL = destination;
             ctx.body.newUserCallbackURL = destination;
             ctx.body.errorCallbackURL = source
-              ? `/?auth=google&error=${source}#${source}/${link}`
-              : '/?auth=google&error=signin';
+              ? `/?auth=google#${source}/${link}`
+              : '/?auth=google';
             // Do not carry client-supplied state fields across the redirect.
             ctx.body.additionalData = undefined;
           }),
@@ -155,6 +159,18 @@ export function googleUserPolicy(
         return { error: 'EMAIL_IDENTITY_CHANGED' };
     }
     const claim = await googleClaim();
+    if (
+      !claim &&
+      source.action === 'create-user' &&
+      !(await canJoin(
+        env.DB,
+        user.email,
+        env.BOOTSTRAP_EMAIL
+          ? await resolveSignInEmail(env.DB, env.BOOTSTRAP_EMAIL)
+          : undefined,
+      ))
+    )
+      return { error: 'INVITATION_REQUIRED' };
     if (claim && !(await identifyOAuthClaim(env.DB, claim, user.email)))
       return { error: 'INVITATION_REQUIRED' };
   };

@@ -101,8 +101,9 @@ async function begin(additionalData?: unknown, extra = {}) {
   const url = new URL(((await response.json()) as { url: string }).url);
   expect(url.origin).toBe('https://accounts.google.com');
   expect(new Set(url.searchParams.get('scope')!.split(' '))).toEqual(
-    new Set(['openid', 'email', 'profile']),
+    new Set(['openid', 'email']),
   );
+  expect(url.searchParams.get('include_granted_scopes')).not.toBe('true');
   return {
     url,
     cookie: response.headers
@@ -209,6 +210,7 @@ it('admits a new Google member only through the exact invite version, then allow
   const response = await finish(
     await begin({ inviteLink: token }),
     'new.person+tag@gmail.com',
+    { name: undefined, picture: undefined },
   );
   expect(signedIn(response)).toBe(true);
   expect(response.headers.get('location')).toBe(`/#invite/${token}`);
@@ -278,9 +280,17 @@ it('records event provenance for new people and access without changing existing
   ).toBe('event-version');
 });
 it('rejects uninvited, unverified and unmanaged third-party Google emails without linking accounts', async () => {
-  expect(signedIn(await finish(await begin(), 'stranger@gmail.com'))).toBe(
-    false,
+  const rejected = await finish(await begin(), 'stranger@gmail.com');
+  expect(signedIn(rejected)).toBe(false);
+  expect(rejected.status).toBe(302);
+  const recovery = new URL(
+    rejected.headers.get('location')!,
+    'http://localhost:8787',
   );
+  expect(recovery.pathname).toBe('/');
+  expect(recovery.searchParams.get('auth')).toBe('google');
+  expect(recovery.searchParams.get('error')).toBe('INVITATION_REQUIRED');
+  expect(await member('stranger@gmail.com')).toBeNull();
   const token = await invite();
   for (const [email, profile] of [
     ['unverified@gmail.com', { email_verified: false }],

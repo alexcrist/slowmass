@@ -519,3 +519,12 @@ it('rejects an unexpected redirect destination', async () => {
   expect(location.assign).not.toHaveBeenCalled();
   expect(button('Continue with Google')!.props.disabled).toBe(false);
 });
+
+it('shows invitation guidance on the login page after an uninvited Google sign-in', async () => {
+  location.search = '?auth=google&error=INVITATION_REQUIRED';
+  await openSignIn('regular', true);
+  expect(
+    renderer.root.findByProps({ role: 'alert' }).children.join(''),
+  ).toContain('You need an invitation to join slowmass.');
+  expect(button('Continue with Google')).toBeDefined();
+});

@@ -24,7 +24,7 @@ Auth owns bounded cleanup of expired sessions and verification records. Missing 
 
 ## Google and shared account identity
 
-Google uses Better Auth's authorization-code flow, PKCE, state validation, and browser-bound state cookie. Slowmass does not implement OAuth cryptography. The sign-in policy accepts only Google with OpenID/email/profile scopes, rejects direct client ID tokens and explicit account-link/token endpoints, and chooses local success/failure destinations. The controls send `additionalData.inviteLink` or `additionalData.eventLink`; these are untrusted credentials, never admission decisions.
+Google uses Better Auth's authorization-code flow, PKCE, state validation, and browser-bound state cookie. Slowmass does not implement OAuth cryptography. The sign-in policy accepts only Google with OpenID/email scopes only (without inheriting previously granted profile access), rejects direct client ID tokens and explicit account-link/token endpoints, and chooses local success/failure destinations. The controls send `additionalData.inviteLink` or `additionalData.eventLink`; these are untrusted credentials, never admission decisions.
 
 Before redirecting, membership pins a ten-minute claim to the exact invitation/event version, with no email yet. Only the claim handle and source are attached through Better Auth's server-owned OAuth state; client-supplied state fields are discarded. After Google returns, its verified email identifies that claim. Existing user/session lifecycle checks revalidate the invitation and commit membership/access through the same constrained D1 batches as email links. A missing/expired claim or changed invitation cannot fall back to bootstrap or another source. OAuth cancellation does not admit anyone; a retry starts a new flow. Existing members keep their original provenance; blocks still suppress event access.
 
@@ -49,3 +49,5 @@ Request-time database schema inspection is disabled. Better Auth 1.7.7 starts it
 Session/user reads use Better Auth’s native D1 join. Active membership and profile-photo completion are read together on every request; neither is cached between requests. Member routes consume that completion result, while domain queries retain their current publication, follow, block, and ownership checks. The isolated D1 regression verifies the joined read count and immediate changes to completion, membership, and session expiry.
 
 OAuth failure destinations include `auth=google` so the welcome screen offers Google retry or email without calling an OAuth cancellation an expired email link. This query value controls copy only, never authorization.
+
+Uninvited Google registrations return to the login page with invitation guidance. Lifecycle failures outside the provider’s normal error handling also redirect to login instead of exposing an API JSON page. Admission remains enforced by the database hooks.

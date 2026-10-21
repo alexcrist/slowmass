@@ -74,6 +74,17 @@ export async function handleAuthRequest(env: Env, request: Request) {
         ),
       },
     });
+  // Lifecycle hooks can reject after the provider's normal error redirect.
+  // Keep browser navigation on the sign-in screen even for those failures.
+  if (
+    request.method === 'GET' &&
+    url.pathname === '/api/auth/callback/google' &&
+    response.status >= 400
+  )
+    return new Response(null, {
+      status: 303,
+      headers: { Location: '/?auth=google&error=signin' },
+    });
   return response;
 }
 

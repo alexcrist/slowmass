@@ -161,3 +161,20 @@ it('returns a private retryable HTTP 503 rather than a signed-out bootstrap for 
   });
   expect(vi.getTimerCount()).toBe(0);
 });
+
+it('redirects rejected Google callbacks to login without exposing API errors', async () => {
+  const auth = library();
+  auth.handler.mockResolvedValue(
+    Response.json({ message: 'Rejected' }, { status: 403 }),
+  );
+  mocks.create.mockReturnValue(auth);
+  const response = await handleAuthRequest(
+    {} as Env,
+    new Request(
+      'https://slowmass.example/api/auth/callback/google?code=synthetic',
+    ),
+  );
+  expect(response.status).toBe(303);
+  expect(response.headers.get('location')).toBe('/?auth=google&error=signin');
+  expect(await response.text()).toBe('');
+});
