@@ -47,7 +47,7 @@ function eventText(item: Item) {
     ? `${item.displayName} cancelled ${item.eventTitle}.`
     : `${item.displayName} posted in ${item.eventTitle}.`;
 }
-type Page = { items: Item[]; next: string | null; focusFound?: boolean };
+type Page = { items: Item[]; next: string | null };
 export function Notifications({
   onChange,
   focus,
@@ -130,9 +130,6 @@ export function Notifications({
   return (
     <>
       {loading && !page && <p role="status">Loading notifications…</p>}
-      {page?.focusFound === false && (
-        <p role="status">That activity is no longer available.</p>
-      )}
       {!loading && page?.items.length === 0 && <p>No activity on this page.</p>}
       <ul className="notification-list" ref={list}>
         {!focus && history.length === 1 && leading}

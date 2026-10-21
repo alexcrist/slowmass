@@ -11,6 +11,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "db:migrate": "wrangler d1 migrations apply slowmass --local",
+    "auth:audit": "node scripts/ops/audit-auth-identity.mjs",
     "auth:schema": "node scripts/generate-auth-schema.mjs",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build"
   },

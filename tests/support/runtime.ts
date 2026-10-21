@@ -21,6 +21,7 @@ export async function testRuntime(
     ) => Promise<{ status: number; headers?: Record<string, string> }>;
   },
   migrationCount?: number,
+  google?: (request: Request) => Promise<{ status: number; body: string }>,
 ) {
   const assetShell = await readFile('index.html', 'utf8');
   const result = await build({
@@ -56,6 +57,12 @@ export async function testRuntime(
         APP_ORIGIN: 'http://localhost:8787',
         MAINTENANCE_MODE: maintenance ? 'true' : 'false',
         AUTH_SECRET: secret,
+        ...(google
+          ? {
+              GOOGLE_CLIENT_ID: 'synthetic-google-client',
+              GOOGLE_CLIENT_SECRET: 'synthetic-google-secret',
+            }
+          : {}),
         RESEND_API_KEY: 'test-key',
         EMAIL_FROM: 'test@example.com',
         ...(push
@@ -66,6 +73,19 @@ export async function testRuntime(
           : {}),
       },
       outboundService: async (request: Request) => {
+        if (
+          google &&
+          [
+            'https://oauth2.googleapis.com/token',
+            'https://www.googleapis.com/oauth2/v3/certs',
+          ].includes(request.url)
+        ) {
+          const result = await google(request);
+          return new RuntimeResponse(result.body, {
+            status: result.status,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
         if (push && request.url.startsWith('https://fcm.googleapis.com/')) {
           const result = await push.send(request);
           return new RuntimeResponse(null, {

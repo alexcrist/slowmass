@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api, jsonRequest } from '../../api';
 import { UsernameField } from './UsernameField';
+import { SetupSignOut } from './SetupSignOut';
 export type Profile = {
   handle: string;
   displayName: string;
@@ -11,11 +12,15 @@ export function ProfileForm({
   profile,
   onSave,
   mode = 'profile',
+  onSignOut,
+  signingOut = false,
 }: {
   profile: Profile | null;
   onSave: (profile: Profile) => void;
   // Name-only event joining keeps a generated username.
   mode?: 'profile' | 'name';
+  onSignOut?: () => void;
+  signingOut?: boolean;
 }) {
   const [handle, setHandle] = useState(profile?.handle ?? '');
   const [displayName, setDisplayName] = useState(profile?.displayName ?? '');
@@ -23,28 +28,40 @@ export function ProfileForm({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const controller = useRef<AbortController | null>(null);
+  useEffect(() => () => controller.current?.abort(), []);
+  const disabled = busy || signingOut;
   async function save(event: FormEvent) {
     event.preventDefault();
+    if (controller.current || signingOut) return;
+    const request = new AbortController();
+    controller.current = request;
     setBusy(true);
     setError('');
     setMessage('');
     try {
       // Name-only saves keep the username, or let the server generate one.
-      const result = await api<{ profile: Profile }>(
-        '/api/people/self',
-        jsonRequest(
+      const result = await api<{ profile: Profile }>('/api/people/self', {
+        ...jsonRequest(
           'PUT',
           mode === 'name' ? { displayName, bio } : { handle, displayName, bio },
         ),
-      );
+        signal: request.signal,
+        timeoutMs: 30_000,
+      });
+      if (request.signal.aborted) return;
       onSave(result.profile);
       setMessage('Profile saved.');
     } catch (error) {
-      setError(
-        error instanceof Error ? error.message : 'Could not save profile.',
-      );
+      if (!request.signal.aborted)
+        setError(
+          error instanceof Error ? error.message : 'Could not save profile.',
+        );
     } finally {
-      setBusy(false);
+      if (!request.signal.aborted) {
+        controller.current = null;
+        setBusy(false);
+      }
     }
   }
   const joining = !profile && mode === 'name';
@@ -55,7 +72,7 @@ export function ProfileForm({
       onChange={(event) => setDisplayName(event.target.value)}
       required
       maxLength={60}
-      disabled={busy}
+      disabled={disabled}
       autoComplete="name"
     />
   );
@@ -70,7 +87,7 @@ export function ProfileForm({
         <UsernameField
           value={handle}
           onChange={setHandle}
-          disabled={busy}
+          disabled={disabled}
           editing={Boolean(profile)}
         />
       )}
@@ -84,7 +101,7 @@ export function ProfileForm({
           <button
             type="submit"
             className="joined-submit"
-            disabled={busy}
+            disabled={disabled}
             aria-label={busy ? 'Saving…' : 'Continue'}
             title="Continue"
           >
@@ -115,12 +132,12 @@ export function ProfileForm({
             onChange={(event) => setBio(event.target.value)}
             maxLength={500}
             rows={4}
-            disabled={busy}
+            disabled={disabled}
           />
         </>
       )}
       {!joining && (
-        <button className="primary-button" disabled={busy}>
+        <button className="primary-button" disabled={disabled}>
           {busy
             ? 'Saving…'
             : !profile
@@ -129,6 +146,17 @@ export function ProfileForm({
                 ? 'Save name'
                 : 'Save profile'}
         </button>
+      )}
+      {onSignOut && (
+        <SetupSignOut
+          onSignOut={() => {
+            controller.current?.abort();
+            controller.current = null;
+            setBusy(false);
+            onSignOut();
+          }}
+          signingOut={signingOut}
+        />
       )}
       {message && <p role="status">{message}</p>}
       {error && (

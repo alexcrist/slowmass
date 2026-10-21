@@ -1,3 +1,10 @@
+import { resolveSignInEmail } from './email';
+import {
+  googleClaim,
+  googleProvider,
+  googleUserPolicy,
+  signInPolicy,
+} from './google';
 import type { BetterAuthOptions } from 'better-auth';
 import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { magicLink } from 'better-auth/plugins';
@@ -31,6 +38,10 @@ function forbidden(): never {
 }
 export function authOptions(env: Env): BetterAuthOptions {
   const linkVerifications = new WeakMap<Request, 'event' | 'invite'>();
+  const bootstrapEmail = () =>
+    env.BOOTSTRAP_EMAIL
+      ? resolveSignInEmail(env.DB, env.BOOTSTRAP_EMAIL)
+      : undefined;
   // Which link's claim, if any, is bound to this email token.
   async function linkVerification(
     token: string | null,
@@ -60,8 +71,12 @@ export function authOptions(env: Env): BetterAuthOptions {
     },
     trustedOrigins: [env.APP_ORIGIN],
     emailAndPassword: { enabled: false },
+    socialProviders: googleProvider(env),
+    user: { validateUserInfo: googleUserPolicy(env) },
+    onAPIError: { errorURL: `${env.APP_ORIGIN}/?error=signin` },
     rateLimit: { enabled: true, storage: 'database', window: 60, max: 30 },
     plugins: [
+      signInPolicy(env),
       {
         id: 'session-diagnostics',
         hooks: {
@@ -128,7 +143,7 @@ export function authOptions(env: Env): BetterAuthOptions {
                       email,
                       token,
                     )
-                  : await canJoin(env.DB, email, env.BOOTSTRAP_EMAIL));
+                  : await canJoin(env.DB, email, await bootstrapEmail()));
           if (!eligible)
             throw new APIError('FORBIDDEN', {
               code: 'INVITATION_REQUIRED',
@@ -154,7 +169,16 @@ export function authOptions(env: Env): BetterAuthOptions {
         },
       }),
     ],
-    account: { accountLinking: { enabled: false } },
+    account: {
+      accountLinking: {
+        enabled: true,
+        trustedProviders: [],
+        requireLocalEmailVerified: true,
+        allowDifferentEmails: false,
+        updateUserInfoOnLink: false,
+      },
+      storeAccountCookie: false,
+    },
     // Sliding sixty-day sessions; only bootstrap renews them (see index.ts).
     session: { cookieCache: { enabled: false }, expiresIn: 60 * 86400 },
     advanced: {
@@ -165,15 +189,41 @@ export function authOptions(env: Env): BetterAuthOptions {
       ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] },
     },
     databaseHooks: {
+      account: {
+        create: {
+          before: async (account) => ({
+            data: {
+              ...account,
+              accessToken: null,
+              refreshToken: null,
+              idToken: null,
+            },
+          }),
+        },
+        update: {
+          before: async (account) => ({
+            data: {
+              ...account,
+              accessToken: null,
+              refreshToken: null,
+              idToken: null,
+            },
+          }),
+        },
+      },
       user: {
         create: {
           before: async (user, ctx) => {
+            const oauth =
+              ctx?.path === '/callback/:id' ? await googleClaim() : null;
             const token =
-              ctx?.path === '/magic-link/verify' &&
+              oauth?.token ??
+              (ctx?.path === '/magic-link/verify' &&
               typeof ctx.query?.token === 'string'
                 ? ctx.query.token
-                : null;
-            const source = await linkVerification(token, ctx?.request);
+                : null);
+            const source =
+              oauth?.source ?? (await linkVerification(token, ctx?.request));
             if (
               !user.emailVerified ||
               !(source && token
@@ -182,7 +232,7 @@ export function authOptions(env: Env): BetterAuthOptions {
                     token,
                     user.email,
                   )
-                : await canJoin(env.DB, user.email, env.BOOTSTRAP_EMAIL))
+                : await canJoin(env.DB, user.email, await bootstrapEmail()))
             )
               forbidden();
             return {
@@ -198,14 +248,18 @@ export function authOptions(env: Env): BetterAuthOptions {
       session: {
         create: {
           before: async (session, ctx) => {
+            const oauth =
+              ctx?.path === '/callback/:id' ? await googleClaim() : null;
             const token =
-              ctx?.path === '/magic-link/verify' &&
+              oauth?.token ??
+              (ctx?.path === '/magic-link/verify' &&
               typeof ctx.query?.token === 'string'
                 ? ctx.query.token
-                : null;
+                : null);
             // Signing in through a link joins new people first; event links
             // also record the link for members.
-            const source = await linkVerification(token, ctx?.request);
+            const source =
+              oauth?.source ?? (await linkVerification(token, ctx?.request));
             if (token && source)
               return (await (
                 source === 'event'
@@ -218,7 +272,7 @@ export function authOptions(env: Env): BetterAuthOptions {
               !(await ensureMembership(
                 env.DB,
                 session.userId,
-                env.BOOTSTRAP_EMAIL,
+                await bootstrapEmail(),
               ))
             )
               forbidden();

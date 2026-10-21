@@ -11,13 +11,16 @@ import { useEventAppearance } from './useEventAppearance';
 // already authorizes the event, so the cover loads directly.
 export function EventJoin({
   id,
+  initialEvent,
   children,
 }: {
   id: string;
+  initialEvent?: EventView;
   children: ReactNode;
 }) {
   const { data, error, reload } = useApiResource<{ event: EventView }>(
     `/api/events/${encodeURIComponent(id)}`,
+    initialEvent ? { event: initialEvent } : undefined,
   );
   const event = data?.event;
   useEventAppearance(event?.appearance);

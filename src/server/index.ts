@@ -37,6 +37,7 @@ app.use('*', async (c, next) => {
   const requestId = crypto.randomUUID();
   c.header('X-Request-Id', requestId);
   c.header('X-Content-Type-Options', 'nosniff');
+  c.header('X-Robots-Tag', 'noindex, nofollow');
   c.header('Referrer-Policy', 'no-referrer');
   c.header('Cache-Control', 'private, no-store');
   c.header(

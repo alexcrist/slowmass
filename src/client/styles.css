@@ -272,6 +272,14 @@ p {
 .setup-actions > .primary-button {
   margin: 0;
 }
+.setup-sign-out {
+  display: block;
+  width: 100%;
+  margin: 12px 0 0;
+}
+.setup-form > .primary-button {
+  display: block;
+}
 .onboarding .avatar-form {
   margin-bottom: 0;
 }

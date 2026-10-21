@@ -17,3 +17,7 @@ See [operations](../../docs/operations.md) for retention, recovery sequencing, a
 `push-keys.mjs <new-private-file>` generates a P-256 VAPID keypair through Node crypto and writes a mode-600 JSON file suitable for Wrangler secret bulk upload. It refuses to overwrite an existing file. Keep and back up this file outside the repository; reusing keys preserves browser subscriptions.
 
 Restore quarantine also deletes shared-invite and event-link claims, permanently revokes shared links while clearing their encrypted bearer copies, and gives every event an unusable link version without ciphertext, so re-enabling a restored member cannot revive old links or access from merely opening one. Event links cannot be replaced, so quarantined events stop inviting new people; their hosts and everyone who answered keep access, and hosts create a new event to invite more people. Older snapshots without these tables remain supported.
+
+Deployment verification includes all generated chunks under `dist/assets`, asserts their immutable caching policy, and checks that the HTML entry and startup recovery script still revalidate. This catches missing deferred screens before declaring deployment verification successful.
+
+`npm run auth:audit` checks local email-alias and provider-identity collisions; append `-- --remote` for a read-only production audit. It outputs aggregate counts only, fails on collisions, and never merges or modifies accounts. Run it immediately before manual migration 0036 under the setup/runbook procedure. The SQL lives beside the command for inspection.

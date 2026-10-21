@@ -19,6 +19,24 @@ Production HTTPS enforcement is configured in Cloudflare under **SSL/TLS → Edg
 
 The production Images binding processes private photo bytes. Remote checks verified JPEG orientation and metadata removal, still PNG/WebP conversion, animation rejection, and the complete avatar API using isolated local D1/R2 with remote image processing. The quarter-hour cleanup schedule removes replaced/orphaned avatar and post objects in bounded batches. A direct post API check with real processing also passed against isolated synthetic D1/R2. Hosted CPU measurements and the full deployed multi-user flow remain open. No paid Workers or Images subscription has been enabled. R2 is activated with its usage-based billing and included allowances.
 
+## Google sign-in preparation
+
+Google provider registration and the local backend integration are configured; the deployed application and current UI still support email links only. The Google Cloud project is `slowmass`, and ownership of `slowmass.com` is verified in Google Search Console through a Cloudflare TXT record. Keep that verification record in DNS. The OAuth application is External with publishing status Testing; the operator's Google account is registered as a test user.
+
+The web clients are `slowmass production` and `slowmass development`. Their authorized origins are `https://slowmass.com` and `http://localhost:8787`, with matching `/api/auth/callback/google` redirect URLs. Data access includes only OpenID, email, and basic profile scopes. Production `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are installed as Worker secrets; the separate development credentials are in ignored `.dev.vars`. Private recovery copies are stored outside the repository in `~/.config/slowmass/google-oauth/`, with owner-only file permissions. The local backend consumes these credentials; its production deployment is pending.
+
+The registered app name is lowercase `slowmass`, with `https://slowmass.com` as its homepage and the existing `public/icons/app-512.png` uploaded as its logo. The public privacy page and homepage description/link are implemented locally but not published. Google's branding verification remains outstanding before the branded public rollout; no verification request has been submitted. Keep the app in Testing until those requirements and the authentication integration are complete.
+
+The [auth backend](../src/server/auth/README.md) integrates Google with existing accounts, shared email matching, and both invitation paths; sign-in controls remain deferred. A read-only production audit on October 21, 2026 found zero email-alias collision groups and zero duplicate provider identities. It read no personal values into its output and changed no data. Repeat the audit before rollout:
+
+```sh
+npm run auth:audit -- --remote
+```
+
+The command prints aggregate counts and fails on collisions. Its default without `--remote` audits local D1. Never merge existing accounts automatically. Migration 0036 is manual: follow the backup/maintenance runbook, rerun the audit, apply the reviewed migration explicitly, and deploy the matching code before admitting new sign-ins. This constraint prevents duplicate aliases and provider bindings under concurrent callbacks. Neither the migration nor the Google backend has been deployed. Keep OAuth client secrets outside source control.
+
+The signed-out homepage includes a small description and Privacy link at the bottom, also present in its pre-JavaScript HTML. The standalone `public/privacy/index.html` page serves at `/privacy/` without authentication or JavaScript. Its plain-language notice covers data use, Google identity, providers, sharing, deletion, retention, and the operator contact, with explicit promises that members own their content, data use is limited to operating the app, and data is never sold/rented, shared with advertisers/data brokers, or fed to AI. Keep its claims aligned with actual app and operational behavior, including manual backup cleanup. After publishing the page, enter `https://slowmass.com/privacy/` in Google Auth Platform → Branding and submit for branding verification. Keep Google in Testing while these pages and the integration are unfinished; do not point Google at a nonexistent policy URL.
+
 ## Email delivery
 
 Create a Resend account on its Free plan. Add slowmass.com as a sending domain and install its verification DNS records in Cloudflare. Keep open and click tracking disabled. Create a sending-only API key scoped to that domain where supported.

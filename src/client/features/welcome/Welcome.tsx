@@ -273,6 +273,7 @@ export function Welcome() {
 
   async function signOut() {
     setBusy(true);
+    setMessage('');
     try {
       const result = await auth.signOut();
       if (result.error) throw new Error('Sign-out failed');

@@ -65,7 +65,10 @@ it.each(['legacy', 'thumbnails', 'large avatars', 'events'])(
         sql += `
           INSERT INTO event(id,creator_id,title,starts_at,time_zone,state,object_key,thumbnail_key,link_id,link_hash,link_encrypted,created_at)
             VALUES('party','alice','Party',9999999999999,'UTC','published','events/aa.webp','events/bb.webp','link','event-hash','synthetic-encrypted-link',1);
-          INSERT INTO event_claim VALUES('event-claim','event-invitation','party','alice','link','event-hash','friend@example.com',9999999999999);`;
+          INSERT INTO event_claim VALUES('event-claim','event-invitation','party','alice','link','event-hash','friend@example.com',9999999999999);
+          INSERT INTO user VALUES('bob','Bob','bob@example.com',1,NULL,1,1);
+          INSERT INTO event_host_invite VALUES('party','bob@example.com',1);
+          INSERT INTO event_host_member_invite VALUES('party','bob','alice','link',1);`;
         // Past/cancelled covers remain readable; shared sizes are copied once.
         // Pending/deleted event objects belong to cleanup, not recovery media.
         for (const [id, state, startsAt, cancelledAt, objectKey] of [

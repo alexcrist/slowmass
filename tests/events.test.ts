@@ -38,6 +38,14 @@ afterEach(async () => {
   await runtime?.worker.dispose();
 });
 
+async function connect(follower: string, target: string) {
+  await runtime.db
+    .prepare(
+      "INSERT INTO follow(follower_id,target_id,status,created_at) VALUES (?,?,'accepted',?) ON CONFLICT DO UPDATE SET status='accepted'",
+    )
+    .bind(follower, target, Date.now())
+    .run();
+}
 function details(overrides: Record<string, unknown> = {}) {
   return {
     title: 'Dinner',
@@ -316,8 +324,9 @@ it('allows only current unblocked hosts to change appearance, including accepted
   expect((await save('bob')).status).toBe(409);
   await respond('bob', id, 'going');
   expect((await save('bob')).status).toBe(409);
+  await connect('alice', 'bob');
   await runtime.request('alice', `/api/events/${id}/hosts`, 'POST', {
-    email: 'bob@example.com',
+    userId: 'bob',
   });
   expect((await save('bob')).status).toBe(409);
   expect(
@@ -681,7 +690,17 @@ it('previews a linked event, shows details after sign-in, and guests after answe
   expect(await link(id, 'bob')).toBeNull();
   expect((await runtime.request('bob', `/api/events/${id}`)).status).toBe(404);
   expect((await open('bob', 'x'.repeat(48))).status).toBe(404);
-  expect(await (await open('bob', token)).json()).toEqual({ id });
+  const openedView = await (await open('bob', token)).json();
+  expect(openedView).toMatchObject({
+    id,
+    event: { id, counts: null, viewer: { isHost: false } },
+  });
+  expect(openedView).toEqual({
+    id,
+    ...((await (
+      await runtime.request('bob', `/api/events/${id}`)
+    ).json()) as object),
+  });
   const opened = await runtime.db
     .prepare("SELECT link_id FROM event_access WHERE user_id='bob'")
     .first('link_id');
@@ -709,7 +728,10 @@ it('previews a linked event, shows details after sign-in, and guests after answe
   ).toEqual({ items: [], next: null });
   expect((await message('bob', id, 'Hi')).response.status).toBe(409);
   // Hosts open their own link without a record.
-  expect(await (await open('alice', token)).json()).toEqual({ id });
+  expect(await (await open('alice', token)).json()).toMatchObject({
+    id,
+    event: { id, viewer: { isHost: true } },
+  });
   expect(
     await runtime.db
       .prepare("SELECT 1 FROM event_access WHERE user_id='alice'")
@@ -738,7 +760,10 @@ it('previews a linked event, shows details after sign-in, and guests after answe
   expect(
     await (await runtime.request('carol', `/api/events/${id}`)).json(),
   ).toMatchObject({ event: { id, url: null } });
-  expect(await (await open('bob', fresh.token)).json()).toEqual({ id });
+  expect(await (await open('bob', fresh.token)).json()).toMatchObject({
+    id,
+    event: { id },
+  });
   expect(
     await runtime.db
       .prepare("SELECT link_id FROM event_access WHERE user_id='bob'")
@@ -834,142 +859,223 @@ it('admits answers through the current link and keeps them without it', async ()
   ).toMatchObject({ event: { cancelled: true } });
 });
 
-it('lets hosts answer and add co-hosts by email without revealing accounts', async () => {
-  const { id, token } = await event();
+it('invites connected members in-app, shares guest access, and preserves consent and host permissions', async () => {
+  const { id } = await event();
   const view = async (actor: string) =>
     (
       (await (await runtime.request(actor, `/api/events/${id}`)).json()) as {
         event: {
-          hosts: { handle: string; isCreator: boolean; isViewer: boolean }[];
+          hosts: { handle: string }[];
+          pendingHostMembers: { id: string }[];
           pendingHosts: string[];
-          viewer: {
-            isHost: boolean;
-            hostInvited: boolean;
-            response: string | null;
-          };
+          viewer: { isHost: boolean; hostInvited: boolean };
         };
       }
     ).event;
-  const add = (actor: string, email: unknown) =>
-    runtime.request(actor, `/api/events/${id}/hosts`, 'POST', { email });
-  const unpend = (actor: string, email: string) =>
-    runtime.request(actor, `/api/events/${id}/hosts`, 'DELETE', { email });
-  const remove = (actor: string, handle: string) =>
-    runtime.request(actor, `/api/events/${id}/hosts/${handle}`, 'DELETE');
+  const add = (actor: string, userId: string) =>
+    runtime.request(actor, `/api/events/${id}/hosts`, 'POST', { userId });
   const accept = (actor: string) =>
     runtime.request(actor, `/api/events/${id}/hosting`, 'POST');
-
-  // Hosts answer without opening the link and appear among the guests.
+  await connect('alice', 'bob');
+  await connect('carol', 'alice');
+  // Email bodies are retired, and strangers and unfinished accounts are rejected.
+  expect(
+    (
+      await runtime.request('alice', `/api/events/${id}/hosts`, 'POST', {
+        email: 'bob@example.com',
+      })
+    ).status,
+  ).toBe(400);
+  expect((await add('alice', 'nobody')).status).toBe(409);
+  await connect('alice', 'david');
+  expect((await add('alice', 'david')).status).toBe(409);
+  expect((await add('bob', 'carol')).status).toBe(409);
+  expect((await accept('bob')).status).toBe(409);
+  const beforeMembership = (
+    await runtime.db.prepare('SELECT * FROM membership ORDER BY user_id').all()
+  ).results;
   expect((await respond('alice', id, 'going')).status).toBe(200);
+  const additions = await Promise.all([
+    add('alice', 'bob'),
+    add('alice', 'bob'),
+  ]);
+  expect(additions.map((r) => r.status)).toEqual([200, 200]);
   expect(await view('alice')).toMatchObject({
-    viewer: { isHost: true, response: 'going' },
+    pendingHosts: [],
+    pendingHostMembers: [{ id: 'bob' }],
+  });
+  expect(await view('bob')).toMatchObject({
+    pendingHostMembers: [],
+    viewer: { isHost: false, hostInvited: true },
   });
   expect(
-    await (
-      await runtime.request('alice', `/api/events/${id}/guests?status=going`)
-    ).json(),
-  ).toEqual({
-    items: [{ handle: 'alice', displayName: 'Alice', hasAvatar: true }],
-    next: null,
-  });
-
-  // Adding replies the same whether or not an account uses the email.
-  expect((await add('alice', 'not an email')).status).toBe(400);
-  expect((await add('alice', ' Bob@Example.com ')).status).toBe(200);
-  expect((await add('alice', 'bob@example.com')).status).toBe(200);
-  expect((await add('alice', 'nobody@example.com')).status).toBe(200);
-  expect((await add('alice', 'david@example.com')).status).toBe(200);
-  expect((await view('alice')).pendingHosts).toEqual([
-    'bob@example.com',
-    'nobody@example.com',
-    'david@example.com',
+    await (await runtime.request('bob', '/api/events')).json(),
+  ).toMatchObject({ items: [{ id, hostInvited: true }] });
+  // An invitation shares guest access, but no host powers or guest list.
+  expect((await view('bob')).hosts).toEqual([
+    expect.objectContaining({ handle: 'alice' }),
   ]);
-  // Only hosts add hosts or see pending ones; an email alone grants nothing.
-  expect((await respond('carol', id, 'maybe', token)).status).toBe(200);
-  expect((await add('carol', 'erin@example.com')).status).toBe(409);
-  expect((await view('carol')).pendingHosts).toEqual([]);
-  expect((await runtime.request('bob', `/api/events/${id}`)).status).toBe(404);
-
-  // Opening the event signed in with that email offers hosting; accepting is
-  // their consent to appear as a host.
-  expect((await accept('carol')).status).toBe(409);
-  await open('bob', token);
-  expect(await view('bob')).toMatchObject({
-    viewer: { isHost: false, hostInvited: true },
-    hosts: [{ handle: 'alice' }],
-  });
-  for (let attempt = 0; attempt < 2; attempt++)
-    expect((await accept('bob')).status).toBe(200);
+  expect(
+    (
+      await runtime.request('bob', `/api/events/${id}/appearance`, 'PATCH', {
+        appearance: originalAppearance,
+        expected: originalAppearance,
+      })
+    ).status,
+  ).toBe(409);
+  const accepted = await Promise.all([accept('bob'), accept('bob')]);
+  expect(accepted.map((r) => r.status)).toEqual([200, 200]);
   expect(await view('bob')).toMatchObject({
     viewer: { isHost: true, hostInvited: false },
-    hosts: [
-      { handle: 'alice', isCreator: true, isViewer: false },
-      { handle: 'bob', isCreator: false, isViewer: true },
-    ],
-    pendingHosts: ['nobody@example.com', 'david@example.com'],
   });
-  // Co-hosts hear about answers like the creator does.
-  expect((await respond('carol', id, 'going')).status).toBe(200);
-  for (const host of ['alice', 'bob'])
-    expect(
-      (await activity(host)).find((item) => item.handle === 'carol'),
-    ).toMatchObject({ kind: 'event_response', response: 'going' });
-  // Without a profile photo, the invitation waits.
-  await open('david', token);
-  expect((await view('david')).viewer.hostInvited).toBe(false);
-  expect((await accept('david')).status).toBe(409);
-  expect((await view('alice')).pendingHosts).toContain('david@example.com');
-  // Declining removes the invitation.
-  await add('alice', 'carol@example.com');
-  expect((await view('carol')).viewer.hostInvited).toBe(true);
+  expect((await view('alice')).pendingHostMembers).toEqual([]);
+  expect((await add('alice', 'carol')).status).toBe(200);
   expect(
     (await runtime.request('carol', `/api/events/${id}/hosting`, 'DELETE'))
       .status,
   ).toBe(200);
   expect((await view('carol')).viewer.hostInvited).toBe(false);
-  expect((await view('alice')).pendingHosts).not.toContain('carol@example.com');
-
-  // Any host removes pending emails and co-hosts, never the creator.
-  expect((await unpend('carol', 'nobody@example.com')).status).toBe(404);
+  expect((await accept('carol')).status).toBe(409);
+  // Declining/removing hosting retains the guest access already shared.
+  expect((await runtime.request('carol', `/api/events/${id}`)).status).toBe(
+    200,
+  );
+  expect(
+    (await runtime.request('bob', `/api/events/${id}/hosts/alice`, 'DELETE'))
+      .status,
+  ).toBe(409);
+  expect(
+    (await runtime.request('carol', `/api/events/${id}/hosts/bob`, 'DELETE'))
+      .status,
+  ).toBe(409);
+  expect((await add('alice', 'carol')).status).toBe(200);
   for (let attempt = 0; attempt < 2; attempt++)
-    expect((await unpend('bob', 'nobody@example.com')).status).toBe(200);
-  expect((await remove('bob', 'alice')).status).toBe(409);
-  expect((await remove('carol', 'bob')).status).toBe(409);
+    expect(
+      (
+        await runtime.request('bob', `/api/events/${id}/hosts`, 'DELETE', {
+          userId: 'carol',
+        })
+      ).status,
+    ).toBe(200);
+  expect((await accept('carol')).status).toBe(409);
   for (let attempt = 0; attempt < 2; attempt++)
-    expect((await remove('alice', 'bob')).status).toBe(200);
-  // Bob opened the link, so he still sees the event as a guest.
+    expect(
+      (await runtime.request('bob', `/api/events/${id}/hosts/bob`, 'DELETE'))
+        .status,
+    ).toBe(200);
   expect((await view('bob')).viewer.isHost).toBe(false);
-  expect((await add('bob', 'carol@example.com')).status).toBe(409);
-  // Co-hosts can stop hosting themselves; retrying succeeds.
-  await add('alice', 'bob@example.com');
-  await accept('bob');
-  expect((await view('bob')).viewer.isHost).toBe(true);
-  for (let attempt = 0; attempt < 2; attempt++)
-    expect((await remove('bob', 'bob')).status).toBe(200);
-  expect((await view('bob')).viewer.isHost).toBe(false);
-
-  // Hosts and pending emails together stay within ten.
-  for (let index = 0; index < 8; index++)
-    expect((await add('alice', `friend${index}@example.com`)).status).toBe(200);
-  expect((await add('alice', 'one-more@example.com')).status).toBe(409);
-  // Deleting an account drops pending invitations to its email.
   expect(
     (
-      await runtime.request('david', '/api/me', 'DELETE', {
-        confirmation: 'DELETE',
-      })
-    ).status,
-  ).toBe(200);
-  expect((await view('alice')).pendingHosts).not.toContain('david@example.com');
-  // Pending emails go once the event ends.
-  await runtime.request('alice', `/api/events/${id}/cancel`, 'POST', {
-    messageId: crypto.randomUUID(),
-  });
-  expect((await add('alice', 'late@example.com')).status).toBe(409);
+      await runtime.db
+        .prepare('SELECT * FROM membership ORDER BY user_id')
+        .all()
+    ).results,
+  ).toEqual(beforeMembership);
+});
+
+it('searches only eligible connections and rechecks follow, block and event state on invitation and acceptance', async () => {
+  const { id } = await event();
+  const candidates = async (actor: string, query = '') =>
+    (await (
+      await runtime.request(
+        actor,
+        `/api/events/${id}/host-candidates?q=${encodeURIComponent(query)}`,
+      )
+    ).json()) as { items: { id: string }[]; next: string | null };
+  const add = (userId: string) =>
+    runtime.request('alice', `/api/events/${id}/hosts`, 'POST', { userId });
+  const accept = () =>
+    runtime.request('bob', `/api/events/${id}/hosting`, 'POST');
+  await connect('alice', 'bob');
+  await connect('carol', 'alice');
+  await connect('alice', 'david');
+  expect((await candidates('alice')).items.map((p) => p.id)).toEqual([
+    'bob',
+    'carol',
+  ]);
+  expect((await candidates('alice', 'BOB')).items.map((p) => p.id)).toEqual([
+    'bob',
+  ]);
+  expect((await candidates('alice', '%')).items).toEqual([]);
+  expect((await candidates('carol')).items).toEqual([]);
+  expect(
+    (await runtime.request(null, `/api/events/${id}/host-candidates`)).status,
+  ).toBe(401);
+  await runtime.db
+    .prepare(
+      "UPDATE follow SET status='pending' WHERE follower_id='alice' AND target_id='bob'",
+    )
+    .run();
+  expect((await candidates('alice')).items.map((p) => p.id)).toEqual(['carol']);
+  expect((await add('bob')).status).toBe(409);
+  await connect('alice', 'bob');
+  expect((await add('bob')).status).toBe(200);
+  await runtime.db
+    .prepare("DELETE FROM follow WHERE follower_id='alice' AND target_id='bob'")
+    .run();
+  expect((await accept()).status).toBe(409);
+  await connect('alice', 'bob');
+  await runtime.db.prepare("INSERT INTO block VALUES('bob','alice',1)").run();
+  expect((await add('bob')).status).toBe(409);
+  expect((await accept()).status).toBe(409);
+  await runtime.db.prepare('DELETE FROM block').run();
+  await runtime.db
+    .prepare("UPDATE membership SET status='disabled' WHERE user_id='bob'")
+    .run();
+  expect((await accept()).status).toBe(401);
+  await runtime.db
+    .prepare("UPDATE membership SET status='active' WHERE user_id='bob'")
+    .run();
+  await runtime.db
+    .prepare('UPDATE event SET starts_at=0,ends_at=? WHERE id=?')
+    .bind(Date.now() - 1, id)
+    .run();
+  expect((await add('carol')).status).toBe(409);
+  expect((await accept()).status).toBe(409);
   await cleanupEvents(
     runtime.db as unknown as D1Database,
     (await runtime.worker.getR2Bucket('PHOTOS')) as unknown as R2Bucket,
   );
+  expect(
+    await runtime.db
+      .prepare('SELECT COUNT(*) AS n FROM event_host_member_invite')
+      .first('n'),
+  ).toBe(0);
+});
+
+it('ignores retired email co-host invitations and drains them in bounded batches', async () => {
+  const { id, token } = await event();
+  await runtime.db.batch(
+    Array.from({ length: 105 }, (_, n) =>
+      runtime.db
+        .prepare('INSERT INTO event_host_invite VALUES(?,?,?)')
+        .bind(
+          id,
+          n === 0 ? 'bob@example.com' : `retired${n}@example.com`,
+          Date.now(),
+        ),
+    ),
+  );
+  await open('bob', token);
+  expect(
+    await (await runtime.request('bob', `/api/events/${id}`)).json(),
+  ).toMatchObject({ event: { viewer: { hostInvited: false } } });
+  expect(
+    (await runtime.request('bob', `/api/events/${id}/hosting`, 'POST')).status,
+  ).toBe(409);
+  expect(
+    await (await runtime.request('alice', `/api/events/${id}`)).json(),
+  ).toMatchObject({ event: { pendingHosts: [], pendingHostMembers: [] } });
+  const bucket = (await runtime.worker.getR2Bucket(
+    'PHOTOS',
+  )) as unknown as R2Bucket;
+  await cleanupEvents(runtime.db as unknown as D1Database, bucket);
+  expect(
+    await runtime.db
+      .prepare('SELECT COUNT(*) AS n FROM event_host_invite')
+      .first('n'),
+  ).toBe(5);
+  await cleanupEvents(runtime.db as unknown as D1Database, bucket);
   expect(
     await runtime.db
       .prepare('SELECT COUNT(*) AS n FROM event_host_invite')
@@ -1035,13 +1141,10 @@ it('keeps events unlisted until a member opens their link, even for followers an
     )
     .bind(Date.now())
     .run();
-  expect(
-    (
-      await runtime.request('alice', `/api/events/${future.id}/hosts`, 'POST', {
-        email: 'bob@example.com',
-      })
-    ).status,
-  ).toBe(200);
+  await runtime.db
+    .prepare('INSERT INTO event_host_invite VALUES(?,?,?)')
+    .bind(future.id, 'bob@example.com', Date.now())
+    .run();
   await message('alice', future.id, 'Private host message');
   for (const actor of ['bob', 'carol', 'david']) {
     for (const when of ['upcoming', 'past']) {
@@ -1371,8 +1474,9 @@ it('sends retry-safe host notifications to all participants without email, enfor
       409,
     );
   expect((await runtime.request(null, path, 'POST', input)).status).toBe(401);
+  await connect('alice', 'carol');
   await runtime.request('alice', `/api/events/${id}/hosts`, 'POST', {
-    email: 'carol@example.com',
+    userId: 'carol',
   });
   expect((await runtime.request('carol', path, 'POST', input)).status).toBe(
     409,
@@ -1396,7 +1500,9 @@ it('sends retry-safe host notifications to all participants without email, enfor
     ]);
     expect(await unread(actor)).toBe(1);
   }
-  expect(await activity('carol')).toEqual([]);
+  expect(
+    (await activity('carol')).filter((item) => item.eventId === id),
+  ).toEqual([]);
   expect(
     (
       await runtime.request('alice', path, 'POST', {
@@ -1776,8 +1882,9 @@ it('allows only the active creator to delete, including after cancellation or th
   expect((await remove('carol')).status).toBe(404);
   await respond('bob', id, 'going', token);
   expect((await remove('bob')).status).toBe(404);
+  await connect('alice', 'bob');
   await runtime.request('alice', `/api/events/${id}/hosts`, 'POST', {
-    email: 'bob@example.com',
+    userId: 'bob',
   });
   expect((await remove('bob')).status).toBe(404);
   expect(
@@ -2358,4 +2465,115 @@ it('does not export unpublished, deleted or cancelled events, including after a 
     (await runtime.request('alice', `/api/events/${deleted.id}/calendar.ics`))
       .status,
   ).toBe(404);
+});
+
+it('paginates co-host connections without duplicates and enforces the host cap under concurrent invitations', async () => {
+  const { id } = await event();
+  const now = Date.now();
+  for (let index = 0; index < 23; index++) {
+    const userId = `member${String(index).padStart(2, '0')}`;
+    await runtime.db.batch([
+      runtime.db
+        .prepare(
+          'INSERT INTO user(id,name,email,emailVerified,createdAt,updatedAt) VALUES(?,?,?,1,?,?)',
+        )
+        .bind(userId, userId, `${userId}@example.com`, now, now),
+      runtime.db
+        .prepare(
+          "INSERT INTO invitation(id,inviter_id,recipient_email,created_at,expires_at) VALUES(?,'alice',?,?,?)",
+        )
+        .bind(userId, `${userId}@example.com`, now, now + day),
+      runtime.db
+        .prepare(
+          "INSERT INTO membership(user_id,invited_by,invitation_id,joined_at) VALUES(?,'alice',?,?)",
+        )
+        .bind(userId, userId, now),
+      runtime.db
+        .prepare(
+          "INSERT INTO profile(user_id,handle,display_name,bio,created_at) VALUES(?,?,?,'',?)",
+        )
+        .bind(userId, userId, `Member ${index}`, now),
+      runtime.db
+        .prepare(
+          'INSERT INTO avatar(user_id,object_key,width,height) VALUES(?,?,1,1)',
+        )
+        .bind(userId, `synthetic/${userId}`),
+    ]);
+    await connect('alice', userId);
+    await connect(userId, 'alice');
+  }
+  const page = async (after = '') =>
+    (await (
+      await runtime.request(
+        'alice',
+        `/api/events/${id}/host-candidates?after=${after}`,
+      )
+    ).json()) as { items: { id: string }[]; next: string | null };
+  const first = await page();
+  expect(first.items).toHaveLength(20);
+  const second = await page(first.next!);
+  expect(second.items).toHaveLength(3);
+  expect(second.next).toBeNull();
+  expect(new Set([...first.items, ...second.items].map((p) => p.id)).size).toBe(
+    23,
+  );
+  const add = (userId: string) =>
+    runtime.request('alice', `/api/events/${id}/hosts`, 'POST', { userId });
+  for (const member of first.items.slice(0, 8))
+    expect((await add(member.id)).status).toBe(200);
+  const race = await Promise.all([add('member08'), add('member09')]);
+  expect(race.map((r) => r.status).sort()).toEqual([200, 409]);
+  expect(
+    await runtime.db
+      .prepare(
+        'SELECT COUNT(*) AS n FROM event_host_member_invite WHERE event_id=?',
+      )
+      .bind(id)
+      .first('n'),
+  ).toBe(9);
+  // Failure midway through sharing rolls the invitation back too.
+  await runtime.db
+    .prepare("DELETE FROM event_host_member_invite WHERE user_id='member00'")
+    .run();
+  await runtime.db
+    .prepare(
+      "CREATE TRIGGER interrupt_host_share BEFORE INSERT ON event_access WHEN NEW.user_id='member10' BEGIN SELECT RAISE(ABORT,'synthetic interruption'); END",
+    )
+    .run();
+  expect((await add('member10')).status).toBe(500);
+  expect(
+    await runtime.db
+      .prepare(
+        "SELECT 1 FROM event_host_member_invite WHERE user_id='member10'",
+      )
+      .first(),
+  ).toBeNull();
+});
+
+it('revokes pending hosting when its inviter leaves or the event link changes', async () => {
+  const { id } = await event();
+  const invite = (actor: string, userId: string) =>
+    runtime.request(actor, `/api/events/${id}/hosts`, 'POST', { userId });
+  const accept = (actor: string) =>
+    runtime.request(actor, `/api/events/${id}/hosting`, 'POST');
+  await connect('alice', 'bob');
+  await connect('bob', 'carol');
+  expect((await invite('alice', 'bob')).status).toBe(200);
+  expect((await accept('bob')).status).toBe(200);
+  expect((await invite('bob', 'carol')).status).toBe(200);
+  expect(
+    (await runtime.request('alice', `/api/events/${id}/hosts/bob`, 'DELETE'))
+      .status,
+  ).toBe(200);
+  expect((await accept('carol')).status).toBe(409);
+  await connect('alice', 'carol');
+  await runtime.request('alice', `/api/events/${id}/hosts`, 'DELETE', {
+    userId: 'carol',
+  });
+  expect((await invite('alice', 'carol')).status).toBe(200);
+  await newLinkVersion(id);
+  expect((await accept('carol')).status).toBe(409);
+  expect((await runtime.request('carol', `/api/events/${id}`)).status).toBe(
+    404,
+  );
 });

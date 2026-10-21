@@ -12,6 +12,12 @@ export const answerEmoji: Record<Answer, string> = {
   maybe: '🎲',
   declined: '🫠',
 };
+export type HostMember = {
+  id: string;
+  handle: string;
+  displayName: string;
+  hasAvatar: true;
+};
 export type Host = {
   handle: string;
   displayName: string;
@@ -38,8 +44,8 @@ export type EventDetails = {
 };
 export type EventView = EventDetails & {
   hosts: Host[];
-  // Emails hosts added that have not become hosts yet; empty for guests.
-  pendingHosts: string[];
+  // Pending member invitations are visible only to hosts.
+  pendingHostMembers: HostMember[];
   // Only hosts and people who answered see how others answered.
   counts: Record<Answer, number> | null;
   // The event's one URL; null when the credential cannot be recovered.
@@ -47,13 +53,14 @@ export type EventView = EventDetails & {
   viewer: {
     isHost: boolean;
     isCreator: boolean;
-    // A host added this member's email; accepting makes them a host.
+    // A connected host invited this member; accepting makes them a host.
     hostInvited: boolean;
     response: Answer | null;
   };
 };
 export type EventItem = EventDetails & {
   isHost: boolean;
+  hostInvited?: boolean;
   response: Answer | null;
 };
 export function yourAnswer(isHost: boolean, response: Answer | null) {

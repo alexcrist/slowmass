@@ -14,7 +14,7 @@ import { MailIcon } from '../../ui/MailIcon';
 import { LockIcon } from '../../ui/LockIcon';
 import { EventLog } from './EventLog';
 import { EventJoin } from './EventJoin';
-import { eventHref } from './EventsPage';
+import { eventHref } from './navigation';
 import type { Answer, EventView } from './types';
 
 const linkToken = /^[a-zA-Z0-9]{48}$/;
@@ -37,18 +37,21 @@ export function EventRoute({
     token: string;
     attempt: number;
     id: string | null;
+    event?: EventView;
     error: string;
   } | null>(null);
   useEffect(() => {
     if (!token) return;
     const controller = new AbortController();
-    const settle = (id: string | null, error = '') =>
-      setOpened({ token, attempt, id, error });
-    api<{ id: string }>('/api/events/open', {
+    const settle = (id: string | null, error = '', event?: EventView) => {
+      if (!controller.signal.aborted)
+        setOpened({ token, attempt, id, error, event });
+    };
+    api<{ id: string; event?: EventView }>('/api/events/open', {
       ...jsonRequest('POST', { token }),
       signal: controller.signal,
     })
-      .then((result) => settle(result.id))
+      .then((result) => settle(result.id, '', result.event))
       .catch((error: unknown) => {
         if (!controller.signal.aborted)
           settle(
@@ -60,17 +63,24 @@ export function EventRoute({
       });
     return () => controller.abort();
   }, [token, attempt]);
-  const show = (id: string) =>
+  const show = (id: string, event?: EventView) =>
     join ? (
-      <EventJoin id={id}>{join}</EventJoin>
+      <EventJoin key={id} id={id} initialEvent={event}>
+        {join}
+      </EventJoin>
     ) : (
-      <EventPage id={id} linkProfiles={linkProfiles} />
+      <EventPage
+        key={id}
+        id={id}
+        linkProfiles={linkProfiles}
+        initialEvent={event}
+      />
     );
   if (!token) return show(param);
   if (opened?.token !== token || opened.attempt !== attempt)
     return <p role="status">Opening event…</p>;
   return opened.id ? (
-    show(opened.id)
+    show(opened.id, opened.event)
   ) : (
     <div>
       <p role="alert">{opened.error}</p>
@@ -82,15 +92,20 @@ export function EventRoute({
 // The event for its hosts, people who answered, and members who opened its
 // current link. Only hosts and people who answered see the guests and activity.
 export function EventPage({
+  initialEvent,
   id,
   linkProfiles,
 }: {
   id: string;
+  initialEvent?: EventView;
   linkProfiles: boolean;
 }) {
   const { data, error, loading, reload, refresh } = useApiResource<{
     event: EventView;
-  }>(`/api/events/${encodeURIComponent(id)}`);
+  }>(
+    `/api/events/${encodeURIComponent(id)}`,
+    initialEvent ? { event: initialEvent } : undefined,
+  );
   const [busy, setBusy] = useState(false);
   const running = useRef(false);
   const deletion = useRef<AbortController | null>(null);
@@ -337,7 +352,7 @@ export function EventPage({
         <EventHosts
           id={id}
           hosts={event.hosts}
-          pending={event.pendingHosts}
+          pending={event.pendingHostMembers ?? []}
           onClose={closeDialog}
           onChange={(left) => {
             // Someone who stops hosting may no longer see the event.

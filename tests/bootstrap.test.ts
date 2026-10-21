@@ -115,3 +115,17 @@ it('renews a sixty-day session cookie only through bootstrap', async () => {
   expect(repeat.headers.get('Set-Cookie')).toBeNull();
   expect(Date.parse((await expiry()) ?? '')).toBe(extended);
 });
+
+it('discourages indexing of dynamic responses, including denied and missing resources', async () => {
+  for (const path of [
+    '/api/status',
+    '/api/bootstrap',
+    '/api/people/self',
+    '/api/missing',
+    '/media/missing',
+    '/event/invalid',
+  ]) {
+    const response = await runtime.request(null, path);
+    expect(response.headers.get('X-Robots-Tag')).toBe('noindex, nofollow');
+  }
+});

@@ -7,3 +7,7 @@ EMAIL_FROM=slowmass <hello@slowmass.com>
 EMAIL_REPLY_TO=
 # Used only to create the first verified member. All later joins require a member invitation.
 BOOTSTRAP_EMAIL=
+
+# Optional Google OAuth web client for http://localhost:8787 (not production).
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=

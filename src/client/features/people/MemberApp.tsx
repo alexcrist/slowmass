@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { ScreenBoundary } from '../../ui/ScreenBoundary';
 import { profileHref, useRoute } from '../../navigation';
 import { BackControl } from '../../navigation/BackControl';
 import { PageHistoryProvider } from '../../navigation/PageHistory';
@@ -173,6 +174,8 @@ function MemberPages({
           eventRoute={eventRoute}
           startImmediately={page === 'photo'}
           onFinish={setupFinished}
+          onSignOut={onSignOut}
+          signingOut={signingOut}
         />
       );
     switch (page) {
@@ -249,14 +252,28 @@ function MemberPages({
         <EventRoute
           param={handle}
           linkProfiles
-          join={<ProfileForm profile={null} onSave={saved} mode="name" />}
+          join={
+            <ProfileForm
+              profile={null}
+              onSave={saved}
+              mode="name"
+              onSignOut={onSignOut}
+              signingOut={signingOut}
+            />
+          }
         />
       ) : (
         <>
           <p className="onboarding-intro">
             Next, you’ll choose a username and add a profile photo.
           </p>
-          <ProfileForm profile={null} onSave={saved} mode="name" />
+          <ProfileForm
+            profile={null}
+            onSave={saved}
+            mode="name"
+            onSignOut={onSignOut}
+            signingOut={signingOut}
+          />
         </>
       );
     switch (page) {
@@ -438,7 +455,7 @@ function MemberPages({
                   : titles[page] || 'slowmass'}
             </h1>
           )}
-          {screen()}
+          <ScreenBoundary>{screen()}</ScreenBoundary>
         </section>
       </PageHistoryProvider>
     </>

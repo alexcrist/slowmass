@@ -7,22 +7,28 @@ import {
 import { AvatarForm, type PreparedAvatar } from '../avatars';
 import type { Profile } from './ProfileForm';
 import { UsernameField } from './UsernameField';
+import { SetupSignOut } from './SetupSignOut';
 
 export function ProfileSetup({
   profile,
   eventRoute,
   startImmediately,
   onFinish,
+  onSignOut,
+  signingOut,
 }: {
   profile: Profile;
   eventRoute: string | undefined;
   startImmediately: boolean;
   onFinish: (profile: Profile) => void;
+  onSignOut: () => void;
+  signingOut: boolean;
 }) {
   const [started, setStarted] = useState(startImmediately);
   const [handle, setHandle] = useState(profile.handle);
   const [photo, setPhoto] = useState<PreparedAvatar | null>(null);
   const [busy, setBusy] = useState(false);
+  const disabled = busy || signingOut;
   const [error, setError] = useState('');
   const [progress, setProgress] = useState<PhotoProgressState>({
     phase: 'saving',
@@ -36,7 +42,7 @@ export function ProfileSetup({
 
   async function finish(event: FormEvent) {
     event.preventDefault();
-    if (controller.current) return;
+    if (controller.current || signingOut) return;
     if (!photo) {
       setError('Choose a profile photo to finish setting up your account.');
       return;
@@ -110,6 +116,7 @@ export function ProfileSetup({
               type="button"
               className="primary-button"
               onClick={() => setStarted(true)}
+              disabled={signingOut}
             >
               Continue
             </button>
@@ -123,12 +130,12 @@ export function ProfileSetup({
         </>
       ) : (
         <>
-          <AvatarForm draft={photo} onSelect={setPhoto} disabled={busy} />
-          <form onSubmit={(event) => void finish(event)}>
+          <AvatarForm draft={photo} onSelect={setPhoto} disabled={disabled} />
+          <form className="setup-form" onSubmit={(event) => void finish(event)}>
             <UsernameField
               value={handle}
               onChange={setHandle}
-              disabled={busy}
+              disabled={disabled}
             />
             {busy && <PhotoProgress progress={progress} />}
             {error && (
@@ -136,12 +143,21 @@ export function ProfileSetup({
                 {error}
               </p>
             )}
-            <button className="primary-button" disabled={busy || !photo}>
+            <button className="primary-button" disabled={disabled || !photo}>
               {busy ? 'Finishing…' : 'Finish'}
             </button>
           </form>
         </>
       )}
+      <SetupSignOut
+        onSignOut={() => {
+          controller.current?.abort();
+          controller.current = null;
+          setBusy(false);
+          onSignOut();
+        }}
+        signingOut={signingOut}
+      />
     </>
   );
 }

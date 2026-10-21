@@ -1,3 +1,4 @@
+import { Compose } from '../src/client/features/posts/Compose';
 import { mockUploads } from './support/upload';
 import { act, createElement, type ReactElement } from 'react';
 import {
@@ -11,22 +12,21 @@ import { MemberApp } from '../src/client/features/people/MemberApp';
 import { Discover } from '../src/client/features/people/Discover';
 import { Connections } from '../src/client/features/people/Connections';
 import { ProfilePage } from '../src/client/features/people/ProfilePage';
-import {
-  Compose,
-  PostDetail,
-  PostList,
-} from '../src/client/features/posts/Posts';
+import { PostDetail, PostList } from '../src/client/features/posts/Posts';
 import { Notifications } from '../src/client/features/notifications/Notifications';
 import { Interactions } from '../src/client/features/interactions/Interactions';
 import { AvatarForm } from '../src/client/features/avatars/AvatarForm';
 import { PostCropEditor } from '../src/client/features/posts/PostCropEditor';
 import { fullPhoto } from '../src/client/features/posts/crop';
 
-const authMocks = vi.hoisted(() => ({ magicLink: vi.fn() }));
+const authMocks = vi.hoisted(() => ({
+  magicLink: vi.fn(),
+  signOut: vi.fn(),
+}));
 vi.mock('better-auth/react', () => ({
   createAuthClient: () => ({
     signIn: { magicLink: authMocks.magicLink },
-    signOut: vi.fn(),
+    signOut: authMocks.signOut,
   }),
 }));
 vi.mock('better-auth/client/plugins', () => ({ magicLinkClient: vi.fn() }));
@@ -43,6 +43,7 @@ let renderer: ReactTestRenderer;
 beforeEach(() => {
   mockUploads((path, options) => fetch(path, options));
   authMocks.magicLink.mockReset();
+  authMocks.signOut.mockReset();
   requests = [];
   const events = new EventTarget();
   const documentEvents = new EventTarget();
@@ -98,6 +99,7 @@ async function mount(element: ReactElement) {
   await act(async () => {
     renderer = create(element);
   });
+  if (!vi.isFakeTimers()) await act(async () => vi.dynamicImportSettled());
 }
 function visibleText(
   value:
@@ -124,6 +126,7 @@ async function reply(request: Request, data: unknown, status = 200) {
   await act(async () => {
     request.resolve(Response.json(data, { status }));
   });
+  if (!vi.isFakeTimers()) await act(async () => vi.dynamicImportSettled());
 }
 async function click(label: string) {
   const button = renderer.root
@@ -192,6 +195,15 @@ it('shows a unified unread badge, preserves it on failures, and pauses polling w
   expect(
     renderer.root.findByProps({ className: 'nav-badge' }).children,
   ).toEqual(['99+']);
+  await act(async () => {
+    window.dispatchEvent(new Event('focus'));
+    window.dispatchEvent(new Event('hashchange'));
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  expect(
+    requests.filter((request) => request.path.includes('unread-count')),
+  ).toHaveLength(3);
+  await act(async () => vi.advanceTimersByTime(30_000));
   await act(async () => window.dispatchEvent(new Event('focus')));
   await reply(pending('/api/notifications/unread-count'), { count: 0 });
   expect(renderer.root.findAllByProps({ className: 'nav-badge' })).toHaveLength(
@@ -947,6 +959,123 @@ it('asks for a name only when bootstrap has confirmed the missing profile', asyn
   expect(visibleText()).toContain('What’s your name?');
   expect(renderer.root.findAllByProps({ id: 'handle' })).toHaveLength(0);
 });
+
+it.each([
+  { step: 'name', route: '#feed', profile: null },
+  { step: 'event name', route: '#event/opened-event', profile: null },
+  {
+    step: 'setup prompt',
+    route: '#feed',
+    profile: { ...ownProfile, hasAvatar: 0 },
+  },
+  {
+    step: 'username and photo',
+    route: '#photo',
+    profile: { ...ownProfile, hasAvatar: 0 },
+  },
+])(
+  'lets members sign out from $step without completing the form',
+  async ({ route, profile }) => {
+    location.hash = route;
+    authMocks.signOut.mockResolvedValue({ error: null });
+    await mount(createElement(Welcome));
+    await reply(pending('/api/bootstrap'), { ...signedIn, profile });
+    const signOut = renderer.root
+      .findAllByType('button')
+      .find((button) => button.children.join('') === 'Sign out');
+    expect(signOut?.props.type).toBe('button');
+    await click('Sign out');
+    expect(authMocks.signOut).toHaveBeenCalledOnce();
+    expect(renderer.root.findAllByType(MemberApp)).toHaveLength(0);
+    expect(renderer.root.findByProps({ type: 'email' })).toBeDefined();
+    expect(requests.some((request) => request.options?.method === 'PUT')).toBe(
+      false,
+    );
+  },
+);
+
+it.each(['name', 'username', 'photo'])(
+  'lets members exit a pending %s save, ignores its late success, and recovers a failed sign-out',
+  async (stage) => {
+    const naming = stage === 'name';
+    location.hash = naming ? '#feed' : '#photo';
+    let finishSignOut!: (result: { error: { message: string } }) => void;
+    authMocks.signOut
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishSignOut = resolve;
+          }),
+      )
+      .mockResolvedValue({ error: null });
+    await mount(createElement(Welcome));
+    await reply(pending('/api/bootstrap'), {
+      ...signedIn,
+      profile: naming ? null : { ...ownProfile, hasAvatar: 0 },
+    });
+    const field = naming ? 'display-name' : 'handle';
+    await act(async () => {
+      renderer.root.findByProps({ id: field }).props.onChange({
+        target: { value: naming ? 'Alice C' : 'alice_new' },
+      });
+      if (!naming)
+        renderer.root.findByType(AvatarForm).props.onSelect({
+          id: crypto.randomUUID(),
+          blob: new Blob(['synthetic'], { type: 'image/webp' }),
+        });
+    });
+    const submit = () =>
+      renderer.root
+        .findByType('form')
+        .props.onSubmit({ preventDefault: vi.fn() });
+    await act(async () => submit());
+    if (stage === 'photo')
+      await reply(pending('/api/people/self'), {
+        profile: { ...ownProfile, hasAvatar: 0 },
+      });
+    const save = pending(
+      stage === 'photo' ? '/api/avatar' : '/api/people/self',
+    );
+    const route = location.hash;
+    await click('Sign out');
+    expect(save.options?.signal?.aborted).toBe(true);
+    expect(renderer.root.findByProps({ id: field }).props.disabled).toBe(true);
+    expect(
+      renderer.root
+        .findAllByType('button')
+        .find((button) => button.children.join('') === 'Signing out…')?.props
+        .disabled,
+    ).toBe(true);
+    const writes = requests.filter(
+      (request) => request.options?.method === 'PUT',
+    ).length;
+    await act(async () => submit());
+    await reply(
+      save,
+      stage === 'photo'
+        ? { ok: true }
+        : { profile: { ...ownProfile, hasAvatar: 0 } },
+    );
+    expect(location.hash).toBe(route);
+    expect(
+      requests.filter((request) => request.options?.method === 'PUT'),
+    ).toHaveLength(writes);
+    await act(async () => finishSignOut({ error: { message: 'Unavailable' } }));
+    expect(visibleText()).toContain(
+      'Sign-out could not be completed. Please try again.',
+    );
+    expect(renderer.root.findByProps({ id: field }).props.disabled).toBe(false);
+    expect(renderer.root.findByProps({ id: field }).props.value).toBe(
+      naming ? 'Alice C' : 'alice_new',
+    );
+    if (!naming)
+      expect(renderer.root.findByType(AvatarForm).props.draft).not.toBeNull();
+    await click('Sign out');
+    expect(authMocks.signOut).toHaveBeenCalledTimes(2);
+    expect(renderer.root.findAllByType(MemberApp)).toHaveLength(0);
+    expect(visibleText()).not.toContain('Sign-out could not be completed.');
+  },
+);
 
 it.each([null, { ...ownProfile, hasAvatar: 0 }])(
   'keeps members without a photo out of the photo app, even on a photo deep link (%j)',
@@ -1904,6 +2033,7 @@ async function go(hash: string) {
     location.hash = hash;
     window.dispatchEvent(new Event('hashchange'));
   });
+  if (!vi.isFakeTimers()) await act(async () => vi.dynamicImportSettled());
 }
 
 it.each([

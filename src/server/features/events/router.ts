@@ -27,7 +27,7 @@ import {
   originalAppearance,
   parseAppearance,
   parseDetails,
-  parseEmail,
+  hostCandidates,
   parseMessage,
   parseStatus,
   postMessage,
@@ -247,8 +247,9 @@ events.post('/open', bodyLimit({ maxSize: 1024 }), async (c) => {
   const id = validLinkToken(body?.token)
     ? await openEvent(c.env.DB, c.get('userId'), body.token)
     : null;
-  return id
-    ? c.json({ id })
+  const event = id ? await findEvent(c.env, c.get('userId'), id) : null;
+  return event
+    ? c.json({ id: event.id, event })
     : c.json(
         {
           error: 'This event link isn’t available.',
@@ -350,29 +351,47 @@ events.post('/:id/notifications', jsonLimit, async (c) => {
         409,
       );
 });
-// Pending hosts are emails, so they travel in request bodies, never URLs.
+events.get('/:id/host-candidates', async (c) => {
+  const query = (c.req.query('q') ?? '').trim();
+  const after = c.req.query('after') ?? '';
+  if (query.length > 60 || after.length > 30)
+    return c.json({ error: 'Invalid search.' }, 400);
+  return c.json(
+    await hostCandidates(
+      c.env.DB,
+      c.get('userId'),
+      c.req.param('id'),
+      query,
+      after,
+    ),
+  );
+});
+function memberId(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-zA-Z0-9_-]{1,128}$/.test(value);
+}
+// Co-host invitations address an existing member, never an email address.
 events.post('/:id/hosts', bodyLimit({ maxSize: 1024 }), async (c) => {
   const body = (await json(c)) as Record<string, unknown> | null;
-  const email = parseEmail(body?.email);
-  if (!email) return c.json({ error: 'Enter an email address.' }, 400);
-  return (await addHost(c.env.DB, c.get('userId'), c.req.param('id'), email))
+  const userId = body?.userId;
+  if (!memberId(userId)) return c.json({ error: 'Choose a member.' }, 400);
+  return (await addHost(c.env.DB, c.get('userId'), c.req.param('id'), userId))
     ? c.json({ ok: true })
     : c.json(
         {
-          error: `Hosts can be added until the event ends or is cancelled, up to ${MAX_EVENT_HOSTS} including pending ones.`,
+          error: `Choose a follower or someone you follow with a profile photo. Events allow up to ${MAX_EVENT_HOSTS} hosts including pending invitations, until they end or are cancelled.`,
         },
         409,
       );
 });
 events.delete('/:id/hosts', bodyLimit({ maxSize: 1024 }), async (c) => {
   const body = (await json(c)) as Record<string, unknown> | null;
-  const email = parseEmail(body?.email);
-  if (!email) return c.json({ error: 'Enter an email address.' }, 400);
+  const userId = body?.userId;
+  if (!memberId(userId)) return c.json({ error: 'Choose a member.' }, 400);
   return (await removePendingHost(
     c.env.DB,
     c.get('userId'),
     c.req.param('id'),
-    email,
+    userId,
   ))
     ? c.json({ ok: true })
     : c.json(notFound, 404);
@@ -390,14 +409,14 @@ events.delete('/:id/hosts/:handle', async (c) =>
         409,
       ),
 );
-// The member a host added by email accepts or declines hosting.
+// The invited member accepts or declines hosting.
 events.post('/:id/hosting', async (c) =>
   (await acceptHosting(c.env.DB, c.get('userId'), c.req.param('id')))
     ? c.json({ ok: true })
     : c.json(
         {
           error:
-            'You can’t host this event. Add a profile photo, or ask a host to add the email you sign in with.',
+            'This host invitation is no longer available. Ask a host to invite you again.',
         },
         409,
       ),

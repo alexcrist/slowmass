@@ -19,3 +19,5 @@ On opening, measured placement prefers below the trigger, flips above when neede
 `CopyLink` shows a link in a read-only field with a Copy button and a status message; when the clipboard is unavailable, focusing the field selects it for manual copying. `MailIcon` is the envelope that opens a link dialog. The event link and invite link dialogs both use them; each feature owns how its link is fetched.
 
 `LockIcon` marks the RSVP-gated guest list. It is decorative; adjacent text explains the restriction. Navigation destinations have no lock badges.
+
+`ScreenBoundary` contains member-screen suspension and load/render failures while keeping navigation available. Loading is announced; failure offers an explicit reload with a warning about unsaved changes. It never reloads automatically. Route remounts reset the boundary, but failed module imports can require a fresh document.

@@ -1,3 +1,8 @@
+export {
+  prepareOAuthClaim,
+  identifyOAuthClaim,
+  type OAuthClaim,
+} from './oauth';
 import { invitationTokenHash } from './credential';
 
 export { newInvitationCredential, invitationTokenHash } from './credential';

@@ -30,6 +30,8 @@ async function mount() {
         eventRoute: undefined,
         startImmediately: true,
         onFinish,
+        onSignOut: vi.fn(),
+        signingOut: false,
       }),
     );
   });

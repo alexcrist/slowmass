@@ -68,6 +68,8 @@ try {
     'push_subscription',
     'invite_link_claim',
     'event_claim',
+    'event_host_invite',
+    'event_host_member_invite',
   ]) {
     if (
       db
@@ -76,7 +78,7 @@ try {
     ) {
       db.exec(`DELETE FROM ${table}`);
       if (db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get())
-        throw new Error('Push quarantine failed.');
+        throw new Error('Access quarantine failed.');
     }
   }
   db.exec(

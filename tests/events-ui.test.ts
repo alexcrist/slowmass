@@ -11,7 +11,7 @@ import { Welcome } from '../src/client/features/welcome/Welcome';
 import { MemberApp } from '../src/client/features/people/MemberApp';
 import { HeaderActions } from '../src/client/features/people/MemberNavigation';
 import { Notifications } from '../src/client/features/notifications/Notifications';
-import { EventPage } from '../src/client/features/events/EventPage';
+import { EventPage, EventRoute } from '../src/client/features/events/EventPage';
 import { EditEvent, EventForm } from '../src/client/features/events/EventForm';
 import { PostCropEditor, fullPhoto } from '../src/client/features/posts';
 import {
@@ -80,7 +80,7 @@ function view(overrides: Record<string, unknown> = {}) {
   return {
     ...details,
     counts: { going: 1, maybe: 0, declined: 0 },
-    pendingHosts: [],
+    pendingHostMembers: [],
     url,
     viewer: { isHost: false, isCreator: false, response: null },
     ...overrides,
@@ -145,6 +145,7 @@ async function mount(element: ReactElement) {
   await act(async () => {
     renderer = create(element);
   });
+  if (!vi.isFakeTimers()) await act(async () => vi.dynamicImportSettled());
 }
 function visibleText(
   value:
@@ -174,6 +175,7 @@ async function reply(request: Request, data: unknown, status = 200) {
   await act(async () => {
     request.resolve(Response.json(data, { status }));
   });
+  if (!vi.isFakeTimers()) await act(async () => vi.dynamicImportSettled());
 }
 // The accessible name skips decoration hidden from assistive technology.
 function labelText(value: ReactTestInstance | string): string {
@@ -812,10 +814,10 @@ it('opens an event from its URL, then shows guests only after answering', async 
   );
   const opened = pending('/api/events/open');
   expect(JSON.parse(String(opened.options?.body))).toEqual({ token });
-  await reply(opened, { id });
-  await reply(pending(`/api/events/${id}`), {
-    event: view({ counts: null }),
-  });
+  await reply(opened, { id, event: view({ counts: null }) });
+  expect(requests.some((request) => request.path === `/api/events/${id}`)).toBe(
+    false,
+  );
   expect(visibleText()).toContain('RSVP to see who’s going');
   expect(
     renderer.root.findAllByProps({ 'aria-label': 'Share event link' }),
@@ -1383,56 +1385,71 @@ it.each([
   },
 );
 
-it('lets hosts answer and add hosts by email', async () => {
+it('searches connections and invites members to co-host without email', async () => {
   await mount(createElement(EventPage, { id, linkProfiles: true }));
   await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
-  // Hosts see the guests and activity.
   await reply(pending(`/api/events/${id}/guests`), { items: [], next: null });
   await reply(pending(`/api/events/${id}/activity`), { items: [], next: null });
-  await click('Maybe');
-  expect(
-    JSON.parse(String(pending(`/api/events/${id}/response`).options?.body)),
-  ).toEqual({ status: 'maybe' });
-  await reply(pending(`/api/events/${id}/response`), { status: 'maybe' });
-  await reply(pending(`/api/events/${id}`), {
-    event: view({ viewer: { ...host, response: 'maybe' } }),
-  });
-  expect(button('Maybe').props['aria-pressed']).toBe(true);
-  expect(
-    renderer.root
-      .findAllByType('button')
-      .some((item) => item.props.children === 'Replace link'),
-  ).toBe(false);
-
   await click('Event options');
   await click('Edit hosts');
-  // The creator always hosts, so there is nothing to remove yet.
-  expect(visibleText()).not.toContain('Remove');
-  const email = renderer.root.findByProps({ type: 'email' });
-  await act(async () =>
-    email.props.onChange({ target: { value: 'bob@example.com' } }),
-  );
+  const bob = { id: 'bob', handle: 'bob', displayName: 'Bob', hasAvatar: true };
+  await reply(pending(`/api/events/${id}/host-candidates`), {
+    items: [bob],
+    next: null,
+  });
+  expect(renderer.root.findAllByProps({ type: 'email' })).toHaveLength(0);
+  const search = renderer.root.findByProps({ type: 'search' });
+  await act(async () => search.props.onChange({ target: { value: 'Bob' } }));
   await submit();
+  expect(pending(`/api/events/${id}/host-candidates`).path).toContain('q=Bob');
+  await reply(pending(`/api/events/${id}/host-candidates`), {
+    items: [bob],
+    next: null,
+  });
+  await click('Invite Bob to co-host');
   const added = pending(`/api/events/${id}/hosts`);
   expect(added.options?.method).toBe('POST');
-  expect(JSON.parse(String(added.options?.body))).toEqual({
-    email: 'bob@example.com',
-  });
+  expect(JSON.parse(String(added.options?.body))).toEqual({ userId: 'bob' });
   await reply(added, { ok: true });
-  await reply(pending(`/api/events/${id}`), {
-    event: view({ viewer: host, pendingHosts: ['bob@example.com'] }),
+  await reply(pending(`/api/events/${id}/host-candidates`), {
+    items: [],
+    next: null,
   });
-  expect(visibleText()).toContain('bob@example.com');
+  await reply(pending(`/api/events/${id}`), {
+    event: view({ viewer: host, pendingHostMembers: [bob] }),
+  });
   expect(visibleText()).toContain('Pending');
-  await click('Remove bob@example.com');
+  expect(visibleText()).not.toContain('bob@example.com');
+  await click('Cancel invitation for Bob');
   const removed = pending(`/api/events/${id}/hosts`);
   expect(removed.options?.method).toBe('DELETE');
-  expect(JSON.parse(String(removed.options?.body))).toEqual({
-    email: 'bob@example.com',
-  });
+  expect(JSON.parse(String(removed.options?.body))).toEqual({ userId: 'bob' });
 });
 
-it('asks members a host added by email to accept hosting', async () => {
+it('offers retry after connection loading fails and ignores an invite response after closing', async () => {
+  await mount(createElement(EventPage, { id, linkProfiles: true }));
+  await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
+  await click('Event options');
+  await click('Edit hosts');
+  await reply(
+    pending(`/api/events/${id}/host-candidates`),
+    { error: 'Try later' },
+    503,
+  );
+  expect(visibleText()).toContain('Try later');
+  await click('Try again');
+  await reply(pending(`/api/events/${id}/host-candidates`), {
+    items: [{ id: 'bob', handle: 'bob', displayName: 'Bob', hasAvatar: true }],
+    next: null,
+  });
+  await click('Invite Bob to co-host');
+  const request = pending(`/api/events/${id}/hosts`);
+  await act(async () => renderer.unmount());
+  expect(request.options?.signal?.aborted).toBe(true);
+  await reply(request, { ok: true });
+});
+
+it('asks invited members to accept hosting', async () => {
   await mount(createElement(EventPage, { id, linkProfiles: true }));
   await reply(pending(`/api/events/${id}`), {
     event: view({
@@ -1545,8 +1562,10 @@ it('opens an event link for a new member before showing its preview', async () =
   );
   const opened = pending('/api/events/open');
   expect(JSON.parse(String(opened.options?.body))).toEqual({ token });
-  await reply(opened, { id });
-  await reply(pending(`/api/events/${id}`), { event: view({ counts: null }) });
+  await reply(opened, { id, event: view({ counts: null }) });
+  expect(requests.some((request) => request.path === `/api/events/${id}`)).toBe(
+    false,
+  );
   expect(visibleText()).toContain('Enter your name to see details and RSVP.');
   expect(visibleText()).not.toContain('Bring a dish');
   expect(renderer.root.findByProps({ id: 'display-name' })).toBeDefined();
@@ -1983,4 +2002,29 @@ it('does not offer calendar export for cancelled or inaccessible events', async 
   await mount(createElement(EventPage, { id, linkProfiles: false }));
   await reply(pending(`/api/events/${id}`), { error: 'Event not found.' }, 404);
   expect(visibleText()).not.toContain('Add to calendar');
+});
+
+it('falls back to a detail read when an older Worker returns only an event ID', async () => {
+  await mount(createElement(EventRoute, { param: token, linkProfiles: true }));
+  await reply(pending('/api/events/open'), { id });
+  await reply(pending(`/api/events/${id}`), { event: view({ counts: null }) });
+  expect(visibleText()).toContain('Bring a dish');
+});
+
+it('ignores an admission response after navigating to a different event', async () => {
+  await mount(createElement(EventRoute, { param: token, linkProfiles: true }));
+  const old = pending('/api/events/open');
+  const other = '22222222-2222-4333-8444-555555555555';
+  await act(async () =>
+    renderer.update(
+      createElement(EventRoute, { param: other, linkProfiles: true }),
+    ),
+  );
+  expect(old.options?.signal?.aborted).toBe(true);
+  await reply(pending(`/api/events/${other}`), {
+    event: view({ id: other, title: 'Current event', counts: null }),
+  });
+  await reply(old, { id, event: view({ title: 'Old event', counts: null }) });
+  expect(visibleText()).toContain('Current event');
+  expect(visibleText()).not.toContain('Old event');
 });

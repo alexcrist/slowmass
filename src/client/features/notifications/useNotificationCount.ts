@@ -4,6 +4,7 @@ import { api } from '../../api';
 export function useNotificationCount(enabled: boolean) {
   const [count, setCount] = useState<number | null>(null);
   const [revision, setRevision] = useState(0);
+  const lastSuccess = useRef<number | null>(null);
   const active = useRef<AbortController | null>(null);
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
 
@@ -19,7 +20,10 @@ export function useNotificationCount(enabled: boolean) {
       },
     )
       .then((data) => {
-        if (!controller.signal.aborted) setCount(data.count);
+        if (!controller.signal.aborted) {
+          lastSuccess.current = Date.now();
+          setCount(data.count);
+        }
       })
       // Keep the last confirmed count on temporary failure, never assume zero.
       .catch(() => {})
@@ -37,7 +41,13 @@ export function useNotificationCount(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
     const visibleRefresh = () => {
-      if (document.visibilityState !== 'hidden' && !active.current) refresh();
+      if (
+        document.visibilityState !== 'hidden' &&
+        !active.current &&
+        (lastSuccess.current === null ||
+          Date.now() - lastSuccess.current >= 30_000)
+      )
+        refresh();
     };
     const timer = setInterval(visibleRefresh, 60_000);
     window.addEventListener('focus', visibleRefresh);

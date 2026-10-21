@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { setTimeout } from 'node:timers/promises';
 
 const origin = 'https://slowmass.com';
@@ -8,6 +8,7 @@ const assets = new Set([
   '/index.html',
   '/manifest.webmanifest',
   '/startup.js',
+  ...(await readdir('dist/assets')).map((name) => `/assets/${name}`),
   ...Array.from(
     html.matchAll(/(?:src|href)="(\/assets\/[^"?#]+)"/g),
     (match) => match[1],
@@ -21,12 +22,35 @@ async function verify() {
       signal: AbortSignal.timeout(15000),
     });
     assert.equal(response.status, 200, `${path}: status`);
+    if (path.startsWith('/assets/')) {
+      assert.match(
+        response.headers.get('cache-control') ?? '',
+        /max-age=31536000/,
+      );
+      assert.match(response.headers.get('cache-control') ?? '', /immutable/);
+    } else if (path === '/index.html' || path === '/startup.js') {
+      assert.match(
+        response.headers.get('cache-control') ?? '',
+        /max-age=0|no-cache/,
+      );
+    }
     assert.deepEqual(
       Buffer.from(await response.arrayBuffer()),
       await readFile(`dist${path}`),
       `${path}: deployed bytes differ from checked build`,
     );
   }
+  const missingChunk = await fetch(
+    new URL('/assets/missing-deployment-probe.js', origin),
+    {
+      signal: AbortSignal.timeout(15000),
+    },
+  );
+  assert.doesNotMatch(
+    missingChunk.headers.get('cache-control') ?? '',
+    /immutable|max-age=31536000/,
+  );
+  await missingChunk.arrayBuffer();
   for (const [path, status] of [
     ['/api/status', 200],
     ['/api/bootstrap', 200],

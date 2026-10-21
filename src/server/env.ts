@@ -7,6 +7,8 @@ export interface Env {
   ASSETS: Fetcher;
   APP_ORIGIN: string;
   AUTH_SECRET?: string;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
   BOOTSTRAP_EMAIL?: string;
   RESEND_API_KEY?: string;
   EMAIL_FROM?: string;

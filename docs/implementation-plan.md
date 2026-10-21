@@ -86,6 +86,7 @@ Exit: an invited friend can sign in, post, follow another friend, and interact w
 ## 7. Events and member setup
 
 - [x] Implement event creation with processed private covers, details, co-host invitations, guest answers, activity/messages, and bounded host notifications.
+- [x] Replace email co-host invitations with in-app invitations to accepted followers/following with complete profiles, preserving consent and existing host roles.
 - [x] Make event links invite new members with permanent inviter/link-version provenance; limit signed-out previews and gate the photo app on profile setup.
 - [x] Implement curated event appearance, combined username/photo setup, calendar copies, cancellation, and creator-only deletion.
 - [x] Allow event-only members to browse Find and other members’ profile previews; open account setup on Request to follow while retaining Feed/New post gates.
@@ -108,3 +109,14 @@ Implemented behavior, permissions, and failure handling live in the [client even
 - [ ] Complete the owner's event-flow review and confirm Google/Outlook saves and Apple calendar imports on real devices. Automated link/file tests do not exercise native app handoff; direct Outlook HTTP probes from the development environment return 417 even for its ordinary calendar page.
 
 These device checks require owner observations; do not perform browser or visual testing. Routine deployment and CI results are available in [GitHub Actions](https://github.com/alexcrist/slowmass/actions/workflows/ci.yml).
+
+## Google sign-in rollout
+
+- [x] Configure production/development OAuth clients, credentials, verified domain, and existing app branding in Google Testing mode.
+- [x] Implement backend account linking and consumer Gmail alias matching, preserving stored account IDs and invitation provenance; verify through synthetic Workers/D1 OAuth integration tests.
+- [x] Audit production alias/provider collisions using aggregate read-only queries; no collisions found on October 21, 2026.
+- [x] Draft the public privacy notice and implement the small homepage description/link locally; verify signed-out, script-free access through the Workers assets runtime.
+- [ ] Publish the public privacy page and homepage footer; complete Google's branding review and publishing requirements.
+- [ ] Repeat the audit and apply manual migration 0036 with the backup/maintenance runbook before backend rollout.
+- [ ] Add Google sign-in controls to regular, invite-link, and event-link flows only after the preceding setup is ready.
+- [ ] Deploy and verify hosted Google sign-in and existing email-link recovery. Local tests are not live-provider verification.

@@ -1,17 +1,29 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from './index';
 
-export function useApiResource<T>(path: string) {
+export function useApiResource<T>(path: string, initialData?: T) {
   // A fresh object identifies each read, including retries of the same URL.
   const [request, setRequest] = useState(() => ({ path, preserveData: false }));
+  // A freshly authorized response from an earlier operation can seed this
+  // mount. Only that exact request skips GET; retries and path changes recheck.
+  const initial = useRef({ request, data: initialData });
   const [result, setResult] = useState<{
     request: typeof request;
     data: T | null;
     error: string;
-  } | null>(null);
+  } | null>(() =>
+    initialData === undefined
+      ? null
+      : { request, data: initialData, error: '' },
+  );
   if (request.path !== path) setRequest({ path, preserveData: false });
 
   useEffect(() => {
+    if (
+      request === initial.current.request &&
+      initial.current.data !== undefined
+    )
+      return;
     const controller = new AbortController();
     const timeout = setTimeout(() => {
       controller.abort();

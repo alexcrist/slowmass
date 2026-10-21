@@ -15,3 +15,9 @@ Feature `index.ts` files define public entry points; cross-feature consumers use
 [Device setup](features/device-setup/README.md) records whether a member may still see the optional install/notification suggestion in Activity. Account bootstrap composes its read with the people profile read and push's subscription check; neither install nor push consent gates member access. Push owns independent browser endpoints within authenticated sessions.
 
 Events share curated appearance IDs with the client through the dependency-free [appearance contract](../shared/event-appearance/README.md); the event domain owns authorization and persistence.
+
+## Crawler policy
+
+`public/robots.txt` disallows all crawling, including AI training and search crawlers. Static assets use `public/_headers` and Worker responses use the global middleware to send `X-Robots-Tag: noindex, nofollow`; the app shell and privacy page also include the HTML directive. Static delivery stays outside the Worker to preserve free asset serving. Event link previews retain their existing authorization and noindex behavior, but preview services that honor robots.txt may stop generating cards.
+
+These are cooperative directives, not access controls: private resources still require authorization. They cannot prevent agents that ignore robots.txt or erase previously collected content. A crawler blocked by robots.txt cannot read the noindex header, so already-indexed URLs may require removal through the search provider’s webmaster tools. Do not claim verified deindexing from a successful deployment alone.

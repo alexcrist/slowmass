@@ -1,3 +1,4 @@
+import { eventHref } from './navigation';
 import { useApiResource } from '../../api/useApiResource';
 import { usePageHistory } from '../../navigation/PageHistory';
 import {
@@ -7,10 +8,6 @@ import {
 } from './EventIcons';
 import { eventStart } from './time';
 import { yourAnswer, type EventItem } from './types';
-
-export function eventHref(id: string, view = '') {
-  return `#event/${encodeURIComponent(id)}${view ? `/${view}` : ''}`;
-}
 
 export function EventsPage({
   when,
@@ -111,7 +108,9 @@ export function EventsPage({
                   <span>
                     {event.cancelled
                       ? 'Cancelled'
-                      : yourAnswer(event.isHost, event.response)}
+                      : event.hostInvited
+                        ? 'Asked to co-host'
+                        : yourAnswer(event.isHost, event.response)}
                   </span>
                 </p>
               </div>
