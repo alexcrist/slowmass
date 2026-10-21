@@ -74,6 +74,8 @@ Use the approved neutral photo-app direction in `docs/design.md`: white canvas a
 
 ## Operations and cost
 
+**Never watch deployments.** After pushing, do not wait for, poll, or monitor CI/deployment runs. Report that the changes were pushed without claiming deployment success. Leave automated deployment checks to the existing pipeline.
+
 Start with one deployable application, one D1 database, and private R2 storage. Add infrastructure only for measured needs. Measure request/CPU usage, rows scanned/written, stored bytes, and transformations; free-tier ceilings are not availability guarantees or hard spending caps.
 
 Prefer local development and CI emulation over idle hosted staging resources. Migrations run explicitly, never opportunistically during requests. Separate preview and production data. Maintain a tested restore procedure and deletion cleanup. Do not silently provision paid services or enable automatic production deployment as an incidental code change.

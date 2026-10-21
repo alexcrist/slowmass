@@ -76,7 +76,7 @@ export function Welcome() {
     const params = new URLSearchParams(location.search);
     const error = params.get('error');
     if (error === 'INVITATION_REQUIRED' && params.get('auth') === 'google')
-      return 'You need an invitation to join slowmass. Ask a member to send you an invite link, then open it to sign in.';
+      return 'To join slowmass, ask a friend on slowmass for an invite link and open it. Already have an account? Sign in with the email you used before.';
     if (error !== null && params.get('auth') === 'google')
       return 'Google sign-in wasn’t completed. Try again or use an email link. New here? Open your invitation first.';
     return error === 'event'

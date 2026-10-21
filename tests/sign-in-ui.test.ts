@@ -525,6 +525,8 @@ it('shows invitation guidance on the login page after an uninvited Google sign-i
   await openSignIn('regular', true);
   expect(
     renderer.root.findByProps({ role: 'alert' }).children.join(''),
-  ).toContain('You need an invitation to join slowmass.');
+  ).toContain(
+    'To join slowmass, ask a friend on slowmass for an invite link and open it.',
+  );
   expect(button('Continue with Google')).toBeDefined();
 });
