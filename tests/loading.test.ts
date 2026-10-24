@@ -2149,7 +2149,12 @@ it('supports direct post links, safe back navigation, unavailable posts, and ret
   await reply(pending('/api/posts/direct'), {
     post: { ...post('direct'), handle: 'bob' },
   });
-  await go(renderer.root.findByProps({ href: '#profile/bob' }).props.href);
+  await go(
+    renderer.root.findByProps({
+      className: 'person-link',
+      href: '#profile/bob',
+    }).props.href,
+  );
   expect(renderer.root.findAllByType(PostDetail)).toHaveLength(0);
   expect(
     pending('/api/interactions/direct/comments?').options?.signal?.aborted,

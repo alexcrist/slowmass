@@ -729,10 +729,6 @@ a.notification-person:hover {
   gap: var(--post-content-gap);
   padding: var(--post-content-gap) 0 20px;
 }
-.post-body > .bio {
-  margin: 0;
-  font-size: 15px;
-}
 .post-body > section {
   /* The 24px icons are centered inside 44px controls. */
   margin-top: -10px;
@@ -1045,6 +1041,22 @@ summary.settings-row::after {
   /* A 24px visible gap, including the 10px below the icons inside their
      44px controls. */
   margin-bottom: calc(var(--post-content-gap) - 2px);
+}
+.post-interactions:has(+ .post-caption) {
+  /* The same 16px visible gap as photo to icons. */
+  margin-bottom: calc(var(--post-content-gap) - 10px);
+}
+.post-caption {
+  margin: 0 0 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.post-caption a {
+  text-decoration: none;
+}
+.post-caption:has(~ .comments) {
+  /* Matches the action-row-to-first-comment gap without a caption. */
+  margin-bottom: 24px;
 }
 .comments > .actions:not(:empty) {
   margin-bottom: var(--post-content-gap);

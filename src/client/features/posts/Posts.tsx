@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { PersonLink } from '../../navigation/PersonLink';
-import { postHref } from '../../navigation';
+import { postHref, profileHref } from '../../navigation';
 import { usePageHistory } from '../../navigation/PageHistory';
 import { Interactions } from '../interactions';
 import { useApiResource } from '../../api/useApiResource';
@@ -208,12 +208,21 @@ function PostCard({
         </a>
       )}
       <div className="post-body">
-        {caption && <p className="bio">{caption}</p>}
         <Interactions
           key={post.id}
           postId={post.id}
           initial={post}
           commentsInitiallyOpen={focused}
+          caption={
+            caption && (
+              <p className="post-caption">
+                <a href={profileHref(post.handle)}>
+                  <strong>@{post.handle}</strong>
+                </a>{' '}
+                {caption}
+              </p>
+            )
+          }
         />
       </div>
     </article>

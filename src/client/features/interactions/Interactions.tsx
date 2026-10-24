@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { PersonLink } from '../../navigation/PersonLink';
 import { profileHref } from '../../navigation';
 import { api, jsonRequest } from '../../api';
@@ -23,10 +23,13 @@ export function Interactions({
   postId,
   initial,
   commentsInitiallyOpen = false,
+  caption,
 }: {
   postId: string;
   initial: Counts;
   commentsInitiallyOpen?: boolean;
+  // Shown between the action row and the comments.
+  caption?: ReactNode;
 }) {
   const [counts, setCounts] = useState(initial),
     [open, setOpen] = useState(commentsInitiallyOpen),
@@ -99,6 +102,7 @@ export function Interactions({
           {counts.commentCount > 0 && <span>{counts.commentCount}</span>}
         </button>
       </div>
+      {caption}
       {likesOpen && (
         <Likes
           path={`/api/interactions/${postId}/likes`}
