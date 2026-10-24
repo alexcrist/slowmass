@@ -129,12 +129,13 @@ async function reply(request: Request, data: unknown, status = 200) {
   if (!vi.isFakeTimers()) await act(async () => vi.dynamicImportSettled());
 }
 async function click(label: string) {
-  const button = renderer.root
-    .findAllByType('button')
-    .find(
-      (item) =>
-        item.props['aria-label'] === label || item.children.join('') === label,
-    );
+  const button = renderer.root.findAllByType('button').find(
+    (item) =>
+      item.props['aria-label'] === label ||
+      // Settings rows lead with an icon element; match their text.
+      item.children.filter((child) => typeof child === 'string').join('') ===
+        label,
+  );
   expect(button, `Button ${label}`).toBeDefined();
   expect(button!.props.disabled).not.toBe(true);
   await act(async () => {
@@ -1895,6 +1896,29 @@ it('Profile navigates home from another member and Settings provides the only fu
     location.hash = '#settings';
     window.dispatchEvent(new Event('hashchange'));
   });
+  // Every row leads with a decorative icon, in this order.
+  const rows = renderer.root.findAll(
+    (node) =>
+      typeof node.type === 'string' &&
+      String(node.props.className).split(' ').includes('settings-row'),
+  );
+  expect(
+    rows.map((row) =>
+      row.children.filter((child) => typeof child === 'string').join(''),
+    ),
+  ).toEqual([
+    'Edit profile',
+    'Invite to slowmass',
+    'Notifications',
+    'Reload app',
+    'Blocked accounts',
+    'Sign out',
+    'Delete account',
+  ]);
+  for (const row of rows)
+    expect(
+      row.findByProps({ className: 'settings-icon' }).props['aria-hidden'],
+    ).toBe('true');
   await click('Reload app');
   expect(location.reload).toHaveBeenCalledOnce();
 });

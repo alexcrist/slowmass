@@ -1,3 +1,4 @@
+import { api } from '../../api';
 export function pushSupported() {
   return (
     'serviceWorker' in navigator &&
@@ -5,14 +6,39 @@ export function pushSupported() {
     typeof Notification !== 'undefined'
   );
 }
-// This device's state without a network request. The server-confirmed status in
-// usePush remains authoritative for Settings and opt-in.
-export async function localPushState() {
+// Endpoints the server confirmed during this page load, so navigation
+// doesn't repeat the check. A confirmed subscription that later stops working
+// is noticed on the next load.
+const confirmed = new Set<string>();
+
+// This device's state for choosing a suggestion. A local subscription counts as
+// on only once the server confirms it delivers to this endpoint for the current
+// login: the browser may have renewed the endpoint, or the login it was
+// registered under may have expired. A failed check counts as on, so being
+// offline never suggests turning notifications on. usePush remains
+// authoritative for Settings and opt-in.
+export async function devicePushState() {
   if (!pushSupported()) return 'unsupported';
   if (Notification.permission === 'denied') return 'denied';
   if (Notification.permission !== 'granted') return 'off';
   const registration = await navigator.serviceWorker.getRegistration('/');
-  return (await registration?.pushManager.getSubscription()) ? 'on' : 'off';
+  const endpoint = (await registration?.pushManager.getSubscription())
+    ?.endpoint;
+  if (!endpoint) return 'off';
+  if (confirmed.has(endpoint)) return 'on';
+  try {
+    const status = await api<{
+      available: boolean;
+      subscription: { endpoint: string } | null;
+    }>('/api/push/device', { headers: { 'X-Push-Endpoint': endpoint } });
+    if (!status.available || status.subscription?.endpoint === endpoint) {
+      confirmed.add(endpoint);
+      return 'on';
+    }
+    return 'off';
+  } catch {
+    return 'on';
+  }
 }
 export function applicationKey(value: string) {
   return Uint8Array.from(

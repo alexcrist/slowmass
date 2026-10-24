@@ -16,10 +16,6 @@ function PushControls({ push }: { push: ReturnType<typeof usePush> }) {
   } = push;
   return (
     <>
-      <p>
-        Push alerts appear on this device for the activity you choose below.
-        They show names and message text, including on a locked screen.
-      </p>
       {needsHomeScreen ? (
         <>
           <p>

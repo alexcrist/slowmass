@@ -13,6 +13,7 @@ The app name is always styled `slowmass` in lowercase, including browser titles,
 - Gray `#737373`: secondary text; light gray `#e5e5e5`: boundaries.
 - Neutral `#f5f5f5`: navigation hover/active state and photo loading surfaces.
 - Douglas Fir `#214c3b`: primary action buttons only, with white labels.
+- Scrollbars: a thin rounded thumb on a transparent track, light gray `#d4d4d4` by default and the event theme's control-line color on themed event pages.
 
 Both fonts are served locally from `public/fonts`, with their SIL Open Font Licenses included. No third-party font or image requests. The reusable wordmark is also available at `/slowmass-wordmark.svg` as standalone vector outlines.
 

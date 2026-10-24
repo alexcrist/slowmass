@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, withDeadline } from '../../api';
 import { useInstallState } from '../install';
-import { localPushState } from '../push';
+import { devicePushState } from '../push';
 import { deviceSetupStep, steps, type PushState, type Step } from './step';
 
 // Which steps this browser has shown for 250 ms. It is a presentation hint for
@@ -16,6 +16,14 @@ function readSeen(): Step[] {
       : [];
   } catch {
     return [];
+  }
+}
+
+function writeSeen(value: Step[]) {
+  try {
+    localStorage.setItem(seenKey, JSON.stringify(value));
+  } catch {
+    /* Without storage, seen state lasts for this page load. */
   }
 }
 
@@ -39,14 +47,26 @@ export function useDeviceSetup(
   const appleMobile = Boolean(install?.appleMobile);
   const running = Boolean(install?.running);
   const checksPush = ready && pending && mobile && (!appleMobile || running);
+  const forget = useCallback((value: Step) => {
+    setSeen((current) => {
+      if (!current.includes(value)) return current;
+      const next = current.filter((step) => step !== value);
+      writeSeen(next);
+      return next;
+    });
+  }, []);
   const refresh = useCallback(async () => {
     if (!checksPush || document.visibilityState === 'hidden') return;
     const current = ++generation.current;
-    const state = await withDeadline(localPushState()).catch(
+    const state = await withDeadline(devicePushState()).catch(
       () => 'unknown' as const,
     );
-    if (current === generation.current) setPush(state);
-  }, [checksPush]);
+    if (current !== generation.current) return;
+    setPush(state);
+    // Working notifications make the step count as new again if they later
+    // stop, e.g. after the browser renews its subscription.
+    if (state === 'on') forget('notifications');
+  }, [checksPush, forget]);
   useEffect(() => {
     if (!checksPush) return;
     void refresh();
@@ -78,11 +98,7 @@ export function useDeviceSetup(
       if (seen.includes(value)) return;
       const next = [...seen, value];
       setSeen(next);
-      try {
-        localStorage.setItem(seenKey, JSON.stringify(next));
-      } catch {
-        /* Without storage, seen state lasts for this page load. */
-      }
+      writeSeen(next);
     },
     [seen],
   );

@@ -29,6 +29,7 @@ import {
   eventHref,
 } from '../events';
 import { DeviceSetupItem, useDeviceSetup } from '../device-setup';
+import { SettingsRowIcon } from '../../ui/SettingsRowIcon';
 
 const titles: Record<string, string> = {
   feed: 'Feed',
@@ -214,34 +215,23 @@ function MemberPages({
       case 'settings':
         return (
           <>
-            <nav className="settings-links" aria-label="Settings">
+            <div className="settings-links">
               <a className="settings-row" href="#photo">
+                <SettingsRowIcon name="photo" />
                 Set up profile
               </a>
               <a className="settings-row" href="#edit">
+                <SettingsRowIcon name="profile" />
                 Edit name
               </a>
               <a className="settings-row" href="#notification-settings">
+                <SettingsRowIcon name="notifications" />
                 Notifications
               </a>
-            </nav>
-            <InstallApp />
-            <button
-              type="button"
-              className="settings-row"
-              onClick={onSignOut}
-              disabled={signingOut}
-            >
-              {signingOut ? 'Signing out…' : 'Sign out'}
-            </button>
-            <details className="settings-disclosure">
-              <summary className="settings-row settings-danger">
-                Delete account
-              </summary>
-              <div className="settings-details">
-                <DeleteAccount />
-              </div>
-            </details>
+              <InstallApp />
+              <SignOutRow signingOut={signingOut} onSignOut={onSignOut} />
+              <DeleteAccountRow />
+            </div>
           </>
         );
       default:
@@ -369,43 +359,33 @@ function MemberPages({
       case 'settings':
         return (
           <>
-            <nav className="settings-links" aria-label="Settings">
+            <div className="settings-links">
               <a className="settings-row" href="#edit">
+                <SettingsRowIcon name="profile" />
                 Edit profile
               </a>
-              <a className="settings-row" href="#blocked">
-                Blocked accounts
-              </a>
+              <InviteSettingsRow disabled={signingOut} />
               <a className="settings-row" href="#notification-settings">
+                <SettingsRowIcon name="notifications" />
                 Notifications
               </a>
-            </nav>
-            <InviteSettingsRow disabled={signingOut} />
-            <InstallApp />
-            <button
-              type="button"
-              className="settings-row"
-              onClick={() => location.reload()}
-              disabled={signingOut}
-            >
-              Reload app
-            </button>
-            <button
-              type="button"
-              className="settings-row"
-              onClick={onSignOut}
-              disabled={signingOut}
-            >
-              {signingOut ? 'Signing out…' : 'Sign out'}
-            </button>
-            <details className="settings-disclosure">
-              <summary className="settings-row settings-danger">
-                Delete account
-              </summary>
-              <div className="settings-details">
-                <DeleteAccount />
-              </div>
-            </details>
+              <InstallApp />
+              <button
+                type="button"
+                className="settings-row"
+                onClick={() => location.reload()}
+                disabled={signingOut}
+              >
+                <SettingsRowIcon name="reload" />
+                Reload app
+              </button>
+              <a className="settings-row" href="#blocked">
+                <SettingsRowIcon name="blocked" />
+                Blocked accounts
+              </a>
+              <SignOutRow signingOut={signingOut} onSignOut={onSignOut} />
+              <DeleteAccountRow />
+            </div>
           </>
         );
       default:
@@ -486,6 +466,40 @@ function MemberPages({
   );
 }
 
+function SignOutRow({
+  signingOut,
+  onSignOut,
+}: {
+  signingOut: boolean;
+  onSignOut: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="settings-row"
+      onClick={onSignOut}
+      disabled={signingOut}
+    >
+      <SettingsRowIcon name="signOut" />
+      {signingOut ? 'Signing out…' : 'Sign out'}
+    </button>
+  );
+}
+
+function DeleteAccountRow() {
+  return (
+    <details className="settings-disclosure">
+      <summary className="settings-row settings-danger">
+        <SettingsRowIcon name="delete" />
+        Delete account
+      </summary>
+      <div className="settings-details">
+        <DeleteAccount />
+      </div>
+    </details>
+  );
+}
+
 function InviteSettingsRow({ disabled }: { disabled: boolean }) {
   const [inviting, setInviting] = useState(false);
   return (
@@ -497,6 +511,7 @@ function InviteSettingsRow({ disabled }: { disabled: boolean }) {
         onClick={() => setInviting(true)}
         disabled={disabled}
       >
+        <SettingsRowIcon name="invite" />
         Invite to slowmass
       </button>
       {inviting && <InviteLinkDialog onClose={() => setInviting(false)} />}

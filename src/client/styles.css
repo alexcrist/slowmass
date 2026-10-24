@@ -51,6 +51,27 @@
 * {
   box-sizing: border-box;
 }
+/* Thin thumb on a transparent track app-wide; it follows --control-line, so
+   event themes recolor it. WebKit-only rules cover Safari without scrollbar-color. */
+:root {
+  scrollbar-width: thin;
+  scrollbar-color: var(--control-line) transparent;
+}
+@supports not (scrollbar-color: auto) {
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: var(--control-line) padding-box;
+  }
+}
 body {
   margin: 0;
 }
@@ -861,11 +882,13 @@ a.notification-person:hover {
 .settings-links {
   display: grid;
 }
+.settings-links > :last-child {
+  border-bottom: 0;
+}
 .settings-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   width: 100%;
   min-height: 56px;
   margin: 0;
@@ -894,7 +917,13 @@ summary.settings-row::after {
   flex-shrink: 0;
   border-top: 1.5px solid var(--muted);
   border-right: 1.5px solid var(--muted);
+  margin-left: auto;
   transform: rotate(45deg);
+}
+.settings-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
 }
 .settings-disclosure {
   border-bottom: 1px solid var(--line);
@@ -945,6 +974,12 @@ summary.settings-row::after {
 .notification-choices tbody th {
   padding: 14px 8px 14px 0;
   font-weight: 400;
+}
+/* Group names (People, Photos, Events) head each set of category rows. */
+.notification-choices .notification-group th {
+  padding: 20px 0 6px;
+  font-size: 16px;
+  font-weight: 600;
 }
 .notification-choices :is(thead th, td):not(:first-child) {
   width: 64px;
@@ -2410,7 +2445,6 @@ a.profile-tab {
 /* Event appearance reaches the entire shell and native top-layer dialogs. */
 :root[data-event-appearance] {
   accent-color: var(--brand);
-  scrollbar-color: var(--control-line) var(--paper);
   /* Narrow accents at the viewport's sides, anchored to the viewport. */
   --edge-width: clamp(20px, 7vw, 112px);
   --canvas: linear-gradient(

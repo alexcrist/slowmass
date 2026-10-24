@@ -80,6 +80,34 @@ it('shows device status and each category with its saved choices', async () => {
   expect(checkbox('Email: Update blasts from hosts').props.checked).toBe(true);
   // Categories the server didn't return (an older server) aren't shown.
   expect(text()).not.toContain('Comments on your photos');
+  expect(text()).toContain('Notification types');
+  // Each group heads its categories, in Settings order.
+  const headings = renderer.root
+    .findAll((node) => node.type === 'th' && node.props.scope === 'rowgroup')
+    .map((node) => node.children.join(''));
+  expect(headings).toEqual(['People', 'Photos', 'Events']);
+  const rows = renderer.root
+    .findAllByType('tbody')
+    .map((group) =>
+      group
+        .findAll((node) => node.type === 'th' && node.props.scope === 'row')
+        .map((node) => node.children.join('')),
+    );
+  expect(rows).toEqual([
+    ['Follow requests'],
+    ['Likes on your photos'],
+    ['Update blasts from hosts'],
+  ]);
+});
+
+it('omits a group when the server returns none of its categories', async () => {
+  await mount(createElement(NotificationSettings));
+  await reply(0, { preferences: [defaults[0]] });
+  expect(
+    renderer.root
+      .findAll((node) => node.type === 'th' && node.props.scope === 'rowgroup')
+      .map((node) => node.children.join('')),
+  ).toEqual(['People']);
 });
 
 it('saves one choice at a time and keeps the saved state when a save fails', async () => {

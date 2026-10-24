@@ -13,6 +13,7 @@ type Preference = {
   email: boolean;
 };
 const path = '/api/notifications/preferences';
+const groups = [...new Set(notificationCategories.map(({ group }) => group))];
 
 function Choices({ preferences }: { preferences: Preference[] }) {
   const [saved, setSaved] = useState(preferences);
@@ -60,33 +61,47 @@ function Choices({ preferences }: { preferences: Preference[] }) {
             <th scope="col">Email</th>
           </tr>
         </thead>
-        <tbody>
-          {notificationCategories.map(({ id, label }) => {
-            const item = saved.find((preference) => preference.category === id);
-            if (!item) return null;
-            return (
-              <tr key={id}>
-                <th scope="row">{label}</th>
-                {(['push', 'email'] as const).map((channel) => (
-                  <td key={channel}>
-                    <input
-                      type="checkbox"
-                      aria-label={`${channel === 'push' ? 'Push' : 'Email'}: ${label}`}
-                      checked={item[channel]}
-                      disabled={saving !== null}
-                      onChange={(event) =>
-                        void change({
-                          ...item,
-                          [channel]: event.target.checked,
-                        })
-                      }
-                    />
-                  </td>
-                ))}
+        {groups.map((group) => {
+          const rows = notificationCategories.flatMap(
+            ({ id, group: of, label }) => {
+              const item = saved.find(
+                (preference) => preference.category === id,
+              );
+              return of === group && item ? [{ item, label }] : [];
+            },
+          );
+          if (!rows.length) return null;
+          return (
+            <tbody key={group}>
+              <tr className="notification-group">
+                <th scope="rowgroup" colSpan={3}>
+                  {group}
+                </th>
               </tr>
-            );
-          })}
-        </tbody>
+              {rows.map(({ item, label }) => (
+                <tr key={item.category}>
+                  <th scope="row">{label}</th>
+                  {(['push', 'email'] as const).map((channel) => (
+                    <td key={channel}>
+                      <input
+                        type="checkbox"
+                        aria-label={`${channel === 'push' ? 'Push' : 'Email'}: ${label}`}
+                        checked={item[channel]}
+                        disabled={saving !== null}
+                        onChange={(event) =>
+                          void change({
+                            ...item,
+                            [channel]: event.target.checked,
+                          })
+                        }
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          );
+        })}
       </table>
       {saving && <p role="status">Saving…</p>}
       {error && <p role="alert">{error}</p>}
@@ -105,12 +120,7 @@ export function NotificationSettings() {
         <PushDevice />
       </section>
       <section aria-labelledby="notification-choices">
-        <h2 id="notification-choices">What you hear about</h2>
-        <p>
-          Everything still appears in Activity. Email skips activity you’ve
-          already seen in the app, except update blasts. Like alerts wait 15
-          minutes so several likes arrive as one.
-        </p>
+        <h2 id="notification-choices">Notification types</h2>
         {error ? (
           <>
             <p role="alert">{error}</p>

@@ -328,3 +328,45 @@ it('counts each step until its summary is visible for 250 ms on this device', as
   await mount();
   expect(unseen).toBe(true);
 });
+
+it('offers notifications again, as new, when the server no longer delivers to this device', async () => {
+  Object.assign(Notification, { permission: 'granted' });
+  local = subscription;
+  endpoint = subscription.endpoint;
+  storage.set('slowmass:device-setup-seen', '["notifications"]');
+  await mount();
+  expect(rows()).toHaveLength(0);
+  // Working notifications forget the step was seen.
+  expect(storage.get('slowmass:device-setup-seen')).toBe('[]');
+
+  // The browser renews its subscription; the server only knows the old one.
+  const renewed = {
+    ...subscription,
+    endpoint: 'https://fcm.googleapis.com/fcm/send/renewed',
+    unsubscribe: vi.fn(async () => {
+      local = null;
+      return true;
+    }),
+  };
+  local = renewed;
+  await act(async () => window.dispatchEvent(new Event('focus')));
+  expect(text()).toContain('Turn on notifications for follows');
+  expect(unseen).toBe(true);
+  await click('Turn on');
+  // Permission was already granted, so there is no prompt.
+  expect(requestPermission).not.toHaveBeenCalled();
+  expect(renewed.unsubscribe).toHaveBeenCalledOnce();
+  expect(local).toBe(subscription);
+  expect(text()).toContain('Notifications are on.');
+});
+
+it('does not suggest notifications when the server check fails', async () => {
+  Object.assign(Notification, { permission: 'granted' });
+  local = {
+    ...subscription,
+    endpoint: 'https://fcm.googleapis.com/fcm/send/offline',
+  };
+  mock.api.mockRejectedValue(new Error('Offline'));
+  await mount();
+  expect(text()).not.toContain('Turn on notifications');
+});

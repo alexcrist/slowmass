@@ -5,6 +5,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { SettingsRowIcon } from '../../ui/SettingsRowIcon';
 
 type InstallPrompt = Event & {
   prompt: () => Promise<{ outcome: 'accepted' | 'dismissed' }>;
@@ -241,7 +242,10 @@ export function InstallApp() {
   if (!context?.mobile) return null;
   return (
     <details className="settings-disclosure">
-      <summary className="settings-row">Install slowmass</summary>
+      <summary className="settings-row">
+        <SettingsRowIcon name="install" />
+        Install slowmass
+      </summary>
       <div className="settings-details">
         <InstallControls />
       </div>

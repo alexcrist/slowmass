@@ -3,6 +3,6 @@ export { usePush } from './usePush';
 export {
   dismissPushNotifications,
   clearLocalPush,
-  localPushState,
+  devicePushState,
   observePushWindow,
 } from './browser';
