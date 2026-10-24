@@ -137,6 +137,9 @@ function Comments({
   } = useApiResource<Page>(
     `/api/interactions/${postId}/comments?after=${encodeURIComponent(after)}`,
   );
+  // An empty first page needs no message: the composer takes the first
+  // comment's place. A later page can empty out after deletions.
+  const empty = !loading && page?.items.length === 0;
   async function add(event: FormEvent) {
     event.preventDefault();
     if (busy || loading || !body.trim()) return;
@@ -187,7 +190,7 @@ function Comments({
   return (
     <div className="comments">
       {loading && !page && <p role="status">Loading comments…</p>}
-      {!loading && page?.items.length === 0 && <p>No comments on this page.</p>}
+      {empty && after && <p>No comments on this page.</p>}
       <ul className="comment-list">
         {page?.items.map((comment) => (
           <CommentRow
@@ -243,7 +246,9 @@ function Comments({
       </nav>
       <Composer
         label="Add a comment"
-        placeholder="Add a comment…"
+        placeholder={
+          empty && !after ? 'Add the first comment…' : 'Add a comment…'
+        }
         maxLength={1000}
         value={body}
         busy={busy}

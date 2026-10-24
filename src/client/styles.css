@@ -691,6 +691,10 @@ a.notification-person:hover {
 }
 .post {
   --post-content-gap: 16px;
+  /* The divider-to-avatar gap below each post: post spacing plus the
+     header's 8px top padding and the avatar's 4px inset. The post body ends
+     with the same gap so the divider sits centered between posts. */
+  --post-divider-gap: calc(var(--post-spacing) + 12px);
   margin: 24px 0 var(--post-spacing);
   background: var(--paper);
   border-bottom: 1px solid var(--line);
@@ -728,14 +732,11 @@ a.notification-person:hover {
   display: flex;
   flex-direction: column;
   gap: var(--post-content-gap);
-  padding: var(--post-content-gap) 16px 20px;
+  padding: var(--post-content-gap) 16px var(--post-divider-gap);
 }
 .post-body > section {
   /* The 24px icons are centered inside 44px controls. */
   margin-top: -10px;
-}
-.post-body:has(.composer) {
-  padding-bottom: var(--post-spacing);
 }
 .post-photo,
 .photo-preview {
@@ -1100,9 +1101,21 @@ summary.settings-row::after {
 .post-caption a {
   text-decoration: none;
 }
+.post-interactions:not(:has(~ .post-caption, ~ .comments)) {
+  /* Ends at the icons, not the 10px below them inside their controls. */
+  margin-bottom: -10px;
+}
+.post-caption:not(:has(~ .comments)) {
+  /* Ends at the last line's text, not its half-leading. */
+  margin-bottom: calc((1em - 1lh) / 2);
+}
 .post-caption:has(~ .comments) {
   /* Matches the action-row-to-first-comment gap without a caption. */
   margin-bottom: 24px;
+}
+/* Loading and empty-page status take the first comment's place. */
+.comments > p:first-child {
+  margin: 0 0 var(--post-content-gap);
 }
 .comments > .actions:not(:empty) {
   margin-bottom: var(--post-content-gap);
@@ -2130,19 +2143,27 @@ a.profile-tab {
   display: block;
 }
 /* The editor is the event page with each part editable in place. Editable
-   parts carry a dashed outline, solid while focused, instead of form chrome. */
+   parts sit on a palette tint instead of form chrome; the shadow pads the
+   tint past the text without moving it, and focus adds a solid ink ring
+   inside the tint's edge. */
 .event-editable {
   border-radius: 3px;
-  outline: 1px dashed var(--control-line);
-  outline-offset: 4px;
+  background: var(--hover);
+  box-shadow: 0 0 0 6px var(--hover);
 }
 .event-editable:hover {
-  outline-color: var(--muted);
+  background: var(--line);
+  box-shadow: 0 0 0 6px var(--line);
 }
 .event-editable:focus-visible,
 .event-editable:has(:focus-visible) {
   outline: 2px solid var(--ink);
   outline-offset: 4px;
+}
+/* Tints reach 6px past each part, so the title takes the same 16px gap as
+   the rows below it; the page's 8px would let the tints meet. */
+.event-title-row:has(.event-editable) {
+  margin-bottom: 16px;
 }
 /* The hidden copy grows the field with wrapping, like the comment composer. */
 .event-field {
@@ -2390,6 +2411,25 @@ a.profile-tab {
 :root[data-event-appearance] {
   accent-color: var(--brand);
   scrollbar-color: var(--control-line) var(--paper);
+  /* Narrow accents at the viewport's sides, anchored to the viewport. */
+  --edge-width: clamp(20px, 7vw, 112px);
+  --canvas: linear-gradient(
+      to right,
+      var(--paper-edge),
+      var(--paper) var(--edge-width),
+      var(--paper) calc(100% - var(--edge-width)),
+      var(--paper-edge)
+    )
+    fixed var(--paper);
+  background: var(--canvas);
+}
+/* Shell bars repaint the same viewport-anchored canvas so the edge accents
+   run unbroken behind them; content columns let it show through. */
+[data-event-appearance] :is(.masthead, .app-navigation) {
+  background: var(--canvas);
+}
+[data-event-appearance] :is(.member-content, .guest-shell .account-section) {
+  background: transparent;
 }
 [data-event-appearance] :is(h1, h2, h3) {
   color: var(--detail);

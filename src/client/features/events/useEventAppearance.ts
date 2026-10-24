@@ -16,6 +16,7 @@ export function useEventAppearance(appearance?: EventAppearance) {
     const fonts = pairings[fontPairing];
     const properties: Record<string, string> = {
       '--paper': palette.paper,
+      '--paper-edge': palette.edge,
       '--surface': palette.surface,
       '--ink': palette.ink,
       '--muted': palette.muted,

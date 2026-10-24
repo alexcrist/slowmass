@@ -1254,13 +1254,15 @@ it.each([
     panel: 'comments',
     open: 'Show comments',
     retry: 'Retry',
-    empty: 'No comments on this page.',
+    empty: () =>
+      renderer.root.findAllByProps({ placeholder: 'Add the first comment…' })
+        .length > 0,
   },
   {
     panel: 'likes',
     open: 'See 1 likes',
     retry: 'Retry',
-    empty: 'No likes to show.',
+    empty: () => visibleText().includes('No likes to show.'),
   },
 ])(
   '$panel retry without retaining old errors or premature empty messages',
@@ -1273,7 +1275,7 @@ it.each([
     );
     await click(open);
     expect(visibleText()).toContain(`Loading ${panel}…`);
-    expect(visibleText()).not.toContain(empty);
+    expect(empty()).toBe(false);
     await reply(
       pending(`/api/interactions/one/${panel}?`),
       { error: 'Read failed' },
@@ -1286,7 +1288,7 @@ it.each([
       items: [],
       next: null,
     });
-    expect(visibleText()).toContain(empty);
+    expect(empty()).toBe(true);
   },
 );
 
