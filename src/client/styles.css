@@ -1047,9 +1047,16 @@ summary.settings-row::after {
   margin-bottom: calc(var(--post-content-gap) - 10px);
 }
 .post-caption {
+  display: flex;
+  flex-direction: column;
+  /* Blank lines become a half-line paragraph gap. */
+  gap: 12px;
   margin: 0 0 12px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+.post-caption p {
+  margin: 0;
 }
 .post-caption a {
   text-decoration: none;

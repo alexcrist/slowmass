@@ -7,6 +7,7 @@ import { useApiResource } from '../../api/useApiResource';
 import { RelativeTime } from '../../ui/RelativeTime';
 import { PostActions } from './PostActions';
 import { FocusedPhoto } from './FocusedPhoto';
+import { captionParagraphs } from './caption';
 type Post = {
   id: string;
   caption: string;
@@ -163,6 +164,7 @@ function PostCard({
     setSourceCaption(post.caption);
     setCaption(post.caption);
   }
+  const paragraphs = captionParagraphs(caption);
   const photo = (
     <img
       className="post-photo"
@@ -214,13 +216,21 @@ function PostCard({
           initial={post}
           commentsInitiallyOpen={focused}
           caption={
-            caption && (
-              <p className="post-caption">
-                <a href={profileHref(post.handle)}>
-                  <strong>@{post.handle}</strong>
-                </a>{' '}
-                {caption}
-              </p>
+            paragraphs.length > 0 && (
+              <div className="post-caption">
+                {paragraphs.map((paragraph, index) => (
+                  <p key={index}>
+                    {index === 0 && (
+                      <>
+                        <a href={profileHref(post.handle)}>
+                          <strong>@{post.handle}</strong>
+                        </a>{' '}
+                      </>
+                    )}
+                    {paragraph}
+                  </p>
+                ))}
+              </div>
             )
           }
         />

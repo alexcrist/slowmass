@@ -38,7 +38,7 @@ Verification uses static checks and API/integration tests only. Browser testing,
 
 Post likes and comments form a compact left-aligned row, with 24px icons, 14px semibold counts, a 7.2px icon-to-count gap and 19.2px between groups. Groups flow with their contents instead of occupying fixed columns. Keep icons left aligned inside their controls, including when counts are absent; keep the separate like-count target at least 24px wide and all controls at least 44px tall.
 
-Post cards share a 16px vertical gap between the header avatar and photo, photo and action icons, and action icons and caption line box. The caption follows the action icons and reads like a comment: the author’s bold @username linked to their profile, then the caption, in 16px comment type. Account for the invisible space inside touch targets rather than adding it to the gap.
+Post cards share a 16px vertical gap between the header avatar and photo, photo and action icons, and action icons and caption line box. The caption follows the action icons and reads like a comment: the author’s bold @username linked to their profile, then the caption, in 16px comment type. Single line breaks stay; blank lines become paragraphs separated by a half-line (12px) gap, and leading or trailing blank lines are dropped. Account for the invisible space inside touch targets rather than adding it to the gap.
 
 Overflow menus dismiss when focus moves outside, the page scrolls, the viewport changes, or their actions become unavailable/change. Preserve keyboard navigation and return focus without scrolling the page back. Keep menus inside the viewport and above mobile navigation, opening upward when space below is insufficient; constrained menus scroll internally without dismissing.
 
