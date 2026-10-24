@@ -8,7 +8,7 @@ The app runs at https://slowmass.com. The repository implements email-link sign-
 
 Feature READMEs in the [client](src/client/README.md) and [server](src/server/README.md) describe implemented behavior. The [implementation plan](docs/implementation-plan.md) tracks remaining work and verification gaps. First-member email delivery, sign-in, and trusted remote image processing have been verified; a complete hosted multi-user flow and real-device calendar/push behavior still need confirmation.
 
-Account deletion, storage limits, encrypted backup/restore tooling, and usage reporting are implemented. Backups remain manual; keep a verified off-device copy and follow the [operations runbook](docs/operations.md). The operating target is $0/month within free allowances, followed by measured upgrades; see [architecture](docs/architecture.md).
+Account deletion, storage limits, encrypted backup/restore tooling, and usage reporting are implemented. Encrypted backups run nightly and are stored in S3 after automatic restore verification; follow the [operations runbook](docs/operations.md). The operating target is $0/month within free allowances, followed by measured upgrades; see [architecture](docs/architecture.md).
 
 ## Local development
 

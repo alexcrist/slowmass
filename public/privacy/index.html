@@ -102,9 +102,10 @@
         Cloudflare hosts the app and its data; Amazon Web Services delivers
         sign-in emails; Google handles Google sign-in if you choose it. Your
         device's notification service delivers notifications if you enable them.
-        Private encrypted backups may be stored in Google Drive. We share
-        information only as needed for these services, at your request, or when
-        legally required to do so.
+        GitHub Actions creates nightly encrypted backups, which are stored with
+        Amazon Web Services; occasional manual encrypted backups may be stored
+        in Google Drive. We share information only as needed for these services,
+        at your request, or when legally required to do so.
       </p>
 
       <h2>Your choices and deletion</h2>
@@ -129,16 +130,17 @@
         records remain stored but are no longer accessible in the app.
       </p>
       <p>
-        Deleted data may remain in encrypted backups until we manually delete
-        them. We aim to keep these backups for no more than seven days, but
-        cleanup is not automatic and can take longer. Service providers also
-        retain some records, such as email delivery logs and database recovery
-        copies, under their own retention schedules. Deleting your Slowmass
-        account does not immediately erase those copies. To load faster, your
-        device keeps post photos you have viewed for up to seven days, even if
-        the post is later deleted or you lose access, and our hosting provider
-        keeps unreachable internal copies of photos for up to seven days. Copies
-        other people saved are outside our control.
+        Deleted data may remain in encrypted backups until they are deleted.
+        Nightly backups are deleted automatically within about seven days. We
+        aim to delete manual backups within seven days, but that cleanup is not
+        automatic and can take longer. Service providers also retain some
+        records, such as email delivery logs and database recovery copies, under
+        their own retention schedules. Deleting your Slowmass account does not
+        immediately erase those copies. To load faster, your device keeps post
+        photos you have viewed for up to seven days, even if the post is later
+        deleted or you lose access, and our hosting provider keeps unreachable
+        internal copies of photos for up to seven days. Copies other people
+        saved are outside our control.
       </p>
 
       <h2>Questions or requests?</h2>

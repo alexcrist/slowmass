@@ -1,0 +1,45 @@
+name: Backup
+on:
+  schedule:
+    # 11:00 UTC is about 4 a.m. Pacific in summer and 3 a.m. in winter.
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+# Separate from deployment: sharing its group could cancel a pending deploy.
+concurrency:
+  group: slowmass-backup
+  cancel-in-progress: false
+jobs:
+  backup:
+    if: github.repository == 'alexcrist/slowmass'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Plaintext exists only in a private temporary directory on the runner.
+      # Logs contain counts and generic errors, never keys, SQL, or content.
+      - name: Create, verify, and upload encrypted backup
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.BACKUP_CLOUDFLARE_API_TOKEN }}
+          BACKUP_KEY: ${{ secrets.BACKUP_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-west-2
+        run: |
+          set -euo pipefail
+          umask 077
+          work=$(mktemp -d)
+          trap 'rm -rf "$work"' EXIT
+          printf '%s' "$BACKUP_KEY" | base64 --decode > "$work/backup.key"
+          test "$(wc -c < "$work/backup.key")" -eq 32
+          name="slowmass-$(date -u +%Y-%m-%dT%H%M%SZ).enc"
+          node scripts/ops/backup.mjs "$work/$name" "$work/backup.key"
+          node scripts/ops/restore-check.mjs "$work/$name" "$work/backup.key"
+          aws s3 cp "$work/$name" "s3://slowmass-backups-909719689394/daily/$name" --only-show-errors

@@ -67,7 +67,7 @@ Exit: three-user API flow covers following, posting, liking, commenting, accepti
 - [ ] Finish broad mutation rate limits and operator invitation/block controls.
 - [x] Add aggregate usage inspection, bounded cleanup, cost monitoring instructions, encrypted backup/export tooling, synthetic SQL/photo restore verification, and a hosted Time Travel drill on a disposable database.
 - [x] Hand off the initial private recovery kit; the owner confirmed copying it off-device.
-- [ ] Establish recurring backups. Current backup creation and off-device copying remain manual.
+- [x] Establish recurring backups: a nightly GitHub Actions job creates, verifies, and uploads encrypted archives to a write-only, seven-day S3 bucket (end-to-end local run and upload restrictions verified October 24, 2026; first scheduled run pending).
 - [x] Add CI checks for format, lint, types, import boundaries, meaningful tests, migrations on a clean database, and production build. Pushes to `main` use the checked deployment workflow in [setup](setup.md#production-deployment).
 
 Exit: real photos survive a documented restore in a nonproduction environment; deletion remains respected. No credentials or production data appear in test artifacts or logs.
@@ -107,7 +107,7 @@ Implemented behavior, permissions, and failure handling live in the [client even
 - [ ] Confirm device installation handoff and Web Push delivery: iPhone browser to Home Screen app to notifications, and Android notifications to installation. Confirm likes remain Activity-only while comments and event alerts reach opted-in devices.
 - [ ] Observe event notification delays under real use. The existing five-delivery batch and 24-hour queue lifetime can delay or expire large push fan-outs; Activity persists independently.
 - [ ] Confirm photo-upload recovery on affected devices and measure hosted processing latency; the exact causes of the reported upload incidents remain unverified.
-- [ ] Take and verify a fresh production backup that includes event media, then copy it off-device. Older archives without event photos are incomplete.
+- [x] Take and verify a fresh production backup that includes event media and copy it off-device (October 24, 2026: 94 photo variants verified and uploaded to S3).
 - [ ] Complete the owner's event-flow review and confirm Google/Outlook saves and Apple calendar imports on real devices. Automated link/file tests do not exercise native app handoff; direct Outlook HTTP probes from the development environment return 417 even for its ordinary calendar page.
 
 These device checks require owner observations; do not perform browser or visual testing. Routine deployment and CI results are available in [GitHub Actions](https://github.com/alexcrist/slowmass/actions/workflows/ci.yml).

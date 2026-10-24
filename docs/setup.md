@@ -75,6 +75,16 @@ aws sesv2 get-email-identity --profile slowmass --region us-west-2 \
 
 The production-access request copy and support reply remain at `~/.config/slowmass/ses-production-access.json` and `~/.config/slowmass/ses-support-reply.txt`; the reply describes the former 80-attempt daily ceiling, which the application no longer enforces. Optional event email additionally needs consent records, preferences/unsubscribe handling, authorization checks at delivery time, and bounded fan-out that leaves capacity for sign-in mail. None of those controls is implemented.
 
+### Encrypted backups
+
+Nightly backups use the S3 bucket and IAM user described in [operations](operations.md#backup-creation-and-retention), with an AWS Budget `slowmass-s3-backups` alerting the operator's Gmail at 20% of $5 actual and 100% forecast S3 spend. That budget covers all S3 usage in the shared account and takes no automatic action. The workflow needs these repository secrets:
+
+- `BACKUP_CLOUDFLARE_API_TOKEN`: a Cloudflare account API token limited to D1 Edit (required for export) and Workers R2 Storage Read on this account. The existing `CLOUDFLARE_ACCOUNT_ID` repository variable supplies the account.
+- `BACKUP_KEY`: the base64-encoded 32-byte archive key.
+- `BACKUP_AWS_ACCESS_KEY_ID` and `BACKUP_AWS_SECRET_ACCESS_KEY`: the `slowmass-backup-writer` access key.
+
+To rotate the Cloudflare token, roll it in the dashboard and replace the secret in GitHub's Actions settings. To rotate the AWS key, create a second key for `slowmass-backup-writer`, update both secrets, run the workflow manually, then deactivate and delete the old key. Changing `BACKUP_KEY` makes older archives require the previous key, so keep both offline until those archives expire.
+
 ## Migrations
 
 `npm run db:migrate` applies checked-in migrations to local D1. The auth schema is generated from the installed Better Auth library; membership and email-budget migrations are application-owned. `npm run auth:schema` prints a reference auth schema for review without applying it. Do not replace an applied migration; add forward migrations when the schema changes.

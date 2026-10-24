@@ -26,20 +26,32 @@ Review usage during the initial beta and before expanding invitations. Investiga
 
 ## Backup creation and retention
 
-Use a private directory outside the repository, a random 32-byte key in a separate mode-600 file, and a new output filename each time:
+**Nightly backups are automatic.** The [Backup workflow](../.github/workflows/backup.yml) runs at 11:00 UTC (about 3–4 a.m. Pacific) and on manual dispatch. It runs `backup.mjs`, then `restore-check.mjs` on the same archive, and uploads only a verified archive to the private S3 bucket `slowmass-backups-909719689394` (`us-west-2`) under `daily/slowmass-<UTC timestamp>.enc`. A failed export, check, or upload fails the run, which GitHub reports as a failed workflow; nothing partial is uploaded. The runner holds plaintext only in a mode-700 temporary directory removed on exit, and logs contain counts and generic errors only. Runs use their own concurrency group so they never cancel a pending deployment.
+
+The D1 export makes the database briefly unavailable to queries, which is why the job runs at night. On October 24, 2026, a 1.2 MB database with 94 photo variants took about 110 seconds end to end (mostly sequential R2 downloads) and produced a 16 MB archive; the database pause is a small part of that. If the database grows enough for the pause to matter, switch the export to non-blocking reads.
+
+The bucket blocks public access, enforces bucket-owner object ownership, enables versioning and SSE-S3, and expires current archives after five days and noncurrent versions one day later, so S3 deletes archives within about seven days of creation. The workflow's IAM user `slowmass-backup-writer` may only `PutObject` under `daily/`: it cannot list, read, delete, or write elsewhere (each verified on October 24, 2026), so leaked runner credentials cannot read or erase existing backups. Downloads use the operator's `slowmass` AWS profile:
 
 ```sh
-node scripts/ops/backup.mjs /private/path/slowmass-YYYY-MM-DD.enc /private/path/backup.key
-node scripts/ops/restore-check.mjs /private/path/slowmass-YYYY-MM-DD.enc /private/path/backup.key
+aws s3 ls s3://slowmass-backups-909719689394/daily/ --profile slowmass
+aws s3 cp s3://slowmass-backups-909719689394/daily/<name>.enc /private/path/ --profile slowmass
+node scripts/ops/restore-check.mjs /private/path/<name>.enc /private/path/backup.key
 ```
 
-The backup includes a D1 SQL export, all referenced published post variants, avatar variants, event covers and thumbnails, checksums, and a capture timestamp. Published event media remains required after cancellation or the event's end; pending/deleted event media is excluded. Shared keys are copied once. Missing media causes failure. It is an application snapshot, not an atomic transaction spanning D1/R2: if concurrent deletion removes a referenced object, retry after the operation settles. Encrypted archives and keys must not enter the public repository. Plaintext temporary directories are mode 700 and removed after the command finishes; archives are mode 600. A killed process may require removing its private temporary directory manually.
+The archive key is the 32-byte file `~/.config/slowmass/backups/backup.key`, stored base64-encoded in the `BACKUP_KEY` repository secret. GitHub cannot reveal secrets, so keep an offline copy in the operator's password manager; without it every archive is unrecoverable. Keep the production VAPID key file there as well, because reusing it preserves push subscriptions after recovery. Code, configuration, provider credentials, and DNS are recreated from Git and provider consoles; sessions and pending uploads are deliberately not restored. Setup and credential rotation are in [setup](setup.md#encrypted-backups).
 
-Before the October 18, 2026 event-media fix, export and restore verification omitted event covers and thumbnails. Take and verify a fresh backup using the corrected tools, then copy it off-device. The updated checker rejects an older archive if published event rows reference missing media; it cannot repair the missing bytes. Older snapshots whose schema predates events remain supported. A successful check with the old tool is insufficient evidence that event media is recoverable.
+Manual backups remain available before manual migrations or recovery work. Use a private directory outside the repository and a new output filename:
 
-Current operation is **manual**: take a backup daily while people are using the app and before manual migrations or recovery work. Routine code-only deployments and reviewed backward-compatible automatic migrations use this existing cadence; automatic migrations additionally record a D1 Time Travel bookmark before applying. This bookmark does not contain photos and does not replace encrypted off-device backups. Verify it, then copy it off this Mac. Keep archives no more than seven days, replacing the oldest only after a newer verified copy exists; manually delete expired copies from the Mac and Google Drive, including Drive trash. A recovery kit containing both an archive and its key is sensitive as a whole—keep its Drive access private. No automatic local schedule or Drive upload has been configured. The requested handoff is a clearly named ZIP for the owner to copy.
+```sh
+node scripts/ops/backup.mjs /private/path/slowmass-YYYY-MM-DD.enc ~/.config/slowmass/backups/backup.key
+node scripts/ops/restore-check.mjs /private/path/slowmass-YYYY-MM-DD.enc ~/.config/slowmass/backups/backup.key
+```
 
-The latest verified snapshot defines recoverable data. With daily successful copies, the target is at most 24 hours of lost new content; a missed backup extends that window. This is a target, not a verified recovery-time guarantee. D1 Time Travel provides an additional provider-managed recovery path, not an R2 backup.
+The backup includes a D1 SQL export, all referenced published post variants, avatar variants, event covers and thumbnails, checksums, and a capture timestamp. Published event media remains required after cancellation or the event's end; pending/deleted event media is excluded. Shared keys are copied once. Missing media causes failure. It is an application snapshot, not an atomic transaction spanning D1/R2: if concurrent deletion removes a referenced object, the run fails and the next night retries. Encrypted archives and keys must not enter the public repository. Plaintext temporary directories are mode 700 and removed after the command finishes; archives are mode 600. Manually delete manual copies within seven days, including from Google Drive and its trash.
+
+Before the October 18, 2026 event-media fix, export and restore verification omitted event covers and thumbnails. The corrected checker rejects an older archive if published event rows reference missing media; it cannot repair the missing bytes. Older snapshots whose schema predates events remain supported.
+
+The latest verified snapshot defines recoverable data. With nightly successful runs, the target is at most 24 hours of lost new content; a failed run extends that window until the next success. Check the workflow history after failures. This is a target, not a verified recovery-time guarantee. D1 Time Travel provides an additional provider-managed recovery path, not an R2 backup; automatic migrations also record a Time Travel bookmark before applying.
 
 ## Recovery without resurrecting deleted content
 
