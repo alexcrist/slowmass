@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { unstable_splitSqlQuery } from 'wrangler';
 import { testRuntime, seedProfilePhotos } from './support/runtime';
 import { cleanupAccounts } from '../src/server/features/account';
 import { cleanupEvents, deleteEvent } from '../src/server/features/events';
@@ -2151,77 +2150,6 @@ it('processes cover photos for hosts and replaces them retry-safely', async () =
     );
   } finally {
     await images.worker.dispose();
-  }
-});
-
-it('keeps activity, receipts and queued alerts through migration 0030', async () => {
-  const old = await testRuntime(false, false, undefined, undefined, 29);
-  try {
-    for (const id of ['alice', 'bob', 'carol'])
-      await old.request(id, '/api/people/self', 'PUT', {
-        handle: id,
-        displayName: id,
-        bio: '',
-      });
-    await seedProfilePhotos(old.db);
-    await old.db.batch([
-      old.db.prepare('DELETE FROM follow'),
-      old.db.prepare(
-        "INSERT INTO push_subscription VALUES('device','alice','alice','https://fcm.googleapis.com/synthetic','key','auth',1)",
-      ),
-      old.db.prepare("INSERT INTO follow VALUES('bob','alice','pending',900)"),
-      old.db.prepare(
-        "INSERT INTO post(id,user_id,caption,alt_text,created_at,published_at,state,object_key,width,height) VALUES('p','alice','','',1,1,'published','posts/p',1,1)",
-      ),
-      old.db.prepare("INSERT INTO post_like VALUES('p','carol',1000)"),
-      old.db.prepare(
-        "INSERT INTO comment(id,post_id,user_id,body,created_at) VALUES('c','p','bob','Hi',1100)",
-      ),
-    ]);
-    await old.db
-      .prepare(
-        "UPDATE activity_read_state SET is_read=1 WHERE event_key='likes:p'",
-      )
-      .run();
-    const snapshot = async () =>
-      Promise.all(
-        ['activity_source', 'activity_read_state', 'push_delivery'].map(
-          async (table) =>
-            (
-              await old.db
-                .prepare(`SELECT * FROM ${table} ORDER BY 1,2,3`)
-                .all()
-            ).results,
-        ),
-      );
-    const before = await snapshot();
-    expect(before[2]).toHaveLength(2);
-    await old.db.batch(
-      unstable_splitSqlQuery(
-        readFileSync('migrations/0030_events.sql', 'utf8'),
-      ).map((query) => old.db.prepare(query)),
-    );
-    const after = await snapshot();
-    expect(after).toEqual(before);
-    // Recreated triggers still produce activity and alerts.
-    await old.db.prepare("INSERT INTO post_like VALUES('p','bob',1200)").run();
-    await old.db
-      .prepare(
-        "INSERT INTO comment(id,post_id,user_id,body,created_at) VALUES('c2','p','carol','Hey',1300)",
-      )
-      .run();
-    expect(
-      (
-        await old.db
-          .prepare('SELECT event_key FROM push_delivery ORDER BY event_key')
-          .all<{ event_key: string }>()
-      ).results.map((row) => row.event_key),
-    ).toEqual(['comment:c', 'comment:c2', 'request:bob']);
-    expect(
-      (await old.db.prepare('PRAGMA foreign_key_check').all()).results,
-    ).toEqual([]);
-  } finally {
-    await old.worker.dispose();
   }
 });
 

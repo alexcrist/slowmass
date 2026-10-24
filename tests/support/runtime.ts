@@ -5,7 +5,7 @@ import {
   Response as RuntimeResponse,
 } from 'miniflare';
 import { unstable_splitSqlQuery, unstable_readConfig } from 'wrangler';
-import { readFile, readdir } from 'node:fs/promises';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { makeSignature } from 'better-auth/crypto';
 
 const secret = 'test-only-secret-with-at-least-thirty-two-characters';
@@ -30,6 +30,119 @@ export async function readSesEmail(request: Request): Promise<SentEmail> {
     text: body.Content.Simple.Body.Text.Data,
   };
 }
+type Statement = { sql: string; params: unknown[] };
+type D1 = Awaited<ReturnType<Miniflare['getD1Database']>>;
+
+// Every runtime runs the same Worker bundle; build it once per test file.
+let bundle: Promise<string> | undefined;
+function workerScript() {
+  return (bundle ??= build({
+    entryPoints: ['src/server/index.ts'],
+    bundle: true,
+    write: false,
+    format: 'esm',
+    platform: 'node',
+    target: 'es2022',
+    external: ['node:*'],
+    alias: unstable_readConfig({ config: 'wrangler.jsonc' }).alias,
+  }).then((result) => result.outputFiles[0].text));
+}
+
+async function migrationStatements(count?: number) {
+  const files = (await readdir('migrations'))
+    .filter((f) => f.endsWith('.sql'))
+    .sort()
+    .slice(0, count);
+  return Promise.all(
+    files.map(async (file) =>
+      unstable_splitSqlQuery(await readFile(`migrations/${file}`, 'utf8')),
+    ),
+  );
+}
+
+// Replaying every migration costs about a second per runtime, so full-schema
+// runtimes start from the schema and rows the migrations produce. The capture
+// is cached on disk under a hash of the migration files, so editing or adding
+// a migration rebuilds it. Tests needing an older schema still replay.
+let snapshot: Promise<Statement[]> | undefined;
+function migratedSnapshot() {
+  return (snapshot ??= (async () => {
+    const migrations = await migrationStatements();
+    const digest = Buffer.from(
+      await crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(JSON.stringify(migrations)),
+      ),
+    ).toString('hex');
+    const cache = `node_modules/.cache/slowmass-test-schema/${digest.slice(0, 16)}.json`;
+    try {
+      return JSON.parse(await readFile(cache, 'utf8')) as Statement[];
+    } catch {
+      // Not captured yet for this migration set.
+    }
+    const template = new Miniflare(
+      convertV4MiniflareOptions({
+        modules: true,
+        script: 'export default { fetch: () => new Response(null) };',
+        compatibilityDate: '2026-10-10',
+        d1Databases: ['DB'],
+      }),
+    );
+    try {
+      const db = await template.getD1Database('DB');
+      for (const statements of migrations)
+        await db.batch(statements.map((sql) => db.prepare(sql)));
+      const objects = (
+        await db
+          .prepare(
+            "SELECT type,name,sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY rowid",
+          )
+          .all<{ type: string; name: string; sql: string }>()
+      ).results;
+      const tables = objects.filter((object) => object.type === 'table');
+      const rows: Statement[] = [];
+      for (const table of tables)
+        for (const row of (
+          await db.prepare(`SELECT * FROM "${table.name}"`).all()
+        ).results) {
+          const columns = Object.keys(row);
+          rows.push({
+            sql: `INSERT INTO "${table.name}" (${columns.map((c) => `"${c}"`).join(',')}) VALUES (${columns.map(() => '?').join(',')})`,
+            params: Object.values(row),
+          });
+        }
+      // Rows load before indexes, views and triggers so no trigger fires on them.
+      const statements: Statement[] = [
+        { sql: 'PRAGMA defer_foreign_keys = on', params: [] },
+        ...tables.map(({ sql }) => ({ sql, params: [] })),
+        ...rows,
+        ...objects
+          .filter((object) => object.type !== 'table')
+          .map(({ sql }) => ({ sql, params: [] })),
+      ];
+      await mkdir('node_modules/.cache/slowmass-test-schema', {
+        recursive: true,
+      });
+      await writeFile(cache, JSON.stringify(statements));
+      return statements;
+    } finally {
+      await template.dispose();
+    }
+  })());
+}
+
+async function applySchema(db: D1, migrationCount?: number) {
+  if (migrationCount === undefined) {
+    const statements = await migratedSnapshot();
+    await db.batch(
+      statements.map(({ sql, params }) => db.prepare(sql).bind(...params)),
+    );
+    return;
+  }
+  for (const statements of await migrationStatements(migrationCount))
+    await db.batch(statements.map((sql) => db.prepare(sql)));
+}
+
 export async function testRuntime(
   maintenance = false,
   images = false,
@@ -45,20 +158,11 @@ export async function testRuntime(
   google?: (request: Request) => Promise<{ status: number; body: string }>,
 ) {
   const assetShell = await readFile('index.html', 'utf8');
-  const result = await build({
-    entryPoints: ['src/server/index.ts'],
-    bundle: true,
-    write: false,
-    format: 'esm',
-    platform: 'node',
-    target: 'es2022',
-    external: ['node:*'],
-    alias: unstable_readConfig({ config: 'wrangler.jsonc' }).alias,
-  });
+  const script = await workerScript();
   const worker = new Miniflare(
     convertV4MiniflareOptions({
       modules: true,
-      script: result.outputFiles[0].text,
+      script,
       compatibilityDate: '2026-10-10',
       compatibilityFlags: ['nodejs_compat'],
       d1Databases: ['DB'],
@@ -127,56 +231,48 @@ export async function testRuntime(
     }),
   );
   const db = await worker.getD1Database('DB');
-  for (const file of (await readdir('migrations'))
-    .filter((f) => f.endsWith('.sql'))
-    .sort()
-    .slice(0, migrationCount)) {
-    await db.batch(
-      unstable_splitSqlQuery(await readFile(`migrations/${file}`, 'utf8')).map(
-        (sql) => db.prepare(sql),
-      ),
-    );
-  }
+  await applySchema(db, migrationCount);
   const now = Date.now();
-  for (const id of ['alice', 'bob', 'carol', 'david']) {
-    await db
-      .prepare(
-        'INSERT INTO user (id,name,email,emailVerified,createdAt,updatedAt) VALUES (?,?,?,1,?,?)',
-      )
-      .bind(id, id, `${id}@example.com`, now, now)
-      .run();
-    if (id !== 'alice')
-      await db
+  await db.batch(
+    ['alice', 'bob', 'carol', 'david'].flatMap((id) => [
+      db
         .prepare(
-          'INSERT INTO invitation (id,inviter_id,recipient_email,created_at,expires_at) VALUES (?, ?, ?, ?, ?)',
+          'INSERT INTO user (id,name,email,emailVerified,createdAt,updatedAt) VALUES (?,?,?,1,?,?)',
         )
-        .bind(id, 'alice', `${id}@example.com`, now, now + 86400000)
-        .run();
-    await db
-      .prepare(
-        'INSERT INTO membership (user_id,invited_by,invitation_id,joined_at) VALUES (?,?,?,?)',
-      )
-      .bind(
-        id,
-        id === 'alice' ? null : 'alice',
-        id === 'alice' ? null : id,
-        now,
-      )
-      .run();
-    await db
-      .prepare(
-        'INSERT INTO session (id,userId,token,expiresAt,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
-      )
-      .bind(
-        id,
-        id,
-        `${id}-token`,
-        new Date(now + 86400000).toISOString(),
-        now,
-        now,
-      )
-      .run();
-  }
+        .bind(id, id, `${id}@example.com`, now, now),
+      ...(id === 'alice'
+        ? []
+        : [
+            db
+              .prepare(
+                'INSERT INTO invitation (id,inviter_id,recipient_email,created_at,expires_at) VALUES (?, ?, ?, ?, ?)',
+              )
+              .bind(id, 'alice', `${id}@example.com`, now, now + 86400000),
+          ]),
+      db
+        .prepare(
+          'INSERT INTO membership (user_id,invited_by,invitation_id,joined_at) VALUES (?,?,?,?)',
+        )
+        .bind(
+          id,
+          id === 'alice' ? null : 'alice',
+          id === 'alice' ? null : id,
+          now,
+        ),
+      db
+        .prepare(
+          'INSERT INTO session (id,userId,token,expiresAt,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
+        )
+        .bind(
+          id,
+          id,
+          `${id}-token`,
+          new Date(now + 86400000).toISOString(),
+          now,
+          now,
+        ),
+    ]),
+  );
   // These four base fixtures represent existing members, not new join events.
   if (
     (

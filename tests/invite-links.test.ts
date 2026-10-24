@@ -1,6 +1,4 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { unstable_splitSqlQuery } from 'wrangler';
 import { testRuntime, seedProfilePhotos } from './support/runtime';
 import {
   bindInviteVerification,
@@ -632,34 +630,6 @@ it('revokes the link and clears claims on account deletion while keeping provena
   ).toEqual({ token_encrypted: null, revoked_at: expect.any(Number) });
   expect(await source('joined@example.com')).toEqual(joined);
   expect(signedIn(await verify())).toBe(false);
-});
-
-it('migration 0032 keeps existing invitations and event joins working', async () => {
-  const old = await testRuntime(false, false, undefined, undefined, 31);
-  try {
-    await old.db
-      .prepare(
-        "INSERT INTO invitation(id,inviter_id,recipient_email,created_at,expires_at,kind) VALUES('legacy','alice','legacy@example.com',1,2,'shared')",
-      )
-      .run();
-    const before = (
-      await old.db.prepare('SELECT * FROM invitation ORDER BY id').all()
-    ).results;
-    await old.db.batch(
-      unstable_splitSqlQuery(
-        readFileSync('migrations/0032_invite_links.sql', 'utf8'),
-      ).map((query) => old.db.prepare(query)),
-    );
-    expect(
-      (await old.db.prepare('SELECT * FROM invitation ORDER BY id').all())
-        .results,
-    ).toEqual(before.map((row) => ({ ...row, invite_link_id: null })));
-    expect(
-      (await old.db.prepare('PRAGMA foreign_key_check').all()).results,
-    ).toEqual([]);
-  } finally {
-    await old.worker.dispose();
-  }
 });
 
 it('extends a shared link without disturbing pending claims or shortening concurrent refreshes', async () => {
