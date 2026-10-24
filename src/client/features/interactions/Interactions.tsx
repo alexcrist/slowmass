@@ -1,10 +1,11 @@
-import { useId, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { PersonLink } from '../../navigation/PersonLink';
 import { profileHref } from '../../navigation';
 import { api, jsonRequest } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
 import { Dialog } from '../../ui/Dialog';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
+import { Composer } from '../../ui/Composer';
 import { RelativeTime } from '../../ui/RelativeTime';
 type Counts = { likeCount: number; commentCount: number; liked: number };
 type Comment = {
@@ -116,8 +117,7 @@ function Comments({
   postId: string;
   onChange: () => Promise<void>;
 }) {
-  const label = useId(),
-    [history, setHistory] = useState(['']),
+  const [history, setHistory] = useState(['']),
     [body, setBody] = useState(''),
     [id, setId] = useState(() => crypto.randomUUID()),
     [busy, setBusy] = useState(false),
@@ -237,48 +237,21 @@ function Comments({
           </button>
         )}
       </nav>
-      <form className="comment-composer" onSubmit={(e) => void add(e)}>
-        <label className="visually-hidden" htmlFor={label}>
-          Add a comment
-        </label>
-        <div className="comment-input">
-          <span className="comment-input-size" aria-hidden="true">
-            {body + ' '}
-          </span>
-          <textarea
-            id={label}
-            required
-            maxLength={1000}
-            rows={1}
-            placeholder="Add a comment…"
-            value={body}
-            disabled={busy}
-            onChange={(e) => {
-              setBody(e.target.value);
-              setId(crypto.randomUUID());
-            }}
-          />
-        </div>
-        <button
-          className="comment-submit"
-          type="submit"
-          disabled={busy || loading || !body.trim()}
-          aria-label={busy ? 'Posting comment' : 'Post comment'}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="m21 3-6.5 18-4-7.5L3 9.5 21 3Z" />
-            <path d="m10.5 13.5 5-5" />
-          </svg>
-        </button>
-      </form>
+      <Composer
+        label="Add a comment"
+        placeholder="Add a comment…"
+        maxLength={1000}
+        value={body}
+        busy={busy}
+        canSubmit={!loading}
+        submitLabel="Post comment"
+        pendingLabel="Posting comment"
+        onChange={(value) => {
+          setBody(value);
+          setId(crypto.randomUUID());
+        }}
+        onSubmit={(e) => void add(e)}
+      />
       {error && !confirming && <p role="alert">{error}</p>}
       {loadError && (
         <div>

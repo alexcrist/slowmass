@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ScreenBoundary } from '../../ui/ScreenBoundary';
+import { ViewerProvider } from '../../ui/Viewer';
 import { profileHref, useRoute } from '../../navigation';
 import { BackControl } from '../../navigation/BackControl';
 import { PageHistoryProvider } from '../../navigation/PageHistory';
@@ -455,7 +456,18 @@ function MemberPages({
                   : titles[page] || 'slowmass'}
             </h1>
           )}
-          <ScreenBoundary>{screen()}</ScreenBoundary>
+          <ViewerProvider
+            value={
+              profile && {
+                displayName: profile.displayName,
+                avatar: profile.hasAvatar
+                  ? `/media/avatar/${encodeURIComponent(profile.handle)}?v=${avatarVersion}`
+                  : null,
+              }
+            }
+          >
+            <ScreenBoundary>{screen()}</ScreenBoundary>
+          </ViewerProvider>
         </section>
       </PageHistoryProvider>
     </>

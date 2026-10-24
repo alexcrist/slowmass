@@ -737,7 +737,7 @@ a.notification-person:hover {
   /* The 24px icons are centered inside 44px controls. */
   margin-top: -10px;
 }
-.post-body:has(.comment-composer) {
+.post-body:has(.composer) {
   padding-bottom: var(--post-spacing);
 }
 .post-photo,
@@ -1048,79 +1048,95 @@ summary.settings-row::after {
 .comments > .actions:not(:empty) {
   margin-bottom: var(--post-content-gap);
 }
-.comment-composer {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
+.composer {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
   margin: 0;
   padding: 0;
   border: 0;
-  border-radius: 22px;
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--line);
-  font-size: 15px;
+  font-size: 16px;
 }
-.comment-composer:has(textarea:focus-visible) {
+.composer:not(:has(.composer-avatar)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+/* Centered on the field's first line. */
+.composer-avatar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-top: 6px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--hover);
+  border: 1px solid var(--line);
+  font-size: 14px;
+  font-weight: 600;
+}
+img.composer-avatar {
+  border: 0;
+}
+.composer-field {
+  display: flex;
+  align-items: flex-end;
+  min-width: 0;
+  border-radius: 3px;
+  background: var(--hover);
+}
+.composer-field:has(textarea:focus-visible) {
+  background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--muted);
 }
-.comment-input {
+.composer-input {
   display: grid;
   flex: 1;
   min-width: 0;
-  margin-left: 22px;
+  margin-left: 12px;
 }
-/* The hidden copy grows with wrapping and newlines, including a trailing one. */
-.comment-input-size,
-.comment-composer textarea {
+/* The hidden copy sizes the textarea to every wrapped line and newline,
+   including a trailing one, so the field grows instead of scrolling. */
+.composer-size,
+.composer textarea {
   grid-area: 1 / 1;
   min-width: 0;
   min-height: 44px;
-  max-height: 154px;
   margin: 0;
-  padding: 11px 0;
+  padding: 10px 0;
   border: 0;
   font: inherit;
-  line-height: 22px;
+  line-height: 24px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.comment-input-size {
+.composer-size {
   visibility: hidden;
-  overflow: hidden;
 }
-.comment-composer textarea {
+.composer textarea,
+.composer textarea:disabled {
   height: 100%;
+  overflow: hidden;
   resize: none;
   border-radius: 0;
   background: transparent;
   outline: none;
 }
-.comment-submit {
-  display: grid;
-  place-items: center;
+.composer-submit {
   flex: none;
-  width: 44px;
-  height: 44px;
-  padding: 10px;
+  min-height: 44px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 50%;
-  background: var(--brand);
-  color: var(--on-brand);
+  background: transparent;
+  color: var(--brand);
+  font: inherit;
+  font-weight: 600;
 }
-.comment-submit svg {
-  width: 22px;
-  height: 22px;
-  /* Balance the paper plane's diagonal silhouette within the circle. */
-  transform: translate(-1px, 1px);
+.composer-submit:enabled:hover {
+  color: var(--brand-hover);
 }
-.comment-submit:disabled {
-  /* Keep the button opaque so the composer's outline cannot show through. */
-  opacity: 1;
-  background: var(--disabled);
-  color: var(--on-disabled);
-}
-.comment-submit:enabled:hover {
-  background: var(--brand-hover);
+.composer-submit:disabled {
+  color: var(--muted);
 }
 .icon-button,
 .count-button {

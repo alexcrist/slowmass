@@ -1,8 +1,9 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api, jsonRequest } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
 import { usePageHistory } from '../../navigation/PageHistory';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
+import { Composer } from '../../ui/Composer';
 import { RelativeTime } from '../../ui/RelativeTime';
 import { PersonPhoto } from './EventSummary';
 import { GuestName, guestPhoto } from './EventGuests';
@@ -45,7 +46,6 @@ export function EventLog({
   onPosted?: () => void;
   refreshVersion?: number;
 }) {
-  const label = useId();
   const [history, setHistory] = usePageHistory(`event/${id}/activity`);
   const cursor = history[history.length - 1];
   const { data, error, loading, reload, refresh } = useApiResource<{
@@ -186,51 +186,21 @@ export function EventLog({
           </button>
         )}
       </nav>
-      <form
-        className="comment-composer"
+      <Composer
+        label="Write a message"
+        placeholder="Write a message…"
+        maxLength={2000}
+        value={body}
+        busy={busy}
+        canSubmit
+        submitLabel="Post message"
+        pendingLabel="Posting message"
+        onChange={(value) => {
+          setBody(value);
+          setMessageId(crypto.randomUUID());
+        }}
         onSubmit={(submit) => void post(submit)}
-      >
-        <label className="visually-hidden" htmlFor={label}>
-          Write a message
-        </label>
-        <div className="comment-input">
-          <span className="comment-input-size" aria-hidden="true">
-            {body + ' '}
-          </span>
-          <textarea
-            id={label}
-            required
-            maxLength={2000}
-            rows={1}
-            placeholder="Write a message…"
-            value={body}
-            disabled={busy}
-            onChange={(change) => {
-              setBody(change.target.value);
-              setMessageId(crypto.randomUUID());
-            }}
-          />
-        </div>
-        <button
-          className="comment-submit"
-          type="submit"
-          disabled={busy || !body.trim()}
-          aria-label={busy ? 'Posting message' : 'Post message'}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="m21 3-6.5 18-4-7.5L3 9.5 21 3Z" />
-            <path d="m10.5 13.5 5-5" />
-          </svg>
-        </button>
-      </form>
+      />
       {failure && !deleting && <p role="alert">{failure}</p>}
       {deleting && (
         <ConfirmDialog
