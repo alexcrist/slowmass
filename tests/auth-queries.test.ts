@@ -25,7 +25,8 @@ it('joins auth reads and checks current membership/completion without caching re
       DB: measuredDatabase(runtime.db as unknown as D1Database),
       AUTH_SECRET: secret,
       APP_ORIGIN: 'http://localhost:8787',
-      RESEND_API_KEY: 'test-key',
+      SES_ACCESS_KEY_ID: 'test-key',
+      SES_SECRET_ACCESS_KEY: 'test-secret',
       EMAIL_FROM: 'test@example.com',
     } as Env;
     const token = 'alice-token';

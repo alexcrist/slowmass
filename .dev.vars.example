@@ -1,7 +1,9 @@
 # Copy to .dev.vars. Never commit credentials.
 # Generate AUTH_SECRET with: openssl rand -base64 32
 AUTH_SECRET=
-RESEND_API_KEY=
+# Keys for the identity-scoped SES sending user (docs/setup.md).
+SES_ACCESS_KEY_ID=
+SES_SECRET_ACCESS_KEY=
 EMAIL_FROM=slowmass <hello@slowmass.com>
 # Optional inbox for replies; may differ from the verified sending domain.
 EMAIL_REPLY_TO=

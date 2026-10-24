@@ -22,6 +22,7 @@
   "description": "Private photo sharing.",
   "dependencies": {
     "@block65/webcrypto-web-push": "2.0.0",
+    "aws4fetch": "1.0.20",
     "better-auth": "1.7.7",
     "hono": "4.13.13",
     "react": "19.3.0",

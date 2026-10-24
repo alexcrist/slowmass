@@ -9,9 +9,9 @@ const fourHours = 4 * 60 * 60 * 1000;
 let ip = 0;
 
 beforeAll(async () => {
-  runtime = await testRuntime(false, false, async (request) => {
-    sent.push((await request.json()) as (typeof sent)[number]);
-    return { status: 200, body: '{"id":"synthetic"}' };
+  runtime = await testRuntime(false, false, async (email) => {
+    sent.push(email);
+    return { status: 200, body: '{"MessageId":"synthetic"}' };
   });
   await runtime.request('alice', '/api/people/self', 'PUT', {
     handle: 'alice',

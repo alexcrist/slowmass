@@ -1,6 +1,6 @@
 # External setup
 
-Status: the production Worker is deployed at https://slowmass.com with D1 and a private R2 bucket. Resend domain verification and first-member sign-in are complete. Use `--env production` for hosted operations; the default configuration remains local-only with a placeholder database ID.
+Status: the production Worker is deployed at https://slowmass.com with D1 and a private R2 bucket. SES domain verification and first-member sign-in are complete. Use `--env production` for hosted operations; the default configuration remains local-only with a placeholder database ID.
 
 ## Cloudflare
 
@@ -39,38 +39,41 @@ The signed-out homepage includes a small description and Privacy link at the bot
 
 ## Email delivery
 
-Create a Resend account on its Free plan. Add slowmass.com as a sending domain and install its verification DNS records in Cloudflare. Keep open and click tracking disabled. Create a sending-only API key scoped to that domain where supported.
-
-In the ignored `.dev.vars` file, enter the API key and your desired sending address. Use `EMAIL_REPLY_TO` for an optional personal reply inbox; Gmail can receive replies but cannot be used as the Resend sender. Set `BOOTSTRAP_EMAIL` to the address you will use for the first account. Its first successful email verification establishes the root member. Once any membership exists, this setting cannot create another root. Every later member requires an active member's invitation.
+Sign-in mail is sent through Amazon SES; see [Amazon SES](#amazon-ses) for the provisioned account. In the ignored `.dev.vars` file, enter the SES sending user's access key and your desired sending address. The IAM policy only permits `hello@slowmass.com`, so local development sends real email from the same identity; other sender addresses fail with `AccessDeniedException`. Use `EMAIL_REPLY_TO` for an optional personal reply inbox. Set `BOOTSTRAP_EMAIL` to the address you will use for the first account. Its first successful email verification establishes the root member. Once any membership exists, this setting cannot create another root. Every later member requires an active member's invitation.
 
 The implementation agent has generated a local auth secret in `.dev.vars`. On a fresh checkout, copy `.dev.vars.example` and generate one using `openssl rand -base64 32`. Do not paste credentials into chat. Production secrets must be installed through Wrangler's secret input; production needs a distinct auth secret and verified HTTPS origin.
 
-Use the actual sender domain/address verified by Resend. The provider's sandbox sender cannot deliver broadly to friends. The application caps email delivery attempts below the provider's current free daily allowance; provider billing settings remain authoritative. Do not enable automatic paid overages as part of setup.
+### Amazon SES
 
-### Amazon SES migration
+SES sends from `us-west-2`. The `slowmass.com` identity is verified with 2048-bit Easy DKIM, its three DNS-only CNAME records are published in Cloudflare, and the domain has a DMARC `p=none` policy. Production access was granted on October 24, 2026 (support case 179246744200507) with a 50,000-message daily quota and 14 messages per second. Approval and quotas apply to this region only. The AWS account also hosts unrelated projects; slowmass resources are tagged `project=slowmass`.
 
-SES is provisioned as the next sending provider in `us-west-2`. The `slowmass.com` identity is verified with 2048-bit Easy DKIM, its three DNS-only CNAME records are published in Cloudflare, and the domain has a DMARC `p=none` policy. Production access has been requested but is not approved: the initial automated review reports `DENIED`, while its support correspondence requests additional information before a final decision. The deployed Worker still sends through Resend; SES approval alone does not switch the application or enable event email.
+The account uses à-la-carte pricing (`CurrentPlan: NONE`). As of October 2026, the base sending price is $0.10 per 1,000 recipients, plus applicable data and notification charges; this is usage-based billing, not an unlimited free allowance. No dedicated IPs, receiving service, or monthly subscription is needed. See [SES pricing](https://aws.amazon.com/ses/pricing/).
 
-The account uses à-la-carte pricing (`CurrentPlan: NONE`), with no scheduled plan change. As of October 2026, the base sending price is $0.10 per 1,000 recipients, plus applicable data and notification charges; this is usage-based billing, not an unlimited free allowance. No dedicated IPs, receiving service, or monthly subscription is needed. See [SES pricing](https://aws.amazon.com/ses/pricing/). Google Workspace is not required for sending from the verified domain.
+The Worker authenticates as IAM user `slowmass-ses-sender`, whose only inline policy allows `ses:SendEmail` on the `slowmass.com` identity when the From address is `hello@slowmass.com`. Its access key is stored only in the production Worker secrets `SES_ACCESS_KEY_ID`/`SES_SECRET_ACCESS_KEY` and the operator's ignored `.dev.vars`. To rotate it, create a second key, install both secrets with `wrangler secret put --env production`, update `.dev.vars`, then deactivate and delete the old key.
 
-Account-level suppression is enabled for both hard bounces and complaints. Both identity notification types publish to the standard SNS topic `slowmass-email-feedback` in the same region. Its policy permits SES publication only from this account and identity, and its confirmed email subscription delivers alerts to the operator's personal Gmail. Original email headers are excluded; feedback metadata still contains recipient addresses and must remain private. Direct feedback forwarding to the sending address is disabled because that address has no inbox. Both permanent-bounce and abuse-complaint simulator notifications have been received through SNS. Simulator bounces do not populate the suppression list, so this verifies the alert path, not a real recipient's suppression.
-
-Use the local `slowmass` AWS profile with a current AWS CLI v2. Refresh its temporary session with `aws login --profile slowmass --region us-west-2`; do not create root access keys. On the current workstation, `/opt/homebrew/bin/aws` supports this login while the older `/usr/local/bin/aws` does not. Check the account, review, suppression settings, and sender verification:
+**Spending cap.** AWS Budget `slowmass-ses-monthly-cap` covers only the Amazon Simple Email Service charge category at $100 per month. It emails the operator's personal Gmail when actual SES charges exceed 10% and 50% and when the forecast exceeds 100%. At 100% of actual charges, an automatic budget action attaches the managed policy `slowmass-ses-spending-cap-deny` (deny `ses:*`) to the sending user through role `slowmass-budget-actions`, which may only attach or detach that one policy on that one user. Sign-in email then fails until AWS resets IAM budget actions at the start of the next monthly period. Cost data refreshes several times a day, so charges can overshoot before the action runs; SES's daily quota bounds that overshoot to roughly $5 per day. This is not an account-wide AWS spending cap. To restore sending early after investigating, reverse the action:
 
 ```sh
-aws sts get-caller-identity --profile slowmass
+aws budgets describe-budget-actions-for-budget --profile slowmass --region us-east-1 \
+  --account-id 909719689394 --budget-name slowmass-ses-monthly-cap
+aws budgets execute-budget-action --profile slowmass --region us-east-1 \
+  --account-id 909719689394 --budget-name slowmass-ses-monthly-cap \
+  --action-id <ActionId> --execution-type REVERSE_BUDGET_ACTION
+```
+
+Account-level suppression is enabled for both hard bounces and complaints. Both identity notification types publish to the standard SNS topic `slowmass-email-feedback` in the same region. Its policy permits SES publication only from this account and identity, and its confirmed email subscription delivers alerts to the operator's personal Gmail. Original email headers are excluded; feedback metadata still contains recipient addresses and must remain private. Direct feedback forwarding to the sending address is disabled because that address has no inbox. Both permanent-bounce and abuse-complaint simulator notifications have been received through SNS. Simulator bounces do not populate the suppression list, so this verifies the alert path, not a real recipient's suppression. Keep suppression enabled and review feedback alerts; investigate the cause before removing any suppression, and require evidence that the recipient wants mail.
+
+Use the local `slowmass` AWS profile with a current AWS CLI v2. Refresh its temporary session with `aws login --profile slowmass --region us-west-2`; the profile flag matters because the workstation's `AWS_PROFILE` points at another account. Do not create root access keys. On the current workstation, `/opt/homebrew/bin/aws` supports this login while the older `/usr/local/bin/aws` does not. Check the account, suppression settings, and sender verification:
+
+```sh
 aws sesv2 get-account --profile slowmass --region us-west-2 \
-  --query '{Production:ProductionAccessEnabled,Review:Details.ReviewDetails,Quota:SendQuota,Suppression:SuppressionAttributes}'
+  --query '{Production:ProductionAccessEnabled,Quota:SendQuota,Suppression:SuppressionAttributes}'
 aws sesv2 get-email-identity --profile slowmass --region us-west-2 \
   --email-identity slowmass.com \
   --query '{Verified:VerifiedForSendingStatus,DKIM:DkimAttributes.Status,Forwarding:FeedbackForwardingStatus}'
 ```
 
-The submitted use case describes existing user-requested sign-in emails and separately identifies optional event mail as future work. A private request copy is stored at `~/.config/slowmass/ses-production-access.json`. AWS sends review communications to the operator's Gmail; [AWS documents an initial response within 96 hours](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html), potentially longer when further information is needed. Approval and quotas apply to this region.
-
-Continue [support case 179246744200507](https://console.aws.amazon.com/support/home#/case/?displayId=179246744200507&language=en) rather than submitting duplicate requests. The operator submitted the complete follow-up through the Support Center, and AWS confirmed that new correspondence was added; a review response is still outstanding. A private copy is stored at `~/.config/slowmass/ses-support-reply.txt`, including the initial planned ceiling of 80 attempts per day (up to 2,400 over 30 days), recipient consent, tested feedback handling, and a sample email. This account's Support API returns `SubscriptionRequiredException` because it requires Premium Support; use the web Support Center for correspondence without purchasing an upgrade. Replies to AWS's notification email do not reach the case because its sender cannot receive incoming mail. SES provisioning and status checks remain available through the CLI.
-
-Before cutover, require `ProductionAccessEnabled: true`, implement the SES transport with identity-scoped sending credentials, preserve bounded application budgets, test failure/retry behavior, and verify real sign-in delivery. Update the privacy notice for the new processor. The current 80-attempt daily cap remains in force until deliberately changed. Keep suppression enabled and review feedback alerts; investigate the cause before removing any suppression, and require evidence that the recipient wants mail. Optional event email additionally needs consent records, preferences/unsubscribe handling, authorization checks at delivery time, and bounded fan-out that leaves capacity for sign-in mail. None of those event-email controls is implemented by provisioning SES.
+The production-access request copy and support reply remain at `~/.config/slowmass/ses-production-access.json` and `~/.config/slowmass/ses-support-reply.txt`; the reply describes the former 80-attempt daily ceiling, which the application no longer enforces. Optional event email additionally needs consent records, preferences/unsubscribe handling, authorization checks at delivery time, and bounded fan-out that leaves capacity for sign-in mail. None of those controls is implemented.
 
 ## Migrations
 
@@ -82,8 +85,8 @@ First-member email delivery/sign-in and trusted image processing have been verif
 
 ## Provider references
 
-- [Resend sender domain setup](https://resend.com/docs/dashboard/domains/introduction)
-- [Resend pricing](https://resend.com/pricing)
+- [SES pricing](https://aws.amazon.com/ses/pricing/)
+- [AWS Budgets actions](https://docs.aws.amazon.com/cost-management/latest/userguide/budgets-controls.html)
 - [Better Auth email-link integration](https://better-auth.com/docs/plugins/magic-link)
 
 ## Local test isolation

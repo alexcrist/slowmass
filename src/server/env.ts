@@ -10,7 +10,8 @@ export interface Env {
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   BOOTSTRAP_EMAIL?: string;
-  RESEND_API_KEY?: string;
+  SES_ACCESS_KEY_ID?: string;
+  SES_SECRET_ACCESS_KEY?: string;
   EMAIL_FROM?: string;
   EMAIL_REPLY_TO?: string;
   PUSH_PUBLIC_KEY?: string;

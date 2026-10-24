@@ -32,9 +32,9 @@ beforeEach(async () => {
   runtime = await testRuntime(
     false,
     false,
-    async (req) => {
-      sent.push((await req.json()) as (typeof sent)[number]);
-      return { status: 200, body: '{"id":"synthetic"}' };
+    async (email) => {
+      sent.push(email);
+      return { status: 200, body: '{"MessageId":"synthetic"}' };
     },
     undefined,
     undefined,

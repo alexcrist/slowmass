@@ -8,10 +8,12 @@ import {
 import { unstable_splitSqlQuery } from 'wrangler';
 import { readFile, readdir } from 'node:fs/promises';
 import { makeSignature } from 'better-auth/crypto';
+import { readSesEmail, sesEndpoint, type SentEmail } from './support/runtime';
 
 const secret = 'test-only-secret-with-at-least-thirty-two-characters';
 const origin = 'http://localhost:8787';
-const emails: { to: string[]; text: string }[] = [];
+const emails: SentEmail[] = [];
+let sesUnavailable = false;
 let worker: Miniflare;
 let unconfigured: Miniflare;
 let emailWorker: Miniflare;
@@ -44,10 +46,15 @@ beforeAll(async () => {
     d1Databases: ['DB'],
     r2Buckets: ['PHOTOS'],
     outboundService: async (request: Request) => {
-      if (request.url !== 'https://api.resend.com/emails')
+      if (request.url !== sesEndpoint)
         throw new Error('Unexpected outbound request in test');
-      emails.push((await request.json()) as { to: string[]; text: string });
-      return new RuntimeResponse('{"id":"test-message"}', {
+      if (sesUnavailable)
+        return new RuntimeResponse('{"message":"synthetic outage"}', {
+          status: 503,
+          headers: { 'x-amzn-ErrorType': 'ServiceUnavailableException' },
+        });
+      emails.push(await readSesEmail(request));
+      return new RuntimeResponse('{"MessageId":"test-message"}', {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -56,7 +63,8 @@ beforeAll(async () => {
   const bindings = {
     APP_ORIGIN: origin,
     AUTH_SECRET: secret,
-    RESEND_API_KEY: 'test-key-never-used-on-network',
+    SES_ACCESS_KEY_ID: 'test-key',
+    SES_SECRET_ACCESS_KEY: 'test-secret-never-used-on-network',
     EMAIL_FROM: 'slowmass <hello@example.com>',
     BOOTSTRAP_EMAIL: 'founder@example.com',
   };
@@ -640,15 +648,42 @@ describe('verified email and permanent invitation provenance', () => {
         .run(),
     ).rejects.toThrow();
   });
-  it('stops email delivery when the daily budget is exhausted', async () => {
+  it('stops email delivery after three links per recipient per hour', async () => {
     const db = await emailWorker.getD1Database('DB');
+    const hash = Buffer.from(
+      await crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode('founder@example.com'),
+      ),
+    ).toString('hex');
     await db
-      .prepare('UPDATE email_budget SET used = 80 WHERE budget_key = ?')
-      .bind(`day:${Math.floor(Date.now() / 86400000)}`)
+      .prepare(
+        'INSERT INTO email_budget (budget_key, used, expires_at) VALUES (?, 3, ?) ON CONFLICT (budget_key) DO UPDATE SET used = 3',
+      )
+      .bind(
+        `recipient:${hash}:${Math.floor(Date.now() / 3600000)}`,
+        Date.now() + 86400000,
+      )
       .run();
     const count = emails.length;
     expect((await requestLink('founder@example.com')).status).toBe(200);
     expect(emails).toHaveLength(count);
+  });
+  it('fails visibly when SES rejects a delivery and recovers afterward', async () => {
+    const db = await emailWorker.getD1Database('DB');
+    await db
+      .prepare("DELETE FROM email_budget WHERE budget_key LIKE 'recipient:%'")
+      .run();
+    const count = emails.length;
+    sesUnavailable = true;
+    try {
+      expect((await requestLink('founder@example.com')).status).toBe(500);
+    } finally {
+      sesUnavailable = false;
+    }
+    expect(emails).toHaveLength(count);
+    expect((await requestLink('founder@example.com')).status).toBe(200);
+    expect(emails.at(-1)?.to).toEqual(['founder@example.com']);
   });
   it('retains the invitation tree when a member is disabled', async () => {
     const db = await emailWorker.getD1Database('DB');

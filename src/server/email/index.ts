@@ -1,32 +1,14 @@
+import { AwsClient } from 'aws4fetch';
 import type { Env } from '../env';
 import { SIGN_IN_LINK_HOURS } from '../../shared/sign-in';
 
-export function emailConfigured(env: Env): boolean {
-  return Boolean(env.RESEND_API_KEY && env.EMAIL_FROM);
-}
+const SES_REGION = 'us-west-2';
+const SES_ENDPOINT = `https://email.${SES_REGION}.amazonaws.com/v2/email/outbound-emails`;
 
-export type EmailPayload = {
-  from: string;
-  reply_to?: string;
-  to: string[];
-  subject: string;
-  text: string;
-};
-export function prepareEmail(
-  env: Env,
-  email: string,
-  subject: string,
-  text: string,
-): EmailPayload {
-  if (!emailConfigured(env))
-    throw new Error('Email delivery is not configured');
-  return {
-    from: env.EMAIL_FROM!,
-    reply_to: env.EMAIL_REPLY_TO || undefined,
-    to: [email],
-    subject,
-    text,
-  };
+export function emailConfigured(env: Env): boolean {
+  return Boolean(
+    env.SES_ACCESS_KEY_ID && env.SES_SECRET_ACCESS_KEY && env.EMAIL_FROM,
+  );
 }
 
 export async function sendLoginEmail(
@@ -44,23 +26,18 @@ export async function sendLoginEmail(
     throw new Error('Invalid sign-in link origin');
   await sendEmail(
     env,
-    prepareEmail(
-      env,
-      email,
-      'Your slowmass sign-in link',
-      `Use this link to confirm your email and sign in to slowmass:\n\n${url}\n\nIt expires in ${SIGN_IN_LINK_HOURS} hours and can be used once. If you did not request it, you can ignore this email.`,
-    ),
+    email,
+    'Your slowmass sign-in link',
+    `Use this link to confirm your email and sign in to slowmass:\n\n${url}\n\nIt expires in ${SIGN_IN_LINK_HOURS} hours and can be used once. If you did not request it, you can ignore this email.`,
   );
 }
 
-export async function sendEmail(
+async function sendEmail(
   env: Env,
-  payload: EmailPayload,
-  idempotencyKey?: string,
+  email: string,
+  subject: string,
+  text: string,
 ): Promise<boolean> {
-  if (!emailConfigured(env))
-    throw new Error('Email delivery is not configured');
-  const email = payload.to[0];
   const now = Date.now();
   const hash = Array.from(
     new Uint8Array(
@@ -72,30 +49,52 @@ export async function sendEmail(
   )
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');
-  const reserve = (key: string, limit: number) =>
+  // Conservative reservations count failed sends too. Total spending is capped
+  // outside the app by the AWS budget action described in docs/setup.md.
+  const [reservation] = await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO email_budget (budget_key, used, expires_at) VALUES (?, 1, ?)
-    ON CONFLICT (budget_key) DO UPDATE SET used = used + 1 WHERE used < ?`,
-    ).bind(key, now + 2 * 86400000, limit);
-  // Conservative reservations count failed sends too. They never exceed the free daily ceiling.
-  const reservations = await env.DB.batch([
-    reserve(`day:${Math.floor(now / 86400000)}`, 80),
-    reserve(`recipient:${hash}:${Math.floor(now / 3600000)}`, 3),
+    ON CONFLICT (budget_key) DO UPDATE SET used = used + 1 WHERE used < 3`,
+    ).bind(
+      `recipient:${hash}:${Math.floor(now / 3600000)}`,
+      now + 2 * 86400000,
+    ),
     env.DB.prepare('DELETE FROM email_budget WHERE expires_at < ?').bind(now),
   ]);
-  if (!reservations[0].meta.changes || !reservations[1].meta.changes)
-    return false;
-  const response = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${env.RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-      ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
-    },
-    body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(10000),
+  if (!reservation.meta.changes) return false;
+  const ses = new AwsClient({
+    accessKeyId: env.SES_ACCESS_KEY_ID!,
+    secretAccessKey: env.SES_SECRET_ACCESS_KEY!,
+    service: 'ses',
+    region: SES_REGION,
+    // SES has no idempotency key, so a retried request could deliver twice.
+    retries: 0,
   });
-  if (!response.ok) throw new Error('Email delivery failed');
+  const request = await ses.sign(SES_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      FromEmailAddress: env.EMAIL_FROM,
+      Destination: { ToAddresses: [email] },
+      ...(env.EMAIL_REPLY_TO ? { ReplyToAddresses: [env.EMAIL_REPLY_TO] } : {}),
+      Content: {
+        Simple: {
+          Subject: { Data: subject, Charset: 'UTF-8' },
+          Body: { Text: { Data: text, Charset: 'UTF-8' } },
+        },
+      },
+    }),
+  });
+  const response = await fetch(request, { signal: AbortSignal.timeout(10000) });
+  if (!response.ok) {
+    // SES error messages can echo addresses; log only the status and error type.
+    console.error(
+      'SES delivery failed',
+      response.status,
+      response.headers.get('x-amzn-ErrorType'),
+    );
+    throw new Error('Email delivery failed');
+  }
   return true;
 }
 

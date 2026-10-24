@@ -15,9 +15,9 @@ let ip = 0;
 const day = 86400000;
 beforeEach(async () => {
   sent = [];
-  runtime = await testRuntime(false, false, async (request) => {
-    sent.push((await request.json()) as (typeof sent)[number]);
-    return { status: 200, body: '{"id":"synthetic"}' };
+  runtime = await testRuntime(false, false, async (email) => {
+    sent.push(email);
+    return { status: 200, body: '{"MessageId":"synthetic"}' };
   });
   for (const id of ['alice', 'bob', 'carol'])
     await runtime.request(id, '/api/people/self', 'PUT', {

@@ -57,7 +57,8 @@ it('keeps session checks independent of an abandoned runtime schema inspection',
     }),
     APP_ORIGIN: 'http://localhost:8787',
     AUTH_SECRET: 'test-only-secret-with-at-least-thirty-two-characters',
-    RESEND_API_KEY: 'test-key',
+    SES_ACCESS_KEY_ID: 'test-key',
+    SES_SECRET_ACCESS_KEY: 'test-secret',
     EMAIL_FROM: 'test@example.com',
   } as Env;
   try {

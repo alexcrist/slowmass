@@ -9,10 +9,31 @@ import { readFile, readdir } from 'node:fs/promises';
 import { makeSignature } from 'better-auth/crypto';
 
 const secret = 'test-only-secret-with-at-least-thirty-two-characters';
+export const sesEndpoint =
+  'https://email.us-west-2.amazonaws.com/v2/email/outbound-emails';
+export type SentEmail = { to: string[]; text: string };
+
+// Simulated SES boundary: requires a SigV4 signature and decodes the message.
+export async function readSesEmail(request: Request): Promise<SentEmail> {
+  if (
+    !request.headers
+      .get('Authorization')
+      ?.startsWith('AWS4-HMAC-SHA256 Credential=test-key/')
+  )
+    throw new Error('Unsigned SES request');
+  const body = (await request.json()) as {
+    Destination: { ToAddresses: string[] };
+    Content: { Simple: { Body: { Text: { Data: string } } } };
+  };
+  return {
+    to: body.Destination.ToAddresses,
+    text: body.Content.Simple.Body.Text.Data,
+  };
+}
 export async function testRuntime(
   maintenance = false,
   images = false,
-  mail?: (request: Request) => Promise<{ status: number; body: string }>,
+  mail?: (email: SentEmail) => Promise<{ status: number; body: string }>,
   push?: {
     publicKey: string;
     privateKey: string;
@@ -63,7 +84,8 @@ export async function testRuntime(
               GOOGLE_CLIENT_SECRET: 'synthetic-google-secret',
             }
           : {}),
-        RESEND_API_KEY: 'test-key',
+        SES_ACCESS_KEY_ID: 'test-key',
+        SES_SECRET_ACCESS_KEY: 'test-secret',
         EMAIL_FROM: 'test@example.com',
         ...(push
           ? {
@@ -93,8 +115,8 @@ export async function testRuntime(
             headers: result.headers,
           });
         }
-        if (mail && request.url === 'https://api.resend.com/emails') {
-          const result = await mail(request);
+        if (mail && request.url === sesEndpoint) {
+          const result = await mail(await readSesEmail(request));
           return new RuntimeResponse(result.body, {
             status: result.status,
             headers: { 'Content-Type': 'application/json' },
