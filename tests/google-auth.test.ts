@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { testRuntime, seedProfilePhotos } from './support/runtime';
 import { invitationTokenHash } from '../src/server/membership';
@@ -26,9 +26,7 @@ function idToken(profile: Record<string, unknown>) {
     .join('.');
   return `${data}.${sign('RSA-SHA256', Buffer.from(data), keys.privateKey).toString('base64url')}`;
 }
-beforeEach(async () => {
-  sent = [];
-  codes.clear();
+beforeAll(async () => {
   runtime = await testRuntime(
     false,
     false,
@@ -76,15 +74,20 @@ beforeEach(async () => {
       };
     },
   );
+});
+afterAll(async () => {
+  await runtime.worker.dispose();
+});
+beforeEach(async () => {
+  sent = [];
+  codes.clear();
+  await runtime.reset();
   await runtime.request('alice', '/api/people/self', 'PUT', {
     handle: 'alice',
     displayName: 'Alice',
     bio: '',
   });
   await seedProfilePhotos(runtime.db);
-});
-afterEach(async () => {
-  await runtime?.worker.dispose();
 });
 function headers() {
   return { 'CF-Connecting-IP': `192.0.2.${++ip}` };

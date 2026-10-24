@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import { testRuntime, seedProfilePhotos } from './support/runtime';
 import {
   bindInviteVerification,
@@ -11,12 +11,18 @@ let runtime: Awaited<ReturnType<typeof testRuntime>>;
 let sent: { to: string[]; text: string }[];
 let ip = 0;
 const day = 86400000;
-beforeEach(async () => {
-  sent = [];
+beforeAll(async () => {
   runtime = await testRuntime(false, false, async (email) => {
     sent.push(email);
     return { status: 200, body: '{"MessageId":"synthetic"}' };
   });
+});
+afterAll(async () => {
+  await runtime.worker.dispose();
+});
+beforeEach(async () => {
+  sent = [];
+  await runtime.reset();
   for (const id of ['alice', 'bob', 'carol'])
     await runtime.request(id, '/api/people/self', 'PUT', {
       handle: id,
@@ -29,9 +35,6 @@ beforeEach(async () => {
     runtime.db.prepare('DELETE FROM follow'),
     runtime.db.prepare("DELETE FROM avatar WHERE user_id='carol'"),
   ]);
-});
-afterEach(async () => {
-  await runtime?.worker.dispose();
 });
 const db = () => runtime.db as unknown as D1Database;
 

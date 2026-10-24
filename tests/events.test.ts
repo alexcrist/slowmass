@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
   testRuntime,
@@ -20,14 +20,20 @@ let sent: SentEmail[];
 let mailStatus: number;
 let ip = 0;
 const day = 86400000;
-beforeEach(async () => {
-  sent = [];
-  mailStatus = 200;
+beforeAll(async () => {
   runtime = await testRuntime(false, false, async (email) => {
     if (!mailStatus) throw new Error('Synthetic SES timeout');
     sent.push(email);
     return { status: mailStatus, body: '{"MessageId":"synthetic"}' };
   });
+});
+afterAll(async () => {
+  await runtime.worker.dispose();
+});
+beforeEach(async () => {
+  sent = [];
+  mailStatus = 200;
+  await runtime.reset();
   for (const id of ['alice', 'bob', 'carol', 'david'])
     await runtime.request(id, '/api/people/self', 'PUT', {
       handle: id,
@@ -40,9 +46,6 @@ beforeEach(async () => {
     runtime.db.prepare('DELETE FROM follow'),
     runtime.db.prepare("DELETE FROM avatar WHERE user_id='david'"),
   ]);
-});
-afterEach(async () => {
-  await runtime?.worker.dispose();
 });
 
 async function connect(follower: string, target: string) {
@@ -668,12 +671,16 @@ it('retains title/cover previews for closed events but denies them after creator
 });
 
 it('keeps share previews closed during maintenance', async () => {
-  await runtime.worker.dispose();
-  runtime = await testRuntime(true);
-  for (const suffix of ['', '/photo'])
-    expect(
-      (await runtime.request(null, `/event/${'a'.repeat(48)}${suffix}`)).status,
-    ).toBe(503);
+  const maintenance = await testRuntime(true);
+  try {
+    for (const suffix of ['', '/photo'])
+      expect(
+        (await maintenance.request(null, `/event/${'a'.repeat(48)}${suffix}`))
+          .status,
+      ).toBe(503);
+  } finally {
+    await maintenance.worker.dispose();
+  }
 });
 
 it('previews a linked event, shows details after sign-in, and guests after answering', async () => {

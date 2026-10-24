@@ -5,6 +5,18 @@ on:
 permissions:
   contents: read
 jobs:
+  # Static checks and the local migration replay run beside the slower tests.
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run check:fast
+      - run: npm run db:migrate
   check:
     runs-on: ubuntu-latest
     steps:
@@ -14,8 +26,14 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run check
-      - run: npm run db:migrate
+      # Restored after npm ci, which empties node_modules. The snapshot file is
+      # also named by a migration hash, so a stale entry is never read.
+      - uses: actions/cache@v4
+        with:
+          path: node_modules/.cache/slowmass-test-schema
+          key: test-schema-${{ hashFiles('migrations/*.sql', 'tests/support/runtime.ts') }}
+      - run: npm test
+      - run: npm run build
       - uses: actions/upload-artifact@v4
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         with:
@@ -25,7 +43,7 @@ jobs:
           if-no-files-found: error
           retention-days: 1
   deploy:
-    needs: check
+    needs: [static, check]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'alexcrist/slowmass' && vars.AUTO_DEPLOY_DISABLED != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15

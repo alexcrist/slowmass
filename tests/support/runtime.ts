@@ -152,6 +152,59 @@ async function applySchema(db: D1, migrationCount?: number) {
     await db.batch(statements.map((sql) => db.prepare(sql)));
 }
 
+// Every runtime starts from the schema plus four completed base members.
+async function seed(db: D1, migrationCount?: number) {
+  await applySchema(db, migrationCount);
+  const now = Date.now();
+  await db.batch(
+    ['alice', 'bob', 'carol', 'david'].flatMap((id) => [
+      db
+        .prepare(
+          'INSERT INTO user (id,name,email,emailVerified,createdAt,updatedAt) VALUES (?,?,?,1,?,?)',
+        )
+        .bind(id, id, `${id}@example.com`, now, now),
+      ...(id === 'alice'
+        ? []
+        : [
+            db
+              .prepare(
+                'INSERT INTO invitation (id,inviter_id,recipient_email,created_at,expires_at) VALUES (?, ?, ?, ?, ?)',
+              )
+              .bind(id, 'alice', `${id}@example.com`, now, now + 86400000),
+          ]),
+      db
+        .prepare(
+          'INSERT INTO membership (user_id,invited_by,invitation_id,joined_at) VALUES (?,?,?,?)',
+        )
+        .bind(
+          id,
+          id === 'alice' ? null : 'alice',
+          id === 'alice' ? null : id,
+          now,
+        ),
+      db
+        .prepare(
+          'INSERT INTO session (id,userId,token,expiresAt,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
+        )
+        .bind(
+          id,
+          id,
+          `${id}-token`,
+          new Date(now + 86400000).toISOString(),
+          now,
+          now,
+        ),
+    ]),
+  );
+  // These four base fixtures represent existing members, not new join events.
+  if (
+    (
+      await db.prepare('PRAGMA table_info(membership)').all<{ name: string }>()
+    ).results.some((column) => column.name === 'join_activity_pending')
+  )
+    await db.prepare('UPDATE membership SET join_activity_pending=0').run();
+}
+
 export async function testRuntime(
   maintenance = false,
   images = false,
@@ -240,55 +293,7 @@ export async function testRuntime(
     }),
   );
   const db = await worker.getD1Database('DB');
-  await applySchema(db, migrationCount);
-  const now = Date.now();
-  await db.batch(
-    ['alice', 'bob', 'carol', 'david'].flatMap((id) => [
-      db
-        .prepare(
-          'INSERT INTO user (id,name,email,emailVerified,createdAt,updatedAt) VALUES (?,?,?,1,?,?)',
-        )
-        .bind(id, id, `${id}@example.com`, now, now),
-      ...(id === 'alice'
-        ? []
-        : [
-            db
-              .prepare(
-                'INSERT INTO invitation (id,inviter_id,recipient_email,created_at,expires_at) VALUES (?, ?, ?, ?, ?)',
-              )
-              .bind(id, 'alice', `${id}@example.com`, now, now + 86400000),
-          ]),
-      db
-        .prepare(
-          'INSERT INTO membership (user_id,invited_by,invitation_id,joined_at) VALUES (?,?,?,?)',
-        )
-        .bind(
-          id,
-          id === 'alice' ? null : 'alice',
-          id === 'alice' ? null : id,
-          now,
-        ),
-      db
-        .prepare(
-          'INSERT INTO session (id,userId,token,expiresAt,createdAt,updatedAt) VALUES (?,?,?,?,?,?)',
-        )
-        .bind(
-          id,
-          id,
-          `${id}-token`,
-          new Date(now + 86400000).toISOString(),
-          now,
-          now,
-        ),
-    ]),
-  );
-  // These four base fixtures represent existing members, not new join events.
-  if (
-    (
-      await db.prepare('PRAGMA table_info(membership)').all<{ name: string }>()
-    ).results.some((column) => column.name === 'join_activity_pending')
-  )
-    await db.prepare('UPDATE membership SET join_activity_pending=0').run();
+  await seed(db, migrationCount);
   async function request(
     id: string | null,
     path: string,
@@ -319,7 +324,34 @@ export async function testRuntime(
           }),
     });
   }
-  return { worker, db, request };
+  // Restores the freshly created state so a test file can share one workerd
+  // process: starting a runtime costs about two seconds, a reset a fraction.
+  // Dropping tables skips their triggers, unlike deleting rows.
+  async function reset() {
+    if (migrationCount !== undefined)
+      throw new Error('Only full-schema runtimes can reset');
+    const objects = (
+      await db
+        .prepare(
+          "SELECT type,name FROM sqlite_master WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' ORDER BY rowid DESC",
+        )
+        .all<{ type: string; name: string }>()
+    ).results;
+    await db.batch([
+      db.prepare('PRAGMA defer_foreign_keys = on'),
+      ...objects.map(({ type, name }) =>
+        db.prepare(`DROP ${type === 'view' ? 'VIEW' : 'TABLE'} "${name}"`),
+      ),
+    ]);
+    const bucket = await worker.getR2Bucket('PHOTOS');
+    for (;;) {
+      const listed = await bucket.list();
+      if (!listed.objects.length) break;
+      await bucket.delete(listed.objects.map(({ key }) => key));
+    }
+    await seed(db);
+  }
+  return { worker, db, request, reset };
 }
 
 // Completed synthetic members for tests unrelated to onboarding.

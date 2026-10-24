@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import { cleanupAccounts } from '../src/server/features/account';
 import {
   seedProfilePhotos,
@@ -8,12 +8,18 @@ import {
 
 let runtime: Awaited<ReturnType<typeof testRuntime>>;
 let sent: SentEmail[];
-beforeEach(async () => {
-  sent = [];
+beforeAll(async () => {
   runtime = await testRuntime(false, false, async (email) => {
     sent.push(email);
     return { status: 200, body: '{"MessageId":"synthetic"}' };
   });
+});
+afterAll(async () => {
+  await runtime.worker.dispose();
+});
+beforeEach(async () => {
+  sent = [];
+  await runtime.reset();
   for (const id of ['alice', 'bob', 'carol'])
     await runtime.request(id, '/api/people/self', 'PUT', {
       handle: id,
@@ -30,7 +36,6 @@ beforeEach(async () => {
       .bind(),
   ]);
 });
-afterEach(async () => runtime?.worker.dispose());
 
 const path = '/api/notifications/preferences';
 async function preferences(actor = 'alice') {

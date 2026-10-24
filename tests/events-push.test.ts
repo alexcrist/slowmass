@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import { createECDH, randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { seedProfilePhotos, testRuntime } from './support/runtime';
@@ -19,9 +19,7 @@ const auth = randomBytes(16);
 let runtime: Awaited<ReturnType<typeof testRuntime>>;
 let sent: Buffer[];
 let providerStatus: number;
-beforeEach(async () => {
-  sent = [];
-  providerStatus = 201;
+beforeAll(async () => {
   runtime = await testRuntime(false, false, undefined, {
     publicKey: vapid.getPublicKey().toString('base64url'),
     privateKey: vapid.getPrivateKey().toString('base64url'),
@@ -30,6 +28,14 @@ beforeEach(async () => {
       return { status: providerStatus };
     },
   });
+});
+afterAll(async () => {
+  await runtime.worker.dispose();
+});
+beforeEach(async () => {
+  sent = [];
+  providerStatus = 201;
+  await runtime.reset();
   for (const id of ['alice', 'bob'])
     await runtime.request(id, '/api/people/self', 'PUT', {
       handle: id,
@@ -40,7 +46,6 @@ beforeEach(async () => {
   // Event-only members can answer and receive push without a profile photo.
   await runtime.db.prepare("DELETE FROM avatar WHERE user_id='bob'").run();
 });
-afterEach(async () => runtime?.worker.dispose());
 
 async function event() {
   const id = crypto.randomUUID();
