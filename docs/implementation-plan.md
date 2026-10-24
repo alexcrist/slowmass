@@ -99,7 +99,8 @@ Implemented behavior, permissions, and failure handling live in the [client even
 
 - [x] Provision the SES sender identity, DNS authentication, à-la-carte pricing, account suppression, and confirmed bounce/complaint alerts; verify both feedback paths with the SES mailbox simulator.
 - [x] Switch sign-in email from Resend to [Amazon SES](setup.md#amazon-ses): production access granted, sender-scoped IAM credentials installed, the application-wide daily cap replaced by a $100/month AWS budget action, and a real signed request accepted by SES using the application's transport (mailbox simulator); a different From address is denied.
-- [ ] Observe a real production sign-in email delivered through SES after deployment, then delete the Resend API key secret and account. Optional event email requires separate consent, unsubscribe, authorization, and delivery work.
+- [x] Observe a real production sign-in email delivered through SES and completed sign-in (October 24, 2026); the Resend API key secret is deleted from production.
+- [ ] Optional event email requires separate consent, unsubscribe, authorization, and delivery work.
 - [ ] Identify or rule out recurring signed-in startup stalls using affected-request diagnostics; measure the CPU cost of request-local authentication. The captured older timeout does not establish every reported failure's cause.
 - [ ] Verify production session-cookie renewal after a day of use and diagnostic retention/expiry cleanup.
 - [ ] Collect representative signed-in feed, profile, Activity, and image latency distributions, hosted cache hit rates, and storage/download measurements before choosing further performance work. Keep dated measurements in the operations runbook.
