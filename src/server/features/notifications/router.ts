@@ -1,8 +1,7 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { Env } from '../../env';
-import { getActiveSession } from '../../auth';
-import { authConfigured } from '../../auth/options';
+import { memberGate } from '../../auth';
 import {
   markRead,
   dismissFollowBack,
@@ -17,17 +16,9 @@ export const notifications = new Hono<{
   Bindings: Env;
   Variables: { userId: string };
 }>();
-notifications.use('*', async (c, next) => {
-  if (!authConfigured(c.env))
-    return c.json({ error: 'Sign-in is not available yet.' }, 503);
-  const session = await getActiveSession(c.env, c.req.raw.headers);
-  const user = session?.user;
-  if (!user) return c.json({ error: 'Sign in to continue.' }, 401);
-  // Members without a profile photo see activity for events they answered;
-  // every row is still authorized by its own visibility rules.
-  c.set('userId', user.id);
-  await next();
-});
+// Members without a profile photo see activity for events they answered;
+// every row is still authorized by its own visibility rules.
+notifications.use('*', memberGate(false));
 // Older open clients cannot render newer activity kinds.
 function kinds(c: { req: { query: (name: string) => string | undefined } }) {
   return {

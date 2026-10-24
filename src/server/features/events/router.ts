@@ -1,7 +1,7 @@
 import { Hono, type MiddlewareHandler } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { Env } from '../../env';
-import { getActiveSession } from '../../auth';
+import { getActiveSession, readAsMember } from '../../auth';
 import { authConfigured } from '../../auth/options';
 import { PhotoError, privatePhoto } from '../../photos';
 import { eventShareHtml } from './share';
@@ -496,15 +496,13 @@ eventMedia.get('/:id', async (c) => {
   const size = c.req.query('size');
   if ((size !== undefined && size !== 'thumb') || !authConfigured(c.env))
     return c.notFound();
-  const session = await getActiveSession(c.env, c.req.raw.headers);
   const id = c.req.param('id');
-  if (!session || !validId(id)) return c.notFound();
-  const key = await eventMediaKey(
-    c.env.DB,
-    session.user.id,
-    id,
-    size === 'thumb' ? 'thumb' : 'full',
-  );
+  if (!validId(id)) return c.notFound();
+  const key = (
+    await readAsMember(c.env, c.req.raw.headers, (viewer) =>
+      eventMediaKey(c.env.DB, viewer, id, size === 'thumb' ? 'thumb' : 'full'),
+    )
+  )?.value;
   const response = key ? await privatePhoto(c.env, key, c.executionCtx) : null;
   return response ?? c.notFound();
 });

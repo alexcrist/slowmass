@@ -1,7 +1,8 @@
 import { startupPhase, sessionStage } from '../telemetry';
 import { betterAuth } from 'better-auth';
+import type { MiddlewareHandler } from 'hono';
 import type { Env } from '../env';
-import { authOptions } from './options';
+import { authConfigured, authOptions } from './options';
 import { memberAccess } from '../membership';
 import { signInRecoveryPath } from '../../shared/sign-in';
 
@@ -88,7 +89,12 @@ export async function handleAuthRequest(env: Env, request: Request) {
   return response;
 }
 
-async function readActiveSession(env: Env, headers: Headers, renew: boolean) {
+async function readActiveSession<T>(
+  env: Env,
+  headers: Headers,
+  renew: boolean,
+  load: (userId: string) => Promise<T>,
+) {
   const { headers: responseHeaders, response: session } = await authOperation(
     env,
     'session',
@@ -102,8 +108,17 @@ async function readActiveSession(env: Env, headers: Headers, renew: boolean) {
   startupPhase('membership');
   const cookies = responseHeaders.getSetCookie();
   if (!session?.user.emailVerified) return { session: null, cookies };
-  const access = await memberAccess(env.DB, session.user.id);
+  // A read-only load runs alongside the fresh membership check, saving one D1
+  // round trip. Its result and errors are discarded unless access is granted.
+  const [access, loaded] = await Promise.all([
+    memberAccess(env.DB, session.user.id),
+    load(session.user.id).then(
+      (value) => ({ value }),
+      (error: unknown) => ({ error }),
+    ),
+  ]);
   if (!access) return { session: null, cookies };
+  if ('error' in loaded) throw loaded.error;
   return {
     session: {
       user: { id: session.user.id, name: session.user.name },
@@ -111,23 +126,91 @@ async function readActiveSession(env: Env, headers: Headers, renew: boolean) {
       hasProfilePhoto: access.hasProfilePhoto,
     },
     cookies,
+    value: loaded.value,
   };
 }
 
 export async function getActiveSession(env: Env, headers: Headers) {
-  return (await readActiveSession(env, headers, false)).session;
+  return (await readActiveSession(env, headers, false, async () => null))
+    .session;
 }
 
 export async function getActiveUser(env: Env, headers: Headers) {
   return (await getActiveSession(env, headers))?.user ?? null;
 }
 
+// For read-only lookups only: `load` runs before membership is confirmed, so
+// it must not write, enqueue work, or have other side effects.
+export async function readAsMember<T>(
+  env: Env,
+  headers: Headers,
+  load: (userId: string) => Promise<T>,
+) {
+  const { session, value } = await readActiveSession(env, headers, false, load);
+  return session && { session, value };
+}
+
+type MemberEnv = { Bindings: Env; Variables: { userId: string } };
+// Requires an active member, and optionally a profile photo. GET handlers
+// behind this gate must be read-only: they run alongside the membership check
+// and their response is replaced when access is denied.
+export function memberGate(
+  requireProfilePhoto: boolean,
+): MiddlewareHandler<MemberEnv> {
+  return async (c, next) => {
+    if (!authConfigured(c.env))
+      return c.json({ error: 'Sign-in is not available yet.' }, 503);
+    const concurrent = c.req.method === 'GET';
+    const { session } = await readActiveSession(
+      c.env,
+      c.req.raw.headers,
+      false,
+      async (userId) => {
+        if (!concurrent) return;
+        c.set('userId', userId);
+        await next();
+      },
+    );
+    const denied = !session
+      ? c.json({ error: 'Sign in to continue.' }, 401)
+      : requireProfilePhoto && !session.hasProfilePhoto
+        ? c.json(
+            { error: 'Add a profile photo to finish setting up your account.' },
+            409,
+          )
+        : null;
+    if (concurrent) {
+      // Discard the handler's response rather than merging its headers.
+      if (denied) {
+        c.res = undefined;
+        c.res = denied;
+      }
+      return;
+    }
+    if (!session || denied) return denied ?? undefined;
+    c.set('userId', session.user.id);
+    await next();
+  };
+}
+
 // Renewal extends the session row and reissues its cookie, so only a response
 // that forwards these Set-Cookie values may renew. Every app start calls
 // bootstrap; other reads skip renewal rather than extend only the row.
-export async function renewActiveUser(env: Env, headers: Headers) {
-  const { session, cookies } = await readActiveSession(env, headers, true);
-  return { user: session?.user ?? null, cookies };
+// `load` follows the same read-only contract as readAsMember.
+export async function renewActiveUser<T>(
+  env: Env,
+  headers: Headers,
+  load: (userId: string) => Promise<T>,
+) {
+  const { session, cookies, value } = await readActiveSession(
+    env,
+    headers,
+    true,
+    load,
+  );
+  return session
+    ? { user: session.user, cookies, value }
+    : { user: null, cookies, value: null };
 }
 
 // Better Auth stores dates as ISO-8601 text. SQLite orders every number before

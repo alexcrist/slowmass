@@ -1,4 +1,3 @@
-import { startupPhase } from '../../telemetry';
 import { bodyLimit } from 'hono/body-limit';
 import { deleteAccount } from './index';
 import { Hono } from 'hono';
@@ -12,19 +11,18 @@ import { hasPushSubscription } from '../push';
 export const bootstrap = new Hono<{ Bindings: Env }>();
 bootstrap.get('/', async (c) => {
   const signInAvailable = authConfigured(c.env);
-  const { user, cookies } = signInAvailable
-    ? await renewActiveUser(c.env, c.req.raw.headers)
-    : { user: null, cookies: [] };
+  const { user, cookies, value } = signInAvailable
+    ? await renewActiveUser(c.env, c.req.raw.headers, (id) =>
+        Promise.all([
+          ownProfile(c.env.DB, id),
+          deviceSetupPending(c.env.DB, id),
+          hasPushSubscription(c.env.DB, id),
+        ]),
+      )
+    : { user: null, cookies: [], value: null };
   for (const cookie of cookies)
     c.header('Set-Cookie', cookie, { append: true });
-  startupPhase('profile');
-  const [profile, pending, pushSubscribed] = user
-    ? await Promise.all([
-        ownProfile(c.env.DB, user.id),
-        deviceSetupPending(c.env.DB, user.id),
-        hasPushSubscription(c.env.DB, user.id),
-      ])
-    : [null, false, false];
+  const [profile, pending, pushSubscribed] = value ?? [null, false, false];
   return c.json({
     signInAvailable,
     googleSignInAvailable: Boolean(

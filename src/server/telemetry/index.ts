@@ -5,7 +5,7 @@ import { routePath } from 'hono/route';
 import type { Env } from '../env';
 
 type Metrics = {
-  phase?: 'initialize' | 'session' | 'handler' | 'membership' | 'profile';
+  phase?: 'initialize' | 'session' | 'handler' | 'membership';
   authTimedOut?: boolean;
   sessionStage?: 'dispatch' | 'endpoint' | 'lookup';
   queries: number;

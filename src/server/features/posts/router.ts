@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { Env } from '../../env';
-import { getActiveSession } from '../../auth';
+import { memberGate, readAsMember } from '../../auth';
 import { authConfigured } from '../../auth/options';
 import { ownProfile, findProfile } from '../people';
 import { PhotoError, privatePhoto } from '../../photos';
@@ -22,20 +22,7 @@ export const posts = new Hono<{
   Variables: { userId: string };
 }>();
 export const postMedia = new Hono<{ Bindings: Env }>();
-posts.use('*', async (c, next) => {
-  if (!authConfigured(c.env))
-    return c.json({ error: 'Sign-in is not available yet.' }, 503);
-  const session = await getActiveSession(c.env, c.req.raw.headers);
-  const user = session?.user;
-  if (!user) return c.json({ error: 'Sign in to continue.' }, 401);
-  if (!session?.hasProfilePhoto)
-    return c.json(
-      { error: 'Add a profile photo to finish setting up your account.' },
-      409,
-    );
-  c.set('userId', user.id);
-  await next();
-});
+posts.use('*', memberGate(true));
 posts.get('/', async (c) => {
   let cursor;
   try {
@@ -44,12 +31,14 @@ posts.get('/', async (c) => {
     return c.json({ error: 'Invalid page.' }, 400);
   }
   const handle = c.req.query('handle')?.toLowerCase() ?? null;
-  if (handle) {
-    const owner = await findProfile(c.env.DB, c.get('userId'), handle);
-    if (!owner || owner.bio === null)
-      return c.json({ error: 'Profile not found.' }, 404);
-  }
-  return c.json(await listPosts(c.env.DB, c.get('userId'), handle, cursor));
+  // The page is only returned once the profile is confirmed visible.
+  const [owner, page] = await Promise.all([
+    handle ? findProfile(c.env.DB, c.get('userId'), handle) : null,
+    listPosts(c.env.DB, c.get('userId'), handle, cursor),
+  ]);
+  if (handle && (!owner || owner.bio === null))
+    return c.json({ error: 'Profile not found.' }, 404);
+  return c.json(page);
 });
 posts.post('/', bodyLimit({ maxSize: 12000 }), async (c) => {
   const draft = parseDraft(await c.req.json().catch(() => null));
@@ -133,10 +122,10 @@ postMedia.get('/:id', async (c) => {
   const size = c.req.query('size');
   if (size !== undefined && size !== 'grid') return c.notFound();
   if (!authConfigured(c.env)) return c.notFound();
-  const session = await getActiveSession(c.env, c.req.raw.headers);
-  const user = session?.user;
-  if (!user) return c.notFound();
-  const post = await findPost(c.env.DB, user.id, c.req.param('id'), false);
+  const read = await readAsMember(c.env, c.req.raw.headers, (viewer) =>
+    findPost(c.env.DB, viewer, c.req.param('id'), false),
+  );
+  const post = read?.value;
   if (!post || post.state !== 'published' || !post.objectKey)
     return c.notFound();
   const response = await privatePhoto(

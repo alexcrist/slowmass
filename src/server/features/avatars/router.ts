@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Env } from '../../env';
-import { getActiveUser } from '../../auth';
+import { getActiveUser, readAsMember } from '../../auth';
 import { authConfigured } from '../../auth/options';
 import { ownProfile } from '../people';
 import { PhotoError, privatePhoto } from '../../photos';
@@ -57,13 +57,10 @@ avatarMedia.get('/:handle', async (c) => {
   const size = c.req.query('size');
   if (size !== undefined && size !== 'large') return c.notFound();
   if (!authConfigured(c.env)) return c.notFound();
-  const user = await getActiveUser(c.env, c.req.raw.headers);
-  if (!user) return c.notFound();
-  const avatar = await findAvatar(
-    c.env.DB,
-    user.id,
-    c.req.param('handle').toLowerCase(),
+  const read = await readAsMember(c.env, c.req.raw.headers, (viewer) =>
+    findAvatar(c.env.DB, viewer, c.req.param('handle').toLowerCase()),
   );
+  const avatar = read?.value;
   if (!avatar) return c.notFound();
   const response = await privatePhoto(
     c.env,

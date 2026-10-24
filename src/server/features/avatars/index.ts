@@ -67,10 +67,21 @@ export async function findAvatar(
   actor: string,
   handle: string,
 ) {
-  const profile = await findProfile(db, actor, handle);
-  if (!profile) return null;
-  return db
-    .prepare('SELECT object_key,large_key FROM avatar WHERE user_id=?')
-    .bind(profile.id)
-    .first<{ object_key: string; large_key: string | null }>();
+  // Read the keys alongside the visibility check; they are only returned when
+  // the profile is visible and belongs to the same account.
+  const [profile, avatar] = await Promise.all([
+    findProfile(db, actor, handle),
+    db
+      .prepare(
+        'SELECT a.user_id,a.object_key,a.large_key FROM avatar a JOIN profile p ON p.user_id=a.user_id WHERE p.handle=?',
+      )
+      .bind(handle)
+      .first<{
+        user_id: string;
+        object_key: string;
+        large_key: string | null;
+      }>(),
+  ]);
+  if (!profile || avatar?.user_id !== profile.id) return null;
+  return { object_key: avatar.object_key, large_key: avatar.large_key };
 }

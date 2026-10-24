@@ -20,6 +20,8 @@ Library logging retains event level only because database exceptions may contain
 
 Auth owns bounded cleanup of expired sessions and verification records. Missing provider configuration returns service-unavailable responses rather than telling a mounted client that its session expired.
 
+Every D1 call from the Worker costs a round trip of roughly 20–25 ms even when SQL takes about 1 ms, so request authentication overlaps work where it safely can. The library session read must come first because it yields the member ID. `readAsMember` and bootstrap renewal then run a caller's read-only lookup concurrently with the fresh membership check, and `memberGate` does the same for GET handlers in the posts, interactions, and notifications routers. Denied access discards the lookup's result and errors, and the gate replaces a GET handler's whole response with the 401/409 error. These lookups and GET handlers must not write, enqueue work, or have other side effects; mutations still wait for membership before running. Membership and photo completion are still checked fresh on every request.
+
 `getActiveSession` exposes the authenticated server session ID alongside the existing active-user identity for device push ownership. Deleting a session cascades its push subscription and queued deliveries; delivery also checks session expiry before sending.
 
 ## Google and shared account identity

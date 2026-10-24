@@ -1,8 +1,7 @@
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { Env } from '../../env';
-import { getActiveSession } from '../../auth';
-import { authConfigured } from '../../auth/options';
+import { memberGate } from '../../auth';
 import { findPost } from '../posts';
 import {
   likePage,
@@ -18,20 +17,7 @@ export const interactions = new Hono<{
   Bindings: Env;
   Variables: { userId: string };
 }>();
-interactions.use('*', async (c, next) => {
-  if (!authConfigured(c.env))
-    return c.json({ error: 'Sign-in is not available yet.' }, 503);
-  const session = await getActiveSession(c.env, c.req.raw.headers);
-  const user = session?.user;
-  if (!user) return c.json({ error: 'Sign in to continue.' }, 401);
-  if (!session?.hasProfilePhoto)
-    return c.json(
-      { error: 'Add a profile photo to finish setting up your account.' },
-      409,
-    );
-  c.set('userId', user.id);
-  await next();
-});
+interactions.use('*', memberGate(true));
 interactions.use('*', bodyLimit({ maxSize: 6000 }));
 interactions.on(['PUT', 'DELETE'], '/:postId/like', async (c) => {
   const actor = c.get('userId'),
@@ -54,10 +40,14 @@ interactions.get('/:postId/likes', async (c) => {
     after = c.req.query('after') ?? '';
   if (after && !/^[a-z0-9_]{3,30}$/.test(after))
     return c.json({ error: 'Invalid page.' }, 400);
-  const post = await findPost(c.env.DB, actor, id, false);
+  // The page is only returned once the post is confirmed visible.
+  const [post, page] = await Promise.all([
+    findPost(c.env.DB, actor, id, false),
+    likePage(c.env.DB, actor, id, after),
+  ]);
   if (!post || post.state !== 'published')
     return c.json({ error: 'Post not found.' }, 404);
-  return c.json(await likePage(c.env.DB, actor, id, after));
+  return c.json(page);
 });
 interactions.get('/:postId/comments', async (c) => {
   const actor = c.get('userId'),
@@ -69,10 +59,13 @@ interactions.get('/:postId/comments', async (c) => {
       !Number.isSafeInteger(Number(after.split(':')[0])))
   )
     return c.json({ error: 'Invalid page.' }, 400);
-  const post = await findPost(c.env.DB, actor, id, false);
+  const [post, page] = await Promise.all([
+    findPost(c.env.DB, actor, id, false),
+    commentPage(c.env.DB, actor, id, after),
+  ]);
   if (!post || post.state !== 'published')
     return c.json({ error: 'Post not found.' }, 404);
-  return c.json(await commentPage(c.env.DB, actor, id, after));
+  return c.json(page);
 });
 interactions.post('/:postId/comments', async (c) => {
   const data: unknown = await c.req.json().catch(() => null);
@@ -118,9 +111,12 @@ interactions.get('/comments/:id/likes', async (c) => {
     after = c.req.query('after') ?? '';
   if (after && !/^[a-z0-9_]{3,30}$/.test(after))
     return c.json({ error: 'Invalid page.' }, 400);
-  if (!(await commentLikeCounts(c.env.DB, actor, id)))
-    return c.json({ error: 'Comment not found.' }, 404);
-  return c.json(await commentLikePage(c.env.DB, actor, id, after));
+  const [counts, page] = await Promise.all([
+    commentLikeCounts(c.env.DB, actor, id),
+    commentLikePage(c.env.DB, actor, id, after),
+  ]);
+  if (!counts) return c.json({ error: 'Comment not found.' }, 404);
+  return c.json(page);
 });
 interactions.delete('/comments/:id', async (c) =>
   (await removeComment(c.env.DB, c.get('userId'), c.req.param('id')))
