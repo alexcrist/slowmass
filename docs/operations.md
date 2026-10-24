@@ -171,6 +171,12 @@ Media response timing now separates R2 lookup (`r2`) from database waiting and o
 
 A 150-second sanitized tail after deployment captured no `request.performance` records at the normal 5% sample rate. The owner reported a slight possible subjective improvement. This observation does not establish an additional hosted latency reduction or R2 bottleneck. The verified gains for this release are the local D1 query-count regression and the client request-order/count regressions; retain the earlier placement measurements as a separate experiment.
 
+## Concurrent authorization and photo caching — October 24, 2026
+
+Two owner browsing sessions were captured with `PERFORMANCE_SAMPLE_RATE` temporarily set to 1 through a Worker secret (deleted afterward, restoring 5%) and a live tail filtered to sanitized `request.performance` records. Each sequential D1 call cost roughly 20–25 ms while SQL took 1–3 ms per request. Before the changes (94 signed-in records), medians were: avatar media 117 ms (p90 406), post media 78 ms (p90 283), unread count 59 ms, feed 71 ms, comment likes 70 ms, bootstrap 66 ms. Media cache misses dominated the tail: avatar misses took 380 ms with 241 ms of R2 wait (17 of 36 avatar requests missed), and post misses 272 ms with 218 ms of R2 wait.
+
+Commit `1d9f983` ran membership checks concurrently with read-only lookups, and `d480037` extended internal media caching to seven days, made post photos browser-immutable, and added ETag revalidation for avatars and event covers. After deployment (30 signed-in records), avatar media had a 58 ms median, with 9 of 10 requests answered 304 without R2 or body transfer; comments took 34 ms, feed 65 ms, unread count 50 ms, and bootstrap 55 ms. Only two post-media requests reached the Worker, both cache misses (about 320 ms, 268 ms R2 wait), consistent with devices reusing immutable post photos. `databaseWaitMs` now sums overlapping calls and can exceed handler time. Samples are small and from one member and location; R2 misses remain the slowest observed path.
+
 ## Captured startup auth timeout — October 13, 2026
 
 During a refresh investigation at approximately `2026-10-14T01:33Z` (October 13 Pacific time), the owner reported a pause followed by recovery. Retained server and browser diagnostics correlate startup `e1698052-84bb-404d-8db6-a3be8d2437bb` and first request `58781069-a0b1-4510-b682-825859b9a44b`:
