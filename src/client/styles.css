@@ -1042,8 +1042,9 @@ summary.settings-row::after {
   flex: none;
 }
 .post-interactions:has(~ .comments) {
-  /* Include the 10px below the icons inside their 44px controls. */
-  margin-bottom: calc(var(--post-content-gap) - 10px);
+  /* A 24px visible gap, including the 10px below the icons inside their
+     44px controls. */
+  margin-bottom: calc(var(--post-content-gap) - 2px);
 }
 .comments > .actions:not(:empty) {
   margin-bottom: var(--post-content-gap);
