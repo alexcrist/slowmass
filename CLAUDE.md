@@ -16,6 +16,7 @@ The repository contains email-link authentication, event-link joining, profiles,
 - [docs/design.md](docs/design.md): visual direction.
 - [docs/setup.md](docs/setup.md): external setup and migration workflow.
 - [docs/operations.md](docs/operations.md): storage limits, backup/restore, retention, and usage inspection.
+- [docs/scaling-watchlist.md](docs/scaling-watchlist.md): known costs that grow with usage, with the signal to act and the planned fix.
 
 ## Software design
 
