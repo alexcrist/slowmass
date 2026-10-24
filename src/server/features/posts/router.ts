@@ -132,6 +132,9 @@ postMedia.get('/:id', async (c) => {
     c.env,
     size === 'grid' ? (post.thumbnailKey ?? post.objectKey) : post.objectKey,
     c.executionCtx,
+    c.req.raw,
+    // A post's photo never changes, so the device may keep it for a week.
+    'immutable',
   );
   return response ?? c.notFound();
 });

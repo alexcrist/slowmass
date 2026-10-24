@@ -84,7 +84,9 @@ it('stores a smaller private grid image once, accounts for both sizes and revoke
   const grid = await runtime.request('alice', `/media/posts/${id}?size=grid`);
   expect(full.status).toBe(200);
   expect(grid.status).toBe(200);
-  expect(grid.headers.get('Cache-Control')).toBe('private, no-store');
+  expect(grid.headers.get('Cache-Control')).toBe(
+    'private, max-age=604800, immutable',
+  );
   const fullBytes = await full.arrayBuffer(),
     gridBytes = await grid.arrayBuffer();
   expect(gridBytes.byteLength).toBeLessThan(fullBytes.byteLength);

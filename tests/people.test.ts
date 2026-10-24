@@ -76,7 +76,7 @@ it('lets unfinished members browse identities while keeping relationships and po
   await bucket.put('test-avatar/bob', 'synthetic avatar bytes');
   const avatar = await runtime.request('david', '/media/avatar/bob');
   expect(avatar.status).toBe(200);
-  expect(avatar.headers.get('cache-control')).toBe('private, no-store');
+  expect(avatar.headers.get('cache-control')).toBe('private, no-cache');
   await avatar.arrayBuffer();
   for (const path of [
     '/api/people/connections?kind=following',
@@ -463,7 +463,7 @@ it('shares avatars with members while enforcing blocks and preventing removal', 
   await action('bob', 'alice', 'accept');
   const visible = await runtime.request('alice', path);
   expect(visible.status).toBe(200);
-  expect(visible.headers.get('cache-control')).toBe('private, no-store');
+  expect(visible.headers.get('cache-control')).toBe('private, no-cache');
   await action('bob', 'alice', 'remove');
   expect((await runtime.request('alice', path)).status).toBe(200);
   await action('bob', 'alice', 'block');

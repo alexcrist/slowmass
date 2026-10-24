@@ -16,6 +16,10 @@ const variants = () => [
   '/media/avatar/bob',
   '/media/avatar/bob?size=large',
 ];
+// Post photos never change; avatar URLs are reused across replacements.
+const policy = (index: number) =>
+  index < 2 ? 'private, max-age=604800, immutable' : 'private, no-cache';
+const etags = new Map<string, string>();
 async function restoreSession(id: string) {
   const now = Date.now();
   await runtime.db
@@ -85,7 +89,8 @@ async function warm() {
     const response = await runtime.request('alice', path);
     expect(response.status).toBe(200);
     expect(response.headers.get('Server-Timing')).toContain('desc="miss"');
-    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(response.headers.get('Cache-Control')).toBe(policy(index));
+    etags.set(path, response.headers.get('ETag') ?? '');
     expect(await response.text()).toBe(`synthetic ${keys[index]}`);
     await expect
       .poll(async () => !!(await cache.match(cacheUrl(keys[index]))))
@@ -94,8 +99,9 @@ async function warm() {
 }
 async function denied(actor: string | null, paths = variants()) {
   for (const path of paths) {
+    // Even the current validator must not skip authorization.
     const response = await runtime.request(actor, path, 'GET', undefined, {
-      'If-None-Match': '*',
+      'If-None-Match': etags.get(path) || '*',
       'If-Modified-Since': new Date().toUTCString(),
       Range: 'bytes=0-2',
     });
@@ -118,9 +124,17 @@ it('reuses each immutable variant across authorized viewers while cache keys hav
       });
       expect(response.status).toBe(200);
       expect(response.headers.get('Server-Timing')).toContain('desc="hit"');
-      expect(response.headers.get('Cache-Control')).toBe('private, no-store');
-      expect(response.headers.get('ETag')).toBeNull();
+      expect(response.headers.get('Cache-Control')).toBe(policy(index));
+      expect(response.headers.get('ETag')).toBe(etags.get(path));
       expect(await response.text()).toBe(`synthetic ${keys[index]}`);
+      const unchanged = await runtime.request(actor, path, 'GET', undefined, {
+        'If-None-Match': etags.get(path)!,
+      });
+      expect(unchanged.status).toBe(304);
+      expect(unchanged.headers.get('Server-Timing')).toContain(
+        'desc="not-modified"',
+      );
+      expect(await unchanged.text()).toBe('');
     }
   }
   const defaults = (await runtime.worker.getCaches()).default;

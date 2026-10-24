@@ -68,6 +68,9 @@ avatarMedia.get('/:handle', async (c) => {
       ? (avatar.large_key ?? avatar.object_key)
       : avatar.object_key,
     c.executionCtx,
+    c.req.raw,
+    // Replacement or a handle change reuses this URL, so check every use.
+    'revalidate',
   );
   return response ?? c.notFound();
 });

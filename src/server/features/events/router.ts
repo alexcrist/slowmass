@@ -466,7 +466,9 @@ eventShares.get('/:token/photo', async (c) => {
   const key = validLinkToken(token)
     ? await eventPreviewMediaKey(c.env.DB, token, c.get('viewer'))
     : null;
-  const response = key ? await privatePhoto(c.env, key, c.executionCtx) : null;
+  const response = key
+    ? await privatePhoto(c.env, key, c.executionCtx, c.req.raw, 'no-store')
+    : null;
   return response ? c.newResponse(response.body, response) : c.notFound();
 });
 eventShares.all('*', (c) => c.notFound());
@@ -487,7 +489,9 @@ eventLinks.post('/photo', linkBodyLimit, async (c) => {
   const key = validLinkToken(body?.token)
     ? await eventPreviewMediaKey(c.env.DB, body.token, c.get('viewer'))
     : null;
-  const response = key ? await privatePhoto(c.env, key, c.executionCtx) : null;
+  const response = key
+    ? await privatePhoto(c.env, key, c.executionCtx, c.req.raw, 'no-store')
+    : null;
   return response ?? c.notFound();
 });
 
@@ -503,6 +507,9 @@ eventMedia.get('/:id', async (c) => {
       eventMediaKey(c.env.DB, viewer, id, size === 'thumb' ? 'thumb' : 'full'),
     )
   )?.value;
-  const response = key ? await privatePhoto(c.env, key, c.executionCtx) : null;
+  // Cover replacement reuses this URL, so check every use.
+  const response = key
+    ? await privatePhoto(c.env, key, c.executionCtx, c.req.raw, 'revalidate')
+    : null;
   return response ?? c.notFound();
 });

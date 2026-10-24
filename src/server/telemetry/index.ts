@@ -17,7 +17,7 @@ type Metrics = {
   unmeasuredQueries: number;
   storageReads: number;
   storageWaitMs: number;
-  mediaCache?: 'hit' | 'miss' | 'unavailable';
+  mediaCache?: 'hit' | 'miss' | 'unavailable' | 'not-modified';
   mediaCacheMs?: number;
 };
 export const requestMetrics = new AsyncLocalStorage<Metrics>();

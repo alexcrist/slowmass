@@ -77,7 +77,7 @@ it('stores two private sizes once, meters both, and checks blocks in both direct
       '/media/avatar/alice' + suffix,
     );
     expect(response.status).toBe(200);
-    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(response.headers.get('Cache-Control')).toBe('private, no-cache');
     bytes.push(await response.arrayBuffer());
     expect(
       (await runtime.request(null, '/media/avatar/alice' + suffix)).status,
