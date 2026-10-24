@@ -1176,7 +1176,7 @@ it('edits an event on its page and cancels back to it', async () => {
 });
 
 it.each([true, false])(
-  'lets a host (creator: %s) send a notification with retry-safe text and clear delivery guidance',
+  'lets a host (creator: %s) send an update blast with retry-safe text and clear delivery guidance',
   async (isCreator) => {
     await mount(createElement(EventPage, { id, linkProfiles: true }));
     await reply(pending(`/api/events/${id}`), {
@@ -1187,17 +1187,16 @@ it.each([true, false])(
       next: null,
     });
     await click('Event options');
-    await click('Send notification');
-    expect(visibleText()).toContain('everyone who RSVP’d');
-    expect(visibleText()).toContain(
-      'Only people with push notifications enabled receive a push alert.',
-    );
-    expect(visibleText()).toContain('No email is sent.');
-    expect(button('Send notification').props.disabled).toBe(true);
+    await click('Send update blast');
+    expect(visibleText()).toContain('Everyone who RSVP’d');
+    expect(visibleText()).toContain('by email and push unless they turned');
+    expect(visibleText()).toContain('You get a copy by email too.');
+    expect(visibleText()).toContain('3 update blasts a day');
+    expect(button('Send update blast').props.disabled).toBe(true);
     const field = renderer.root.findByType('dialog').findByType('textarea');
     await type(field.props.id, 'Bring a jacket');
     await submit();
-    const first = pending(`/api/events/${id}/notifications`);
+    const first = pending(`/api/events/${id}/update-blasts`);
     expect(first.options?.method).toBe('POST');
     expect(JSON.parse(String(first.options?.body))).toMatchObject({
       id: expect.any(String),
@@ -1206,7 +1205,7 @@ it.each([true, false])(
     expect(button('Sending…').props.disabled).toBe(true);
     await submit();
     expect(
-      requests.filter((request) => request.path.endsWith('/notifications')),
+      requests.filter((request) => request.path.endsWith('/update-blasts')),
     ).toHaveLength(1);
     await reply(first, { error: 'Connection interrupted. Try again.' }, 503);
     expect(visibleText()).toContain('Connection interrupted. Try again.');
@@ -1214,29 +1213,29 @@ it.each([true, false])(
       renderer.root.findByType('dialog').findByType('textarea').props.value,
     ).toBe('Bring a jacket');
     await submit();
-    const retry = pending(`/api/events/${id}/notifications`);
+    const retry = pending(`/api/events/${id}/update-blasts`);
     expect(retry.options?.body).toBe(first.options?.body);
     await reply(retry, { id: JSON.parse(String(first.options?.body)).id });
     expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
-    expect(visibleText()).toContain('Notification sent.');
+    expect(visibleText()).toContain('Update blast sent.');
     expect(pending(`/api/events/${id}/activity`)).toBeDefined();
   },
 );
 
-it('starts a new notification attempt when its message changes after failure', async () => {
+it('starts a new update blast attempt when its message changes after failure', async () => {
   await mount(createElement(EventPage, { id, linkProfiles: true }));
   await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
   await click('Event options');
-  await click('Send notification');
+  await click('Send update blast');
   const fieldId = renderer.root.findByType('dialog').findByType('textarea')
     .props.id;
   await type(fieldId, 'First update');
   await submit();
-  const first = pending(`/api/events/${id}/notifications`);
+  const first = pending(`/api/events/${id}/update-blasts`);
   await reply(first, { error: 'Try again.' }, 503);
   await type(fieldId, 'Corrected update');
   await submit();
-  const corrected = pending(`/api/events/${id}/notifications`);
+  const corrected = pending(`/api/events/${id}/update-blasts`);
   expect(JSON.parse(String(corrected.options?.body)).id).not.toBe(
     JSON.parse(String(first.options?.body)).id,
   );
@@ -1254,7 +1253,7 @@ it.each([
   },
   { viewer: host, cancelled: true },
 ])(
-  'withholds the host notification control when unavailable: %j',
+  'withholds the update blast control when unavailable: %j',
   async (overrides) => {
     await mount(createElement(EventPage, { id, linkProfiles: true }));
     await reply(pending(`/api/events/${id}`), { event: view(overrides) });
@@ -1263,7 +1262,7 @@ it.each([
       expect(
         renderer.root.findAllByProps({ 'aria-label': 'Event options' }),
       ).toHaveLength(0);
-    expect(visibleText()).not.toContain('Send notification');
+    expect(visibleText()).not.toContain('Send update blast');
   },
 );
 

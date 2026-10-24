@@ -1,3 +1,4 @@
+import { InstallInstructions } from '../install';
 import { usePush } from './usePush';
 
 function PushControls({ push }: { push: ReturnType<typeof usePush> }) {
@@ -16,15 +17,17 @@ function PushControls({ push }: { push: ReturnType<typeof usePush> }) {
   return (
     <>
       <p>
-        Get alerts when invitees join, for follow requests, new followers, and
-        comments. Likes appear only in Activity. Alerts don’t include names,
-        comment text, or photos.
+        Push alerts appear on this device for the activity you choose below.
+        They show names and message text, including on a locked screen.
       </p>
       {needsHomeScreen ? (
-        <p>
-          On iPhone or iPad, add slowmass to your Home Screen first, then open
-          the slowmass icon to enable notifications.
-        </p>
+        <>
+          <p>
+            On iPhone and iPad, push alerts only work in the slowmass Home
+            Screen app:
+          </p>
+          <InstallInstructions appleMobile notificationsFrom="settings" />
+        </>
       ) : !supported ? (
         <p>
           Push notifications aren’t supported in this browser. You can still see
@@ -96,14 +99,7 @@ function PushControls({ push }: { push: ReturnType<typeof usePush> }) {
     </>
   );
 }
-export function PushSettings() {
-  const push = usePush();
-  return (
-    <details className="settings-disclosure">
-      <summary className="settings-row">Notifications</summary>
-      <div className="settings-details">
-        <PushControls push={push} />
-      </div>
-    </details>
-  );
+// This device's push status, with the steps to turn alerts on.
+export function PushDevice() {
+  return <PushControls push={usePush()} />;
 }

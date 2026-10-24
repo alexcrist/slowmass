@@ -59,6 +59,7 @@ beforeEach(async () => {
   pauseSend = undefined;
   await runtime.db.batch([
     runtime.db.prepare('DELETE FROM push_subscription'),
+    runtime.db.prepare('DELETE FROM notification_alert'),
     runtime.db.prepare('DELETE FROM follow'),
     runtime.db.prepare('DELETE FROM block'),
     runtime.db.prepare('DELETE FROM comment'),
@@ -80,7 +81,7 @@ async function enable(actor = 'alice', endpoint = subscription.endpoint) {
 async function tick() {
   const result = await (
     await runtime.worker.getWorker()
-  ).scheduled({ cron: '0 * * * *' });
+  ).scheduled({ cron: '* * * * *' });
   expect(result.outcome).toBe('ok');
 }
 async function photo() {
@@ -89,6 +90,15 @@ async function photo() {
       "INSERT INTO post(id,user_id,caption,alt_text,created_at,published_at,state,object_key,width,height) VALUES('photo','alice','','',1,1,'published','posts/photo',1,1)",
     )
     .run();
+}
+// A follow the recipient didn't accept themselves, such as an invitation's.
+async function acceptedFollow() {
+  await runtime.db.batch([
+    runtime.db.prepare('DELETE FROM follow'),
+    runtime.db.prepare(
+      "INSERT INTO follow VALUES('bob','alice','accepted',1000)",
+    ),
+  ]);
 }
 async function pendingRequest() {
   await runtime.db
@@ -100,7 +110,7 @@ async function count(table: 'push_delivery' | 'push_subscription') {
     .prepare(`SELECT COUNT(*) AS n FROM ${table}`)
     .first<number>('n');
 }
-it('keeps hourly delivery separate from maintenance and ignores obsolete schedules', async () => {
+it('keeps minute delivery separate from maintenance and ignores obsolete schedules', async () => {
   await enable();
   await pendingRequest();
   await runtime.db
@@ -117,7 +127,7 @@ it('keeps hourly delivery separate from maintenance and ignores obsolete schedul
     )
     .run();
   const worker = await runtime.worker.getWorker();
-  expect((await worker.scheduled({ cron: '* * * * *' })).outcome).toBe('ok');
+  expect((await worker.scheduled({ cron: '0 * * * *' })).outcome).toBe('ok');
   expect(
     await runtime.db
       .prepare("SELECT 1 FROM session WHERE id='maintenance-probe'")
@@ -222,8 +232,7 @@ it.each(['request', 'follower'])(
   async (kind) => {
     await enable();
     await pendingRequest();
-    if (kind === 'follower')
-      await runtime.db.prepare("UPDATE follow SET status='accepted'").run();
+    if (kind === 'follower') await acceptedFollow();
     const receipt = await runtime.db
       .prepare('SELECT version,event_key FROM push_delivery')
       .first<{ version: number; event_key: string }>();
@@ -243,11 +252,16 @@ it.each(['request', 'follower'])(
       key: `${kind}:bob`,
       version: receipt!.version,
     });
-    expect(Object.keys(message).sort()).toEqual([
-      'key',
-      'subscriptionId',
-      'version',
-    ]);
+    expect(message).toEqual({
+      key: `${kind}:bob`,
+      version: receipt!.version,
+      subscriptionId: expect.any(String),
+      title: 'slowmass',
+      body:
+        kind === 'request'
+          ? 'bob requested to follow you.'
+          : 'bob started following you.',
+    });
     const token = sent[0].headers.get('authorization')!.match(/t=([^,]+)/)![1];
     const [header, payload, signature] = token.split('.');
     const publicBytes = vapid.getPublicKey();
@@ -287,8 +301,7 @@ it.each(['removed', 'block', 'inactive', 'expired', 'incomplete'])(
   'cancels follower push when %s before delivery',
   async (reason) => {
     await enable();
-    await pendingRequest();
-    await runtime.db.prepare("UPDATE follow SET status='accepted'").run();
+    await acceptedFollow();
     expect(await count('push_delivery')).toBe(1);
     if (reason === 'removed')
       await runtime.db.prepare('DELETE FROM follow').run();
@@ -351,7 +364,7 @@ it('queues invitation follower alerts only after profile photo completion and ne
     .run();
   expect(await count('push_delivery')).toBe(0);
 });
-it('never queues likes, coalesces concurrent dispatchers, and prevents a stale completion from clearing a newer version', async () => {
+it('queues no likes by default, coalesces concurrent dispatchers, and alerts a re-sent request once an hour', async () => {
   await enable();
   await photo();
   await runtime.db.batch([
@@ -388,9 +401,20 @@ it('never queues likes, coalesces concurrent dispatchers, and prevents a stale c
   await first;
   pauseSend = undefined;
   expect(await count('push_delivery')).toBe(1);
+  // Within the hour, the re-sent request is in Activity but alerts no one.
+  await tick();
+  expect(sent).toHaveLength(1);
+  expect(await count('push_delivery')).toBe(0);
+  // After the hour, a re-sent request alerts again under the same topic.
+  await runtime.db.batch([
+    runtime.db.prepare('UPDATE notification_alert SET sent_at=0'),
+    runtime.db.prepare("DELETE FROM follow WHERE follower_id='bob'"),
+    runtime.db.prepare(
+      "INSERT INTO follow VALUES('bob','alice','pending',3000)",
+    ),
+  ]);
   await tick();
   expect(sent).toHaveLength(2);
-  expect(await count('push_delivery')).toBe(0);
   expect(sent[0].headers.get('topic')).toBe(sent[1].headers.get('topic'));
   await runtime.db
     .prepare("INSERT INTO post_like VALUES('photo','david',3000)")

@@ -48,7 +48,7 @@ function HomeScreenDialog({ onClose }: { onClose: () => void }) {
         On iPhone and iPad, notifications only work in the Home Screen app.
         Adding it is the first step; you’ll turn notifications on from there.
       </p>
-      <InstallInstructions appleMobile forNotifications />
+      <InstallInstructions appleMobile notificationsFrom="activity" />
       <p className="install-note">
         Already added it? Open slowmass from your Home Screen.
       </p>

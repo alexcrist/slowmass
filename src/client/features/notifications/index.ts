@@ -8,3 +8,9 @@ export const Notifications = lazy(() =>
     default: module.Notifications,
   })),
 );
+export { Unsubscribe } from './Unsubscribe';
+export const NotificationSettings = lazy(() =>
+  import('./NotificationSettings').then((module) => ({
+    default: module.NotificationSettings,
+  })),
+);

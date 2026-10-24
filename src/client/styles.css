@@ -915,6 +915,50 @@ summary.settings-row::after {
 .settings-danger {
   color: var(--danger);
 }
+.notification-settings section {
+  padding: 0 8px 24px;
+}
+.notification-settings h2 {
+  margin: 8px 0 4px;
+  font-size: 18px;
+}
+/* One row per category, aligned like settings rows, with fixed checkbox
+   columns so Push and Email line up under their headers on narrow phones. */
+.notification-choices {
+  width: 100%;
+  margin-top: 12px;
+  border-collapse: collapse;
+}
+.notification-choices th,
+.notification-choices td {
+  padding: 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+.notification-choices thead th {
+  padding-bottom: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+.notification-choices tbody th {
+  padding: 14px 8px 14px 0;
+  font-weight: 400;
+}
+.notification-choices :is(thead th, td):not(:first-child) {
+  width: 64px;
+  text-align: center;
+}
+.notification-choices input {
+  width: 22px;
+  height: 22px;
+  margin: 11px;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+.notification-choices input:disabled {
+  cursor: default;
+}
 .person-link {
   display: inline-flex;
   gap: 10px;

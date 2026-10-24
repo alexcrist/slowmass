@@ -44,7 +44,7 @@ async function emit(type: string, event: object) {
   await work;
 }
 it.each(['request:bob', 'follower:bob', 'joined:bob', ...eventKeys])(
-  'shows generic push %s without caching private content or changing read state',
+  'shows the described push %s without caching content, following links, or changing read state',
   async (key) => {
     expect(validNotificationKey(key)).toBe(true);
     await emit('push', {
@@ -53,15 +53,16 @@ it.each(['request:bob', 'follower:bob', 'joined:bob', ...eventKeys])(
           key,
           version: 9,
           subscriptionId: 'device',
-          body: 'private text',
+          title: 'Dinner',
+          body: 'Alice posted in Dinner.',
           url: 'https://evil.test',
         }),
       },
     });
     expect(showNotification).toHaveBeenCalledWith(
-      'slowmass',
+      'Dinner',
       expect.objectContaining({
-        body: 'You have new activity. Open slowmass to see it.',
+        body: 'Alice posted in Dinner.',
         tag: `slowmass:device:${key}`,
         data: { key, version: 9 },
         renotify: false,
@@ -74,6 +75,20 @@ it.each(['request:bob', 'follower:bob', 'joined:bob', ...eventKeys])(
       'notificationclick',
       'push',
     ]);
+  },
+);
+it.each([{}, { title: 7, body: '   ' }, null])(
+  'falls back to generic text for an older or malformed payload %j',
+  async (payload) => {
+    await emit('push', {
+      data: { json: () => ({ ...payload, key: 'request:bob', version: 1 }) },
+    });
+    expect(showNotification).toHaveBeenCalledWith(
+      'slowmass',
+      expect.objectContaining({
+        body: 'You have new activity. Open slowmass to see it.',
+      }),
+    );
   },
 );
 it.each(['comment:test', 'follower:bob', 'joined:bob', ...eventKeys])(

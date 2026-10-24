@@ -177,10 +177,11 @@ function InstallControls() {
 // dialog. Wording was checked against vendor documentation (see README).
 export function InstallInstructions({
   appleMobile,
-  forNotifications = false,
+  notificationsFrom,
 }: {
   appleMobile: boolean;
-  forNotifications?: boolean;
+  // Where the installed app turns notifications on, as a final step.
+  notificationsFrom?: 'activity' | 'settings';
 }) {
   return (
     <>
@@ -202,9 +203,16 @@ export function InstallInstructions({
             Open <strong>slowmass</strong> from your Home Screen. Sign in only
             if asked.
           </li>
-          {forNotifications && (
+          {notificationsFrom === 'activity' && (
             <li>
               In Activity, tap <strong>Turn on</strong>, then{' '}
+              <strong>Allow</strong>.
+            </li>
+          )}
+          {notificationsFrom === 'settings' && (
+            <li>
+              In <strong>Settings</strong>, open <strong>Notifications</strong>,
+              tap <strong>Enable notifications</strong>, then{' '}
               <strong>Allow</strong>.
             </li>
           )}

@@ -12,9 +12,10 @@ import { posts, postMedia } from './features/posts/router';
 import { cleanupPosts, backfillThumbnail } from './features/posts';
 import { cleanupEmailBudgets } from './email';
 import { interactions } from './features/interactions/router';
-import { notifications } from './features/notifications/router';
+import { notifications, unsubscribe } from './features/notifications/router';
+import { dispatchEmailNotifications } from './features/notifications';
 import { people } from './features/people/router';
-import { push, pushAfterMutation } from './features/push/router';
+import { push, deliverAfterMutation } from './features/push/router';
 import { dispatchPush } from './features/push';
 import { deviceSetup } from './features/device-setup/router';
 import {
@@ -31,7 +32,7 @@ import { measuredEnvironment, performanceMetrics } from './telemetry';
 
 const app = new Hono<{ Bindings: Env }>();
 app.use('*', performanceMetrics);
-app.use('/api/*', pushAfterMutation);
+app.use('/api/*', deliverAfterMutation);
 
 app.use('*', async (c, next) => {
   const requestId = crypto.randomUUID();
@@ -54,9 +55,11 @@ app.use('*', async (c, next) => {
       { error: 'Maintenance in progress. Please try again shortly.' },
       503,
     );
+  // One-click unsubscribe comes from mail providers, authorized by its token.
   if (
     !['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) &&
-    c.req.header('Origin') !== c.env.APP_ORIGIN
+    c.req.header('Origin') !== c.env.APP_ORIGIN &&
+    !(c.req.method === 'POST' && c.req.path.startsWith('/api/unsubscribe/'))
   ) {
     return c.json({ error: 'Request origin is not allowed.' }, 403);
   }
@@ -83,6 +86,7 @@ app.route('/api/avatar', avatars);
 app.route('/api/posts', posts);
 app.route('/api/interactions', interactions);
 app.route('/api/notifications', notifications);
+app.route('/api/unsubscribe', unsubscribe);
 app.route('/api/push', push);
 app.route('/api/device-setup', deviceSetup);
 app.route('/api/events', events);
@@ -113,8 +117,9 @@ export default {
     app.fetch(request, measuredEnvironment(env), context),
   scheduled: async (controller: ScheduledController, env: Env) => {
     if (env.MAINTENANCE_MODE === 'true') return;
-    if (controller.cron === '0 * * * *') {
+    if (controller.cron === '* * * * *') {
       await dispatchPush(env);
+      await dispatchEmailNotifications(env);
       return;
     }
     if (controller.cron !== '*/15 * * * *') return;

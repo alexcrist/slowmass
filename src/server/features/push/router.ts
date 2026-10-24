@@ -4,6 +4,7 @@ import { getActiveSession } from '../../auth';
 import { authConfigured } from '../../auth/options';
 import type { Env } from '../../env';
 import { dispatchPush } from './delivery';
+import { dispatchEmailNotifications } from '../notifications';
 import {
   parseSubscription,
   validEndpoint,
@@ -103,29 +104,39 @@ push.delete('/device', async (c) => {
   );
   return c.json({ ok: true });
 });
-// Prompt dispatch is best effort; the committed outbox and cron survive a lost
-// request, process failure, or a mutation served by the previous deployment.
-// Post and comment likes never enqueue alerts, so they skip dispatch.
-export const pushAfterMutation: MiddlewareHandler<{ Bindings: Env }> = async (
-  c,
-  next,
-) => {
+// Prompt dispatch is best effort; the committed outboxes and the minute cron
+// survive a lost request, process failure, or a mutation served by the
+// previous deployment. Like alerts and most email wait before sending, so
+// likes skip dispatch and only update blasts and cancellations email at once.
+export const deliverAfterMutation: MiddlewareHandler<{
+  Bindings: Env;
+}> = async (c, next) => {
   await next();
+  if (c.res.status >= 300) return;
+  const path = c.req.path;
+  const event = path.match(
+    /^\/api\/events\/[^/]+\/(response|messages|update-blasts|cancel)$/,
+  );
   if (
     pushConfigured(c.env) &&
     ((['POST', 'PUT', 'DELETE'].includes(c.req.method) &&
-      (/^\/api\/(people|interactions)\//.test(c.req.path) ||
-        c.req.path === '/api/avatar')) ||
-      (c.req.method === 'POST' &&
-        /^\/api\/events\/[^/]+\/(response|messages|notifications|cancel)$/.test(
-          c.req.path,
-        ))) &&
-    !c.req.path.endsWith('/like') &&
-    c.res.status < 300
+      (/^\/api\/(people|interactions)\//.test(path) ||
+        path === '/api/avatar')) ||
+      (c.req.method === 'POST' && event)) &&
+    !path.endsWith('/like')
   )
     c.executionCtx.waitUntil(
       dispatchPush(c.env).catch(() =>
         console.error(JSON.stringify({ event: 'push.dispatch_failed' })),
+      ),
+    );
+  if (
+    c.req.method === 'POST' &&
+    (event?.[1] === 'update-blasts' || event?.[1] === 'cancel')
+  )
+    c.executionCtx.waitUntil(
+      dispatchEmailNotifications(c.env).catch(() =>
+        console.error(JSON.stringify({ event: 'email.dispatch_failed' })),
       ),
     );
 };

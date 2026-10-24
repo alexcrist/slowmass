@@ -8,7 +8,7 @@ import { EventAnswers, EventCover, EventSummary } from './EventSummary';
 import { EventGuests } from './EventGuests';
 import { EventHosts } from './EventHosts';
 import { EventLinkDialog } from './EventLinkDialog';
-import { EventNotificationDialog } from './EventNotificationDialog';
+import { EventUpdateBlastDialog } from './EventUpdateBlastDialog';
 import { EventCalendarDialog } from './EventCalendarDialog';
 import { MailIcon } from '../../ui/MailIcon';
 import { LockIcon } from '../../ui/LockIcon';
@@ -112,10 +112,10 @@ export function EventPage({
   useEffect(() => () => deletion.current?.abort(), []);
   const [failure, setFailure] = useState('');
   const [dialog, setDialog] = useState<
-    'link' | 'hosts' | 'notification' | 'cancel' | 'delete' | 'calendar' | null
+    'link' | 'hosts' | 'update-blast' | 'cancel' | 'delete' | 'calendar' | null
   >(null);
   const [messageId] = useState(() => crypto.randomUUID());
-  const [notificationSent, setNotificationSent] = useState(0);
+  const [updateBlastsSent, setUpdateBlastsSent] = useState(0);
   const event = data?.event;
   useEventAppearance(event?.appearance);
   const url = event?.url;
@@ -225,8 +225,8 @@ export function EventPage({
                               onSelect: () => setDialog('hosts'),
                             },
                             {
-                              label: 'Send notification',
-                              onSelect: () => setDialog('notification'),
+                              label: 'Send update blast',
+                              onSelect: () => setDialog('update-blast'),
                             },
                             {
                               label: 'Cancel event',
@@ -286,7 +286,7 @@ export function EventPage({
             <p>Answers are closed.</p>
           )}
           {failure && !dialog && <p role="alert">{failure}</p>}
-          {notificationSent > 0 && <p role="status">Notification sent.</p>}
+          {updateBlastsSent > 0 && <p role="status">Update blast sent.</p>}
           {event.counts ? (
             <>
               <section
@@ -306,7 +306,7 @@ export function EventPage({
                 <EventLog
                   id={id}
                   linkProfiles={linkProfiles}
-                  refreshVersion={notificationSent}
+                  refreshVersion={updateBlastsSent}
                 />
               </section>
             </>
@@ -338,13 +338,13 @@ export function EventPage({
       {dialog === 'calendar' && !event.cancelled && (
         <EventCalendarDialog event={event} onClose={closeDialog} />
       )}
-      {dialog === 'notification' && managing && (
-        <EventNotificationDialog
+      {dialog === 'update-blast' && managing && (
+        <EventUpdateBlastDialog
           id={id}
           onClose={closeDialog}
           onSent={() => {
             closeDialog();
-            setNotificationSent((value) => value + 1);
+            setUpdateBlastsSent((value) => value + 1);
           }}
         />
       )}

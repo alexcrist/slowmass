@@ -6,7 +6,11 @@ import { profileHref, useRoute } from '../../navigation';
 import { BackControl } from '../../navigation/BackControl';
 import { PageHistoryProvider } from '../../navigation/PageHistory';
 import { DeleteAccount } from '../account';
-import { Notifications, useNotificationCount } from '../notifications';
+import {
+  NotificationSettings,
+  Notifications,
+  useNotificationCount,
+} from '../notifications';
 import { Compose, PostDetail, PostList } from '../posts';
 import { AvatarForm } from '../avatars';
 import { InstallApp, InstallProvider } from '../install';
@@ -24,7 +28,6 @@ import {
   EventsPage,
   eventHref,
 } from '../events';
-import { PushSettings } from '../push';
 import { DeviceSetupItem, useDeviceSetup } from '../device-setup';
 
 const titles: Record<string, string> = {
@@ -43,6 +46,7 @@ const titles: Record<string, string> = {
   following: 'Following',
   followers: 'Followers',
   blocked: 'Blocked accounts',
+  'notification-settings': 'Notifications',
 };
 type DeviceSetupState = { pending: boolean; pushSubscribed: boolean };
 const noDeviceSetup: DeviceSetupState = {
@@ -119,14 +123,14 @@ function MemberPages({
     // Events is always in the navigation, and the editors end with Cancel.
     if (eventOnly) {
       if (needsPhoto) return null;
-      if (page === 'edit')
+      if (page === 'edit' || page === 'notification-settings')
         return { href: '#settings', label: 'Back to settings' };
       if (page === 'profile') return toList(backRoute);
       return null;
     }
     if (page === 'settings' || page === 'following' || page === 'followers')
       return { href: profileRoute, label: 'Back to profile' };
-    if (['edit', 'blocked'].includes(page))
+    if (['edit', 'blocked', 'notification-settings'].includes(page))
       return { href: '#settings', label: 'Back to settings' };
     if (
       page === 'post' ||
@@ -205,6 +209,8 @@ function MemberPages({
         );
       case 'edit':
         return <ProfileForm profile={profile} onSave={saved} mode="name" />;
+      case 'notification-settings':
+        return <NotificationSettings />;
       case 'settings':
         return (
           <>
@@ -215,9 +221,11 @@ function MemberPages({
               <a className="settings-row" href="#edit">
                 Edit name
               </a>
+              <a className="settings-row" href="#notification-settings">
+                Notifications
+              </a>
             </nav>
             <InstallApp />
-            <PushSettings />
             <button
               type="button"
               className="settings-row"
@@ -356,6 +364,8 @@ function MemberPages({
       case 'followers':
       case 'blocked':
         return <Connections kind={page as Kind} />;
+      case 'notification-settings':
+        return <NotificationSettings />;
       case 'settings':
         return (
           <>
@@ -366,10 +376,12 @@ function MemberPages({
               <a className="settings-row" href="#blocked">
                 Blocked accounts
               </a>
+              <a className="settings-row" href="#notification-settings">
+                Notifications
+              </a>
             </nav>
             <InviteSettingsRow disabled={signingOut} />
             <InstallApp />
-            <PushSettings />
             <button
               type="button"
               className="settings-row"

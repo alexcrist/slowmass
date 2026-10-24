@@ -20,16 +20,21 @@ self.addEventListener('push', (event) => {
     const payload = event.data?.json();
     if (payload && typeof payload === 'object') data = payload;
   } catch {
-    /* Still show a generic alert. */
+    /* Still show an alert. */
   }
   const key = validNotificationKey(data.key) ? data.key : '';
   const version =
     Number.isSafeInteger(data.version) && data.version > 0 ? data.version : 0;
   const subscription =
     typeof data.subscriptionId === 'string' ? data.subscriptionId : '';
+  // The server describes the activity; older payloads fall back to generic text.
+  const text = (value, limit) =>
+    typeof value === 'string' && value.trim() ? value.slice(0, limit) : '';
   event.waitUntil(
-    self.registration.showNotification('slowmass', {
-      body: 'You have new activity. Open slowmass to see it.',
+    self.registration.showNotification(text(data.title, 120) || 'slowmass', {
+      body:
+        text(data.body, 400) ||
+        'You have new activity. Open slowmass to see it.',
       icon: '/icons/app-192.png',
       tag: `slowmass:${subscription}:${key}`,
       data: { key, version },

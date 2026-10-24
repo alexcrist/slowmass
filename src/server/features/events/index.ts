@@ -899,19 +899,24 @@ export async function postMessage(
   id: string,
   body: string,
 ) {
-  return writeMessage(db, actor, event, id, body, 'participant');
+  return writeMessage(db, actor, event, id, body, false);
 }
 
-// An explicit host blast is a host message, sharing the same atomic Activity
-// fan-out, push queue, deletion rules and daily allowance.
-export async function sendEventNotification(
+// Update blasts per event per day, across all of its hosts. With at most 500
+// answers and ten hosts, this bounds blast email per event to about 1,500 a day.
+export const UPDATE_BLASTS_PER_DAY = 3;
+
+// An update blast is a host message marked as a blast, sharing the same atomic
+// Activity fan-out, deletion rules and daily allowance. Notification triggers
+// queue its push alerts and emails, including the sending host's copy.
+export async function sendUpdateBlast(
   db: D1Database,
   actor: string,
   event: string,
   id: string,
   body: string,
 ) {
-  return writeMessage(db, actor, event, id, body, 'host');
+  return writeMessage(db, actor, event, id, body, true);
 }
 
 async function writeMessage(
@@ -920,32 +925,45 @@ async function writeMessage(
   event: string,
   id: string,
   body: string,
-  access: 'participant' | 'host',
+  blast: boolean,
 ) {
-  const allowed =
-    access === 'host' ? `${hostOf} AND e.cancelled_at IS NULL` : participating;
+  const allowed = blast
+    ? `${hostOf} AND e.cancelled_at IS NULL`
+    : participating;
   const now = Date.now();
   await db
     .prepare(
       `WITH viewer AS (SELECT ? AS id)
-      INSERT INTO event_message(id,event_id,user_id,kind,body,created_at)
-      SELECT ?,e.id,viewer.id,'message',?,? FROM event e CROSS JOIN viewer
+      INSERT INTO event_message(id,event_id,user_id,kind,body,created_at,blast)
+      SELECT ?,e.id,viewer.id,'message',?,?,? FROM event e CROSS JOIN viewer
       WHERE e.id=? AND ${allowed}
         AND (SELECT COUNT(*) FROM event_message WHERE user_id=viewer.id AND created_at>?)<100
+        AND (?=0 OR (SELECT COUNT(*) FROM event_message WHERE event_id=e.id AND blast=1 AND created_at>?)<${UPDATE_BLASTS_PER_DAY})
       ON CONFLICT DO NOTHING`,
     )
-    .bind(actor, id, body, now, event, now - 86400000)
+    .bind(
+      actor,
+      id,
+      body,
+      now,
+      Number(blast),
+      event,
+      now - 86400000,
+      Number(blast),
+      now - 86400000,
+    )
     .run();
-  // A retried request succeeds only for the same author, event and text.
+  // A retried request succeeds only for the same author, event, text and
+  // kind, so an ordinary message never becomes a blast or the reverse.
   return Boolean(
     await db
       .prepare(
         `WITH viewer AS (SELECT ? AS id)
         SELECT 1 FROM event_message m JOIN event e ON e.id=m.event_id CROSS JOIN viewer
         WHERE m.id=? AND e.id=? AND m.user_id=viewer.id AND m.kind='message'
-          AND m.body=? AND m.deleted_at IS NULL AND ${allowed}`,
+          AND m.body=? AND m.blast=? AND m.deleted_at IS NULL AND ${allowed}`,
       )
-      .bind(actor, id, event, body)
+      .bind(actor, id, event, body, Number(blast))
       .first(),
   );
 }

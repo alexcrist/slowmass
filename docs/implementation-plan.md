@@ -85,7 +85,8 @@ Exit: an invited friend can sign in, post, follow another friend, and interact w
 
 ## 7. Events and member setup
 
-- [x] Implement event creation with processed private covers, details, co-host invitations, guest answers, activity/messages, and bounded host notifications.
+- [x] Implement event creation with processed private covers, details, co-host invitations, guest answers, activity/messages, and bounded update blasts (Activity, push, and email, with a copy to the sending host).
+- [x] Let members choose push and/or email per notification category in Settings → Notifications, with descriptive push and email text, category-specific one-click unsubscribe, like coalescing, an hourly per-notification alert cooldown, minute delivery, and daily notification email caps. Not yet measured: Worker CPU for a full push pass on the free plan, real-device display of descriptive alerts, and SES acceptance of the custom unsubscribe headers in production.
 - [x] Replace email co-host invitations with in-app invitations to accepted followers/following with complete profiles, preserving consent and existing host roles.
 - [x] Make event links invite new members with permanent inviter/link-version provenance; limit signed-out previews and gate the photo app on profile setup.
 - [x] Implement curated event appearance, combined username/photo setup, calendar copies, cancellation, and creator-only deletion.

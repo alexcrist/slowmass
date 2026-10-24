@@ -1,7 +1,13 @@
 import { buildPushPayload } from '@block65/webcrypto-web-push';
 import { authDate } from '../../auth';
 import type { Env } from '../../env';
-import { isUnreadNotification } from '../notifications';
+import {
+  alertAllowed,
+  describeNotification,
+  notificationText,
+  pushBody,
+  recordAlert,
+} from '../notifications';
 import { pushConfigured, validEndpoint } from './subscriptions';
 
 type Delivery = {
@@ -47,17 +53,35 @@ async function target(db: D1Database, item: Delivery) {
 }
 async function send(env: Env, item: Delivery) {
   const subscription = await target(env.DB, item);
+  const described =
+    subscription &&
+    (await describeNotification(
+      env.DB,
+      subscription.user_id,
+      item.event_key,
+      item.version,
+    ));
+  // Send only while still visible, unread, and wanted as a push alert.
   if (
     !subscription ||
     !validEndpoint(subscription.endpoint) ||
-    !(await isUnreadNotification(env.DB, subscription.user_id, {
-      key: item.event_key,
-      version: item.version,
-    }))
+    !described?.unread ||
+    !described.push
   ) {
     await finish(env.DB, item);
     return;
   }
+  const alert = {
+    recipient: subscription.user_id,
+    key: item.event_key,
+    version: item.version,
+    channel: 'push' as const,
+  };
+  if (!(await alertAllowed(env.DB, alert))) {
+    await finish(env.DB, item);
+    return;
+  }
+  const text = notificationText(described);
   let retryAfter = 0;
   try {
     const digest = new Uint8Array(
@@ -70,14 +94,16 @@ async function send(env: Env, item: Delivery) {
       .replace(/\+/g, '-')
       .replace(/\//g, '_')
       .slice(0, 32);
-    // Generic text avoids leaking names, comment bodies or photos in a delayed
-    // lock-screen delivery after logout/revocation. Activity reauthorizes detail.
+    // The alert describes the activity as of this send. It cannot be recalled
+    // after a later block, deletion or sign-out; opening it reauthorizes.
     const request = await buildPushPayload(
       {
         data: {
           key: item.event_key,
           version: item.version,
           subscriptionId: item.subscription_id,
+          title: text.title,
+          body: pushBody(text),
         },
         options: { ttl: 3600, urgency: 'normal', topic },
       },
@@ -99,6 +125,7 @@ async function send(env: Env, item: Delivery) {
     });
     await response.body?.cancel();
     if (response.ok) {
+      await recordAlert(env.DB, alert);
       await finish(env.DB, item);
       return;
     }
@@ -171,7 +198,7 @@ export async function dispatchPush(env: Env) {
   const lease = crypto.randomUUID();
   const rows = await env.DB.prepare(
     `UPDATE push_delivery SET lease=?,lease_until=?,attempts=attempts+1
-    WHERE rowid IN(SELECT rowid FROM push_delivery WHERE available_at<=? AND lease_until<=? AND attempts<8 ORDER BY available_at LIMIT 5)
+    WHERE rowid IN(SELECT rowid FROM push_delivery WHERE available_at<=? AND lease_until<=? AND attempts<8 ORDER BY available_at LIMIT 10)
     RETURNING subscription_id,event_key,version,attempts,lease
   `,
   )

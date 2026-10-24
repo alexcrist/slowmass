@@ -54,7 +54,7 @@ async function acknowledge(actor: string, items: Notification[]) {
       .status,
   ).toBe(200);
 }
-it('replaces the request with unread follower activity, authorizes receipts, and makes acceptance idempotent', async () => {
+it('replaces the request with already-read follower activity for the accepter, authorizes receipts, and makes acceptance idempotent', async () => {
   await runtime.request('bob', '/api/people/alice/request', 'POST');
   const request = (await page()).items;
   await acknowledge('alice', request);
@@ -65,7 +65,9 @@ it('replaces the request with unread follower activity, authorizes receipts, and
     key: 'follower:bob',
     kind: 'follower',
     handle: 'bob',
-    unread: true,
+    // Alice just accepted, so the row (and its Follow back) is already read.
+    unread: false,
+    canFollowBack: true,
     postId: null,
   });
   expect(follower[0].version).toBeGreaterThan(request[0].version);
@@ -76,7 +78,7 @@ it('replaces the request with unread follower activity, authorizes receipts, and
     await (
       await runtime.request('alice', '/api/notifications/unread-count')
     ).json(),
-  ).toEqual({ count: 1 });
+  ).toEqual({ count: 0 });
   expect(await page('alice', '?focus=follower:bob')).toMatchObject({
     focusFound: true,
     items: follower,
@@ -100,8 +102,16 @@ it('replaces the request with unread follower activity, authorizes receipts, and
     ).json(),
   ).toEqual({ count: 0 });
 });
+// An accepted follow the recipient didn't accept, such as an invitation's,
+// arrives unread.
+async function followDirectly() {
+  await runtime.db
+    .prepare("INSERT INTO follow VALUES('bob','alice','accepted',?)")
+    .bind(Date.now())
+    .run();
+}
 it('removes old follower events and never lets delayed receipts acknowledge a later follow', async () => {
-  await accept();
+  await followDirectly();
   const old = (await page()).items;
   for (const [actor, action] of [
     ['bob', 'unfollow'],
@@ -121,7 +131,7 @@ it('removes old follower events and never lets delayed receipts acknowledge a la
     ).toBe(0);
     if (action === 'block')
       await runtime.request('alice', '/api/people/bob/unblock', 'POST');
-    await accept();
+    await followDirectly();
     await acknowledge('alice', old);
     const current = (await page()).items[0];
     expect(current.unread).toBe(true);
@@ -405,7 +415,7 @@ it('persists owner-only dismissal without hiding or reading activity and ignores
   await dismiss('alice');
   expect((await page()).items[0]).toMatchObject({
     canFollowBack: true,
-    unread: true,
+    unread: false,
   });
 });
 

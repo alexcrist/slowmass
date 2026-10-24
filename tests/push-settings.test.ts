@@ -2,7 +2,7 @@ import { act, createElement } from 'react';
 import { create, type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
-  PushSettings,
+  PushDevice,
   clearLocalPush,
   dismissPushNotifications,
 } from '../src/client/features/push';
@@ -111,7 +111,7 @@ afterEach(async () => {
 async function mount() {
   await act(async () => {
     renderer = create(
-      createElement(InstallProvider, { children: createElement(PushSettings) }),
+      createElement(InstallProvider, { children: createElement(PushDevice) }),
     );
   });
 }
@@ -226,7 +226,9 @@ it('explains Home Screen installation on iPhone and iPad without asking for perm
     maxTouchPoints: 5,
   });
   await mount();
-  expect(text()).toContain('add slowmass to your Home Screen');
+  expect(text()).toContain('only work in the slowmass Home Screen app');
+  expect(text()).toContain('Add to Home Screen');
+  expect(text()).toContain('Enable notifications');
   expect(mock.api).not.toHaveBeenCalled();
   expect(requestPermission).not.toHaveBeenCalled();
 });
@@ -349,7 +351,7 @@ it('does not confuse an installation event with running in the iOS Home Screen a
   Object.assign(navigator, { userAgent: 'iPhone', standalone: false });
   await mount();
   await act(async () => window.dispatchEvent(new Event('appinstalled')));
-  expect(text()).toContain('Home Screen first');
+  expect(text()).toContain('only work in the slowmass Home Screen app');
   expect(mock.api).not.toHaveBeenCalled();
   Object.assign(navigator, { standalone: true });
   await act(async () => window.dispatchEvent(new Event('focus')));
@@ -368,7 +370,7 @@ it.each(['install-first', 'notifications-first'])(
             'div',
             null,
             createElement(InstallApp),
-            createElement(PushSettings),
+            createElement(PushDevice),
           ),
         }),
       );

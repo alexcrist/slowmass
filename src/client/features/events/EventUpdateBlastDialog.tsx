@@ -2,7 +2,7 @@ import { useId, useRef, useState, type FormEvent } from 'react';
 import { api, jsonRequest } from '../../api';
 import { Dialog } from '../../ui/Dialog';
 
-export function EventNotificationDialog({
+export function EventUpdateBlastDialog({
   id,
   onClose,
   onSent,
@@ -25,7 +25,7 @@ export function EventNotificationDialog({
     setError('');
     try {
       await api(
-        `/api/events/${id}/notifications`,
+        `/api/events/${id}/update-blasts`,
         jsonRequest('POST', { id: messageId, body }),
       );
       onSent();
@@ -33,7 +33,7 @@ export function EventNotificationDialog({
       setError(
         error instanceof Error
           ? error.message
-          : 'Could not send the notification.',
+          : 'Could not send the update blast.',
       );
     } finally {
       sending.current = false;
@@ -41,11 +41,12 @@ export function EventNotificationDialog({
     }
   }
   return (
-    <Dialog title="Send notification" busy={busy} onClose={onClose}>
+    <Dialog title="Send update blast" busy={busy} onClose={onClose}>
       <p>
-        Your message appears in Activity for everyone who RSVP’d and the other
-        hosts. Only people with push notifications enabled receive a push alert.
-        No email is sent.
+        Everyone who RSVP’d and the other hosts get your message in Activity,
+        and by email and push unless they turned those off in their notification
+        settings. You get a copy by email too. Each event can send 3 update
+        blasts a day.
       </p>
       <form onSubmit={(event) => void send(event)}>
         <label className="field-label" htmlFor={label}>
@@ -73,7 +74,7 @@ export function EventNotificationDialog({
             className="primary-button"
             disabled={busy || !body.trim()}
           >
-            {busy ? 'Sending…' : 'Send notification'}
+            {busy ? 'Sending…' : 'Send update blast'}
           </button>
         </div>
       </form>

@@ -11,7 +11,12 @@ import { makeSignature } from 'better-auth/crypto';
 const secret = 'test-only-secret-with-at-least-thirty-two-characters';
 export const sesEndpoint =
   'https://email.us-west-2.amazonaws.com/v2/email/outbound-emails';
-export type SentEmail = { to: string[]; text: string };
+export type SentEmail = {
+  to: string[];
+  bcc: string[];
+  subject: string;
+  text: string;
+};
 
 // Simulated SES boundary: requires a SigV4 signature and decodes the message.
 export async function readSesEmail(request: Request): Promise<SentEmail> {
@@ -22,11 +27,15 @@ export async function readSesEmail(request: Request): Promise<SentEmail> {
   )
     throw new Error('Unsigned SES request');
   const body = (await request.json()) as {
-    Destination: { ToAddresses: string[] };
-    Content: { Simple: { Body: { Text: { Data: string } } } };
+    Destination: { ToAddresses?: string[]; BccAddresses?: string[] };
+    Content: {
+      Simple: { Subject: { Data: string }; Body: { Text: { Data: string } } };
+    };
   };
   return {
-    to: body.Destination.ToAddresses,
+    to: body.Destination.ToAddresses ?? [],
+    bcc: body.Destination.BccAddresses ?? [],
+    subject: body.Content.Simple.Subject.Data,
     text: body.Content.Simple.Body.Text.Data,
   };
 }

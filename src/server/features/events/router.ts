@@ -36,7 +36,8 @@ import {
   removePendingHost,
   respond,
   saveEventPhoto,
-  sendEventNotification,
+  sendUpdateBlast,
+  UPDATE_BLASTS_PER_DAY,
   updateEvent,
   updateAppearance,
   validId,
@@ -331,25 +332,26 @@ events.delete('/:id/messages/:message', async (c) =>
     ? c.json({ ok: true })
     : c.json({ error: 'Message not found.' }, 404),
 );
-events.post('/:id/notifications', jsonLimit, async (c) => {
+events.post('/:id/update-blasts', jsonLimit, async (c) => {
   const message = parseMessage(await json(c));
   if (!message)
     return c.json({ error: 'Write a message up to 2,000 characters.' }, 400);
-  return (await sendEventNotification(
-    c.env.DB,
-    c.get('userId'),
-    c.req.param('id'),
-    message.id,
-    message.body,
-  ))
-    ? c.json({ id: message.id })
-    : c.json(
-        {
-          error:
-            'The notification could not be sent. Only hosts can send notifications for an event that hasn’t been cancelled, with up to 100 messages a day.',
-        },
-        409,
-      );
+  if (
+    !(await sendUpdateBlast(
+      c.env.DB,
+      c.get('userId'),
+      c.req.param('id'),
+      message.id,
+      message.body,
+    ))
+  )
+    return c.json(
+      {
+        error: `The update blast could not be sent. Only hosts can send update blasts for an event that hasn’t been cancelled, up to ${UPDATE_BLASTS_PER_DAY} a day per event.`,
+      },
+      409,
+    );
+  return c.json({ id: message.id });
 });
 events.get('/:id/host-candidates', async (c) => {
   const query = (c.req.query('q') ?? '').trim();

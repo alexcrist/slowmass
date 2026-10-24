@@ -168,6 +168,14 @@ export async function cleanupAccounts(db: D1Database) {
         )
         .bind(id),
       db
+        .prepare('DELETE FROM notification_preference WHERE user_id=?')
+        .bind(id),
+      db
+        .prepare(
+          'DELETE FROM email_delivery WHERE rowid IN(SELECT rowid FROM email_delivery WHERE recipient_id=? LIMIT 100)',
+        )
+        .bind(id),
+      db
         .prepare(
           'DELETE FROM event_host WHERE rowid IN(SELECT rowid FROM event_host WHERE user_id=? LIMIT 100)',
         )
@@ -202,6 +210,7 @@ export async function cleanupAccounts(db: D1Database) {
   AND NOT EXISTS(SELECT 1 FROM follow WHERE follower_id=? OR target_id=?)
   AND NOT EXISTS(SELECT 1 FROM block WHERE blocker_id=? OR target_id=?)
   AND NOT EXISTS(SELECT 1 FROM notification_read WHERE user_id=?)
+  AND NOT EXISTS(SELECT 1 FROM email_delivery WHERE recipient_id=account_deletion.user_id)
   AND NOT EXISTS(SELECT 1 FROM event WHERE creator_id=account_deletion.user_id AND state!='deleted')
   AND NOT EXISTS(SELECT 1 FROM event_host WHERE user_id=account_deletion.user_id)
   AND NOT EXISTS(SELECT 1 FROM event_response WHERE user_id=account_deletion.user_id)

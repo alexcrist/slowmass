@@ -280,7 +280,9 @@ it('derives request, follower, grouped-like and comment notifications and clears
   page = await notices();
   expect(page.items).toHaveLength(3);
   expect(page.items.find((i) => i.kind === 'likes')?.count).toBe(2);
-  for (const item of page.items) expect(item.unread).toBe(true);
+  // Alice accepted Carol herself, so that follower row arrives already read.
+  for (const item of page.items)
+    expect(item.unread).toBe(item.kind !== 'follower');
   expect((await notices('bob')).items).toHaveLength(0);
   await runtime.request('bob', `${base}/like`, 'DELETE');
   expect((await notices()).items.find((i) => i.kind === 'likes')?.count).toBe(

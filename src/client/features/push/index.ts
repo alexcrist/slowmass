@@ -1,4 +1,4 @@
-export { PushSettings } from './PushSettings';
+export { PushDevice } from './PushDevice';
 export { usePush } from './usePush';
 export {
   dismissPushNotifications,

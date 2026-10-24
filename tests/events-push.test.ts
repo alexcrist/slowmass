@@ -101,7 +101,7 @@ async function queued() {
     .first('n');
 }
 
-it.each(['response', 'message', 'notification', 'cancel'])(
+it.each(['response', 'message', 'update-blast', 'cancel'])(
   'dispatches event %s immediately with its exact unread Activity identity',
   async (kind) => {
     const { id } = await event();
@@ -117,7 +117,7 @@ it.each(['response', 'message', 'notification', 'cancel'])(
     else {
       const response = await runtime.request(
         'alice',
-        `/api/events/${id}/${kind === 'notification' ? 'notifications' : kind === 'cancel' ? 'cancel' : 'messages'}`,
+        `/api/events/${id}/${kind === 'update-blast' ? 'update-blasts' : kind === 'cancel' ? 'cancel' : 'messages'}`,
         'POST',
         kind === 'cancel'
           ? { messageId }
@@ -134,11 +134,18 @@ it.each(['response', 'message', 'notification', 'cancel'])(
         privateKey: device,
         authSecret: auth,
       }).toString(),
-    ) as { key: string; version: number; subscriptionId: string };
+    ) as Record<string, unknown> & { version: number };
     expect(payload).toEqual({
       key,
       version: expect.any(Number),
       subscriptionId: expect.any(String),
+      title: 'Private dinner',
+      body: {
+        response: 'bob is going to Private dinner.',
+        message: 'alice posted in Private dinner. “Private message”',
+        'update-blast': 'Update from alice: Private dinner “Private message”',
+        cancel: 'alice cancelled Private dinner.',
+      }[kind],
     });
     expect(
       await (
@@ -172,7 +179,7 @@ it.each(['read', 'block', 'delete'])(
       (
         await runtime.request(
           'alice',
-          `/api/events/${id}/notifications`,
+          `/api/events/${id}/update-blasts`,
           'POST',
           {
             id: messageId,
@@ -215,7 +222,7 @@ it.each(['read', 'block', 'delete'])(
       (
         await (
           await runtime.worker.getWorker()
-        ).scheduled({ cron: '0 * * * *' })
+        ).scheduled({ cron: '* * * * *' })
       ).outcome,
     ).toBe('ok');
     expect(sent).toHaveLength(1);
@@ -246,7 +253,7 @@ it('keeps detail edits silent and discards historical change alerts before deliv
     .run();
   expect(await queued()).toBe(1);
   expect(
-    (await (await runtime.worker.getWorker()).scheduled({ cron: '0 * * * *' }))
+    (await (await runtime.worker.getWorker()).scheduled({ cron: '* * * * *' }))
       .outcome,
   ).toBe('ok');
   expect(await queued()).toBe(0);
@@ -267,7 +274,7 @@ it('adds Activity for every guest while only sending push to opted-in devices, w
   });
   await enable('bob');
   const input = { id: crypto.randomUUID(), body: 'Bring a jacket' };
-  const path = `/api/events/${id}/notifications`;
+  const path = `/api/events/${id}/update-blasts`;
   expect((await runtime.request('alice', path, 'POST', input)).status).toBe(
     200,
   );

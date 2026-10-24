@@ -65,6 +65,7 @@ try {
   // A restored snapshot is quarantined. Never reopen stale sessions or silently restore access.
   for (const table of [
     'push_delivery',
+    'email_delivery',
     'push_subscription',
     'invite_link_claim',
     'event_claim',

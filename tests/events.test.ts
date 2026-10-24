@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { testRuntime, seedProfilePhotos } from './support/runtime';
+import {
+  testRuntime,
+  seedProfilePhotos,
+  type SentEmail,
+} from './support/runtime';
 import { cleanupAccounts } from '../src/server/features/account';
 import { cleanupEvents, deleteEvent } from '../src/server/features/events';
 import { invitationTokenHash } from '../src/server/membership';
@@ -11,14 +15,18 @@ import {
 } from '../src/shared/event-appearance';
 
 let runtime: Awaited<ReturnType<typeof testRuntime>>;
-let sent: { to: string[]; text: string }[];
+let sent: SentEmail[];
+// 0 makes the simulated SES boundary fail without a response.
+let mailStatus: number;
 let ip = 0;
 const day = 86400000;
 beforeEach(async () => {
   sent = [];
+  mailStatus = 200;
   runtime = await testRuntime(false, false, async (email) => {
+    if (!mailStatus) throw new Error('Synthetic SES timeout');
     sent.push(email);
-    return { status: 200, body: '{"MessageId":"synthetic"}' };
+    return { status: mailStatus, body: '{"MessageId":"synthetic"}' };
   });
   for (const id of ['alice', 'bob', 'carol', 'david'])
     await runtime.request(id, '/api/people/self', 'PUT', {
@@ -1460,12 +1468,12 @@ it('hides historical detail changes from the log, Activity, badge, focus and rea
   ).toBe(0);
 });
 
-it('sends retry-safe host notifications to all participants without email, enforcing host access', async () => {
+it('sends retry-safe update blasts to all participants, enforcing host access', async () => {
   const { id, token } = await event();
   await respond('bob', id, 'declined', token);
   await respond('david', id, 'maybe', token);
   await open('carol', token);
-  const path = `/api/events/${id}/notifications`;
+  const path = `/api/events/${id}/update-blasts`;
   const input = { id: crypto.randomUUID(), body: '  Bring a jacket  ' };
   // Answered guests, link viewers, pending hosts and signed-out users cannot blast.
   for (const actor of ['bob', 'carol', 'david'])
@@ -1525,7 +1533,9 @@ it('sends retry-safe host notifications to all participants without email, enfor
   expect(
     (await runtime.request('carol', path, 'POST', cohostInput)).status,
   ).toBe(409);
-  // Creator blocks hide already-sent notifications and deny future sends.
+  // Let earlier email finish before the block, which would stop it.
+  await expect.poll(queuedEmails, { timeout: 5000 }).toBe(0);
+  // Creator blocks hide already-sent blasts and their future email.
   await runtime.db.prepare("INSERT INTO block VALUES('bob','alice',1)").run();
   expect(await activity('bob')).toEqual([]);
   expect(
@@ -1548,13 +1558,198 @@ it('sends retry-safe host notifications to all participants without email, enfor
       })
     ).status,
   ).toBe(409);
-  expect(sent).toEqual([]);
+  // One email per recipient per blast, including the sender's copy, despite
+  // the concurrent retry; cancellation is not emailed by default.
+  await expect.poll(() => sent.length, { timeout: 5000 }).toBe(9);
+  await expect.poll(queuedEmails, { timeout: 5000 }).toBe(0);
+  const received = (body: string) =>
+    sent
+      .filter((email) => email.text.includes(body))
+      .flatMap((email) => email.to)
+      .sort();
+  expect(received('Bring a jacket')).toEqual([
+    'alice@example.com',
+    'bob@example.com',
+    'david@example.com',
+  ]);
+  expect(received('Doors are open')).toEqual([
+    'alice@example.com',
+    'bob@example.com',
+    'carol@example.com',
+    'david@example.com',
+  ]);
+  expect(received('Another update')).toEqual([
+    'alice@example.com',
+    'david@example.com',
+  ]);
+  expect(sent.every((email) => email.bcc.length === 0)).toBe(true);
 });
 
-it('rolls back a host blast when notification fan-out fails and enforces the shared daily message limit', async () => {
+async function queuedEmails() {
+  return runtime.db
+    .prepare('SELECT COUNT(*) AS n FROM email_delivery')
+    .first<number>('n');
+}
+async function cron() {
+  expect(
+    (await (await runtime.worker.getWorker()).scheduled({ cron: '* * * * *' }))
+      .outcome,
+  ).toBe('ok');
+}
+async function setEmail(actor: string, category: string, email: boolean) {
+  const response = await runtime.request(
+    actor,
+    '/api/notifications/preferences',
+    'PUT',
+    { category, push: true, email },
+  );
+  expect(response.status).toBe(200);
+}
+
+it('emails update blasts at most once to recipients who still allow and can see them', async () => {
+  const { id, token } = await event();
+  for (const [actor, status] of [
+    ['bob', 'going'],
+    ['carol', 'going'],
+    ['david', 'maybe'],
+  ])
+    await respond(actor, id, status, token);
+  await setEmail('david', 'update_blast', false);
+
+  // A rejected email is released for a later attempt, rechecking recipients.
+  mailStatus = 500;
+  const path = `/api/events/${id}/update-blasts`;
+  const blast = { id: crypto.randomUUID(), body: 'Doors at 7' };
+  expect((await runtime.request('alice', path, 'POST', blast)).status).toBe(
+    200,
+  );
+  await expect
+    .poll(
+      () =>
+        runtime.db
+          .prepare(
+            'SELECT COUNT(*) AS n FROM email_delivery WHERE attempts=1 AND lease IS NULL',
+          )
+          .first('n'),
+      { timeout: 5000 },
+    )
+    .toBe(3);
+  expect(sent.map((email) => email.to[0]).sort()).toEqual([
+    'alice@example.com',
+    'bob@example.com',
+    'carol@example.com',
+  ]);
+  sent = [];
+  mailStatus = 200;
+  await runtime.db.prepare("INSERT INTO block VALUES('carol','alice',1)").run();
+  await runtime.db.prepare('UPDATE email_delivery SET available_at=0').run();
+  await cron();
+  expect(sent.map((email) => email.to[0]).sort()).toEqual([
+    'alice@example.com',
+    'bob@example.com',
+  ]);
+  const guest = sent.find((email) => email.to[0] === 'bob@example.com')!;
+  expect(guest.subject).toBe('Update from Alice: Dinner');
+  expect(guest.text).toContain('Doors at 7');
+  expect(guest.text).toContain(`http://localhost:8787/#event/${id}`);
+  expect(guest.text).not.toContain(token);
+  const copy = sent.find((email) => email.to[0] === 'alice@example.com')!;
+  expect(copy.text).toContain('You sent this update blast about Dinner.');
+  expect(await queuedEmails()).toBe(0);
+  await cron();
+  expect(sent).toHaveLength(2);
+
+  // An ordinary message's ID cannot be reused to send a blast, or vice versa.
+  const ordinary = { id: crypto.randomUUID(), body: 'Just a message' };
+  expect(
+    (
+      await runtime.request(
+        'alice',
+        `/api/events/${id}/messages`,
+        'POST',
+        ordinary,
+      )
+    ).status,
+  ).toBe(200);
+  expect((await runtime.request('alice', path, 'POST', ordinary)).status).toBe(
+    409,
+  );
+  expect(
+    (
+      await runtime.request(
+        'alice',
+        `/api/events/${id}/messages`,
+        'POST',
+        blast,
+      )
+    ).status,
+  ).toBe(409);
+
+  // A dispatcher that stopped after claiming may already have sent, so its
+  // abandoned claim is dropped rather than sent again.
+  mailStatus = 500;
+  expect(
+    (
+      await runtime.request('alice', path, 'POST', {
+        id: crypto.randomUUID(),
+        body: 'Parking is behind the building',
+      })
+    ).status,
+  ).toBe(200);
+  await expect
+    .poll(
+      () =>
+        runtime.db
+          .prepare(
+            'SELECT COUNT(*) AS n FROM email_delivery WHERE attempts=1 AND lease IS NULL',
+          )
+          .first('n'),
+      { timeout: 5000 },
+    )
+    .toBe(2);
+  sent = [];
+  mailStatus = 200;
+  await runtime.db
+    .prepare(
+      "UPDATE email_delivery SET lease='stopped',lease_until=1,available_at=0",
+    )
+    .run();
+  await cron();
+  expect(sent).toEqual([]);
+  expect(await queuedEmails()).toBe(0);
+
+  // Each event sends three blasts a day; ordinary messages are unaffected.
+  expect(
+    (
+      await runtime.request('alice', path, 'POST', {
+        id: crypto.randomUUID(),
+        body: 'Third update',
+      })
+    ).status,
+  ).toBe(200);
+  await expect.poll(() => sent.length, { timeout: 5000 }).toBe(2);
+  const limited = await runtime.request('alice', path, 'POST', {
+    id: crypto.randomUUID(),
+    body: 'Fourth update',
+  });
+  expect(limited.status).toBe(409);
+  expect(await limited.json()).toMatchObject({
+    error: expect.stringContaining('3 a day per event'),
+  });
+  expect(
+    (
+      await runtime.request('alice', `/api/events/${id}/messages`, 'POST', {
+        id: crypto.randomUUID(),
+        body: 'Ordinary message',
+      })
+    ).status,
+  ).toBe(200);
+});
+
+it('rolls back an update blast when Activity fan-out fails and enforces the shared daily message limit', async () => {
   const { id, token } = await event();
   await respond('bob', id, 'going', token);
-  const path = `/api/events/${id}/notifications`;
+  const path = `/api/events/${id}/update-blasts`;
   const input = { id: crypto.randomUUID(), body: 'Doors at 7' };
   await runtime.db.exec(
     "CREATE TRIGGER fail_blast BEFORE INSERT ON activity_source WHEN NEW.kind='event_message' BEGIN SELECT RAISE(ABORT,'synthetic failure'); END;",
@@ -1569,6 +1764,7 @@ it('rolls back a host blast when notification fan-out fails and enforces the sha
       .first('n'),
   ).toBe(0);
   expect(await activity('bob')).toEqual([]);
+  expect(await queuedEmails()).toBe(0);
   await runtime.db.exec('DROP TRIGGER fail_blast');
   expect((await runtime.request('alice', path, 'POST', input)).status).toBe(
     200,

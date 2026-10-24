@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import type { Env } from '../../env';
 import { memberGate } from '../../auth';
@@ -12,6 +12,12 @@ import {
   unreadCount,
   type ReadReceipt,
 } from './index';
+import {
+  parsePreference,
+  readPreferences,
+  savePreference,
+  unsubscribe as unsubscribeEmail,
+} from './preferences';
 export const notifications = new Hono<{
   Bindings: Env;
   Variables: { userId: string };
@@ -119,3 +125,39 @@ notifications.post(
     return c.json({ ok: true });
   },
 );
+
+notifications.get('/preferences', async (c) =>
+  c.json({ preferences: await readPreferences(c.env.DB, c.get('userId')) }),
+);
+notifications.put('/preferences', bodyLimit({ maxSize: 256 }), async (c) => {
+  const preference = parsePreference(await c.req.json().catch(() => null));
+  if (!preference)
+    return c.json({ error: 'Invalid notification setting.' }, 400);
+  if (!(await savePreference(c.env.DB, c.get('userId'), preference)))
+    return c.json({ error: 'Sign in to continue.' }, 401);
+  return c.json({ preference });
+});
+
+// Unsubscribing needs no session: the token in each email authorizes exactly
+// one member's email for one category. Mail providers send the RFC 8058
+// one-click POST to /:token without an Origin header, so the composition root
+// exempts this route from its origin check; GET never changes anything, since
+// link scanners fetch URLs in email.
+export const unsubscribe = new Hono<{ Bindings: Env }>();
+async function stop(c: Context<{ Bindings: Env }>, token: unknown) {
+  if (typeof token !== 'string' || token.length > 200 || !c.env.AUTH_SECRET)
+    return c.json({ error: 'This unsubscribe link isn’t valid.' }, 400);
+  const category = await unsubscribeEmail(c.env.DB, c.env.AUTH_SECRET, token);
+  return category
+    ? c.json({ category })
+    : c.json({ error: 'This unsubscribe link isn’t valid.' }, 400);
+}
+unsubscribe.use('*', bodyLimit({ maxSize: 1024 }));
+unsubscribe.post('/', async (c) => {
+  const body: unknown = await c.req.json().catch(() => null);
+  return stop(
+    c,
+    body && typeof body === 'object' && 'token' in body ? body.token : null,
+  );
+});
+unsubscribe.post('/:token', (c) => stop(c, c.req.param('token')));

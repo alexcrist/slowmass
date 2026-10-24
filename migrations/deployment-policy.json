@@ -34,5 +34,6 @@
   "0033_event_appearance.sql": "automatic",
   "0034_event_party_fonts.sql": "automatic",
   "0035_event_host_members.sql": "automatic",
-  "0036_auth_identity.sql": "manual"
+  "0036_auth_identity.sql": "manual",
+  "0037_notification_preferences.sql": "automatic"
 }
