@@ -215,7 +215,7 @@ function Comments({
           onConfirm={() => void remove(confirming.id)}
         >
           <p>
-            Delete this comment by @{confirming.handle}? This cannot be undone.
+            Delete this comment by {confirming.handle}? This cannot be undone.
           </p>
         </ConfirmDialog>
       )}
@@ -324,7 +324,7 @@ function CommentRow({
       <a
         className="comment-avatar"
         href={profileHref(comment.handle)}
-        aria-label={`View @${comment.handle}'s profile`}
+        aria-label={`View ${comment.handle}'s profile`}
       >
         <img
           src={`/media/avatar/${encodeURIComponent(comment.handle)}`}
@@ -337,7 +337,7 @@ function CommentRow({
       <div className="comment-content">
         <p className="comment-text">
           <a href={profileHref(comment.handle)}>
-            <strong>@{comment.handle}</strong>
+            <strong>{comment.handle}</strong>
           </a>{' '}
           {comment.body}
         </p>

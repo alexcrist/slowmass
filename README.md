@@ -24,6 +24,8 @@ npm run dev
 
 Open http://localhost:8787. The welcome screen works without credentials and reports that sign-in is unavailable. For frontend hot reload, also run `npm run dev:ui`; its API proxy requires the Worker to be running. Test actual email links on port 8787, the configured origin.
 
+For realistic local data, stop the Worker and run `npm run db:seed`. It replaces local D1/R2 with synthetic members, dog photos, comments, and likes, and makes `BOOTSTRAP_EMAIL` a member you can sign in as; see [development tools](scripts/dev/README.md).
+
 Default local development uses isolated D1/R2 storage and the local Images emulator, including profile-photo cropping and uploads. It does not use production data or remote image processing. The emulator supports the basic transforms used here; hosted processing behavior is verified separately.
 
 [External setup](docs/setup.md) explains credentials and provisioning. Never paste secrets into issues or commit `.dev.vars`.

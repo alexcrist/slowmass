@@ -192,7 +192,7 @@ export function EventHosts({
               />
               <span className="event-host-pending">
                 <strong>{member.displayName}</strong>
-                <span className="event-list-meta">@{member.handle}</span>
+                <span className="event-list-meta">{member.handle}</span>
               </span>
               <button
                 type="button"

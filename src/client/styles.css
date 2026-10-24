@@ -703,8 +703,9 @@ a.notification-person:hover {
   display: flex;
   align-items: center;
   gap: 8px;
-  /* The 36px avatar is centered inside a 44px link. */
-  padding: 8px 0 calc(var(--post-content-gap) - 4px);
+  /* The 36px avatar is centered inside a 44px link. Header and body are
+     inset so the photo stays wider than the content around it. */
+  padding: 8px 16px calc(var(--post-content-gap) - 4px);
 }
 .post > header > .person-link,
 .post > header > time {
@@ -727,7 +728,7 @@ a.notification-person:hover {
   display: flex;
   flex-direction: column;
   gap: var(--post-content-gap);
-  padding: var(--post-content-gap) 0 20px;
+  padding: var(--post-content-gap) 16px 20px;
 }
 .post-body > section {
   /* The 24px icons are centered inside 44px controls. */
@@ -796,12 +797,6 @@ a.notification-person:hover {
   .post-photo {
     border-inline: 0;
     border-radius: 0;
-  }
-  .post > header {
-    padding-inline: 16px;
-  }
-  .post-body {
-    padding-inline: 16px;
   }
 }
 @media (max-width: 480px) {

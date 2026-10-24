@@ -128,7 +128,7 @@ function SampleRows() {
               alt=""
             />
             <div className="notification-content">
-              <p>@friend started following you.</p>
+              <p>friend started following you.</p>
               <time>10/17/2026, 9:41:00 AM</time>
             </div>
           </a>
@@ -136,7 +136,7 @@ function SampleRows() {
             <button className="primary-button">Follow back</button>
             <button
               className="notification-dismiss"
-              aria-label="Dismiss follow back for @friend"
+              aria-label="Dismiss follow back for friend"
             >
               <span aria-hidden="true">×</span>
             </button>

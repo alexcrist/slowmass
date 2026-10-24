@@ -88,7 +88,7 @@ export function ProfilePage({
               <div className="profile-identity">
                 <ProfilePhoto key={profile.handle} handle={profile.handle} />
                 <div>
-                  <h2>@{profile.handle}</h2>
+                  <h2>{profile.handle}</h2>
                   <p>{profile.displayName}</p>
                 </div>
               </div>
@@ -183,8 +183,8 @@ export function ProfilePage({
             >
               <p>
                 {confirming === 'block'
-                  ? `Block @${profile.handle}? Neither of you will be able to see the other's profile or posts. Your follow relationships will be removed.`
-                  : `Stop following @${profile.handle}? You will need their approval to follow them again.`}
+                  ? `Block ${profile.handle}? Neither of you will be able to see the other's profile or posts. Your follow relationships will be removed.`
+                  : `Stop following ${profile.handle}? You will need their approval to follow them again.`}
               </p>
             </ConfirmDialog>
           )}

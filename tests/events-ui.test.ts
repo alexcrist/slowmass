@@ -684,7 +684,7 @@ it('opens profile previews from event avatars and gates following for viewers wi
       relationship: 'none',
     },
   });
-  expect(visibleText()).toMatch(/@\s*alice/);
+  expect(visibleText()).toMatch(/\balice\b/);
   expect(visibleText()).toContain('This account is private');
   expect(visibleText()).not.toContain('Set up your account');
   expect(

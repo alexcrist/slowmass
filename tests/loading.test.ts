@@ -252,7 +252,7 @@ it('shows a new follower as a profile link without follow-request decisions', as
     next: null,
   });
   expect(visibleText().replace(/\s+/g, ' ')).toContain(
-    '@ bob started following you.',
+    'bob started following you.',
   );
   expect(renderer.root.findByType('a').props.href).toBe('#profile/bob');
   expect(renderer.root.findAllByType('button')).toHaveLength(0);
@@ -277,7 +277,7 @@ it.each(['follow', 'dismiss'] as const)(
     const avatar = renderer.root.findByType('img');
     expect(renderer.root.findByType('img').props.src).toBe('/media/avatar/bob');
     const label =
-      action === 'follow' ? 'Follow back' : 'Dismiss follow back for @bob';
+      action === 'follow' ? 'Follow back' : 'Dismiss follow back for bob';
     const path =
       action === 'follow'
         ? '/api/people/bob/request'
@@ -1301,13 +1301,13 @@ it.each(['self', 'none'])(
     expect(renderer.root.findByProps({ className: 'avatar' }).props.src).toBe(
       '/media/avatar/alice',
     );
-    await click("Enlarge @alice's profile photo");
+    await click("Enlarge alice's profile photo");
     let dialog = renderer.root.findByType('dialog');
     let image = dialog.findByType('img');
     expect(image.props.src).toBe('/media/avatar/alice?size=large');
     expect(dialog.props.className).toContain('app-dialog-image');
     expect(dialog.findByType('h2').props.className).toBe('visually-hidden');
-    expect(image.props.alt).toBe("@alice's profile photo");
+    expect(image.props.alt).toBe("alice's profile photo");
     expect(visibleText()).toContain('Loading profile photo…');
     expect(image.props.style.visibility).toBe('hidden');
     await act(async () => image.props.onError());
@@ -1321,7 +1321,7 @@ it.each(['self', 'none'])(
     expect(visibleText()).not.toContain('Loading profile photo…');
     await click('Close profile photo');
     expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
-    await click("Enlarge @alice's profile photo");
+    await click("Enlarge alice's profile photo");
     dialog = renderer.root.findByType('dialog');
     expect(dialog.findByType('img').props.style.visibility).toBe('hidden');
     await act(async () => {
@@ -1336,7 +1336,7 @@ it.each(['self', 'none'])(
         bio: null,
       },
     });
-    await click("Enlarge @bob's profile photo");
+    await click("Enlarge bob's profile photo");
     expect(renderer.root.findByType('dialog').findByType('img').props.src).toBe(
       '/media/avatar/bob?size=large',
     );
@@ -1537,7 +1537,7 @@ it.each(['connections', 'activity'])(
       src: '/media/avatar/bob',
     });
     if (kind === 'connections') {
-      await click('Remove @alice as a follower');
+      await click('Remove alice as a follower');
       expect(
         requests.some((request) => request.options?.method === 'POST'),
       ).toBe(false);
@@ -1548,7 +1548,7 @@ it.each(['connections', 'activity'])(
     expect(renderer.root.findByProps({ src: '/media/avatar/bob' })).toBe(
       remainingAvatar,
     );
-    expect(visibleText()).not.toContain('@alice');
+    expect(visibleText()).not.toContain('alice');
     expect(
       renderer.root
         .findAllByType('button')
@@ -1583,7 +1583,7 @@ it.each(['followers', 'following'] as const)(
     expect(renderer.root.findByType('img').props.src).toBe('/media/avatar/bob');
     expect(renderer.root.findByProps({ href: '#profile/bob' })).toBeDefined();
     const label =
-      kind === 'followers' ? 'Remove @bob as a follower' : 'Unfollow @bob';
+      kind === 'followers' ? 'Remove bob as a follower' : 'Unfollow bob';
     const confirm = kind === 'followers' ? 'Remove follower' : 'Unfollow';
     const path = `/api/people/bob/${kind === 'followers' ? 'remove' : 'unfollow'}`;
     await click(label);
@@ -2305,7 +2305,7 @@ it('keeps profile information mounted across tabs and returns to the selected ta
     await go(location.hash);
     const kind = label.toLowerCase();
     expect(location.hash).toBe(`#profile/alice/${kind}`);
-    expect(renderer.root.findByType('h2').children.join('')).toBe('@alice');
+    expect(renderer.root.findByType('h2').children.join('')).toBe('alice');
     expect(
       renderer.root.findByProps({ role: 'tabpanel' }).props['data-tab'],
     ).toBe(kind);
@@ -2388,7 +2388,7 @@ it.each(['following', 'followers'] as const)(
     expect(row.findAllByType('button')).toHaveLength(0);
     expect(row.findByType('img').props.src).toBe('/media/avatar/carol');
     await click('Next');
-    expect(visibleText()).not.toContain('@carol');
+    expect(visibleText()).not.toContain('carol');
     await reply(pending(`${path}carol`), { items: [], next: null });
     expect(visibleText()).toContain('No accounts on this page.');
     await click('Previous');
@@ -2423,7 +2423,7 @@ it.each(['following', 'followers'] as const)(
       { error: 'Follow this account to view its connections.' },
       404,
     );
-    expect(visibleText()).not.toContain('@carol');
+    expect(visibleText()).not.toContain('carol');
     expect(visibleText()).toContain(
       'Follow this account to view its connections.',
     );

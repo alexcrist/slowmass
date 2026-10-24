@@ -8,7 +8,7 @@ export function PersonLink({ handle }: { handle: string }) {
         height={36}
         alt=""
       />
-      <strong>@{handle}</strong>
+      <strong>{handle}</strong>
     </a>
   );
 }

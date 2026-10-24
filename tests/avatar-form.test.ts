@@ -252,7 +252,7 @@ it('guards against duplicate crop confirmations and cancellation during saving',
   );
   await act(async () =>
     renderer.root
-      .findByProps({ 'aria-label': "Enlarge @alice's profile photo" })
+      .findByProps({ 'aria-label': "Enlarge alice's profile photo" })
       .props.onClick(),
   );
   const dialog = renderer.root.findByType('dialog');

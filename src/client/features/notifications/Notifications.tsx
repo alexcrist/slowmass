@@ -173,7 +173,7 @@ export function Notifications({
                 />
                 <div className="notification-content">
                   <p data-notification-key={item.key}>
-                    @{item.handle} joined slowmass through your invitation.
+                    {item.handle} joined slowmass through your invitation.
                   </p>
                   <time dateTime={new Date(item.createdAt).toISOString()}>
                     {new Date(item.createdAt).toLocaleString()}
@@ -197,7 +197,7 @@ export function Notifications({
                   />
                   <div className="notification-content">
                     <p data-notification-key={item.key}>
-                      @{item.handle}{' '}
+                      {item.handle}{' '}
                       {item.kind === 'request'
                         ? 'requested to follow you.'
                         : 'started following you.'}
@@ -234,7 +234,7 @@ export function Notifications({
                     </button>
                     <button
                       className="notification-dismiss"
-                      aria-label={`Dismiss follow back for @${item.handle}`}
+                      aria-label={`Dismiss follow back for ${item.handle}`}
                       disabled={busy || loading}
                       onClick={() => void dismissFollowBack(item)}
                     >
@@ -264,7 +264,7 @@ export function Notifications({
                   ) : (
                     <>
                       <p data-notification-key={item.key}>
-                        @{item.handle} commented on your photo.
+                        {item.handle} commented on your photo.
                       </p>
                       <p className="bio">{item.body}</p>
                     </>

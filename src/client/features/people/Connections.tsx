@@ -60,7 +60,7 @@ export function Connections({ kind, handle }: ConnectionsProps) {
         {data?.items.map((person) => (
           <li className="connection-row" key={person.handle}>
             {kind === 'blocked' ? (
-              <a href={profileHref(person.handle)}>@{person.handle}</a>
+              <a href={profileHref(person.handle)}>{person.handle}</a>
             ) : (
               <PersonLink handle={person.handle} />
             )}
@@ -71,8 +71,8 @@ export function Connections({ kind, handle }: ConnectionsProps) {
                 disabled={busy || loading}
                 aria-label={
                   kind === 'followers'
-                    ? `Remove @${person.handle} as a follower`
-                    : `${kind === 'following' ? 'Unfollow' : 'Unblock'} @${person.handle}`
+                    ? `Remove ${person.handle} as a follower`
+                    : `${kind === 'following' ? 'Unfollow' : 'Unblock'} ${person.handle}`
                 }
                 aria-haspopup={kind === 'blocked' ? undefined : 'dialog'}
                 onClick={() => {
@@ -107,8 +107,8 @@ export function Connections({ kind, handle }: ConnectionsProps) {
         >
           <p>
             {kind === 'followers'
-              ? `@${confirming} will need to request to follow you again to see your posts.`
-              : `Stop following @${confirming}? You will need their approval to follow them again.`}
+              ? `${confirming} will need to request to follow you again to see your posts.`
+              : `Stop following ${confirming}? You will need their approval to follow them again.`}
           </p>
         </ConfirmDialog>
       )}

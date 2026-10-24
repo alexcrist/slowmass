@@ -77,7 +77,7 @@ export function PostList({
               aria-label={
                 post.caption
                   ? `Open post: ${post.caption.slice(0, 100)}`
-                  : `Open post by @${post.handle}`
+                  : `Open post by ${post.handle}`
               }
             >
               <img
@@ -169,7 +169,7 @@ function PostCard({
     <img
       className="post-photo"
       src={post.mediaUrl}
-      alt={post.altText || `Photo by @${post.handle}`}
+      alt={post.altText || `Photo by ${post.handle}`}
       width={post.width}
       height={post.height}
       loading={priority ? 'eager' : 'lazy'}
@@ -194,7 +194,7 @@ function PostCard({
       {focused ? (
         <FocusedPhoto
           src={post.mediaUrl}
-          alt={post.altText || `Photo by @${post.handle}`}
+          alt={post.altText || `Photo by ${post.handle}`}
           width={post.width}
           height={post.height}
         >
@@ -204,7 +204,7 @@ function PostCard({
         <a
           className="post-photo-link"
           href={postHref(post.id)}
-          aria-label={`Open post by @${post.handle}`}
+          aria-label={`Open post by ${post.handle}`}
         >
           {photo}
         </a>
@@ -223,7 +223,7 @@ function PostCard({
                     {index === 0 && (
                       <>
                         <a href={profileHref(post.handle)}>
-                          <strong>@{post.handle}</strong>
+                          <strong>{post.handle}</strong>
                         </a>{' '}
                       </>
                     )}
