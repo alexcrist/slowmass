@@ -1,6 +1,7 @@
 import { useId, useState, type ReactNode } from 'react';
 import { profileHref } from '../../navigation';
 import { ImageViewer } from '../../ui/ImageViewer';
+import { EventDescription } from './description';
 import { EventDateIcon, EventLocationIcon, EventTimeIcon } from './EventIcons';
 import { eventWhen } from './time';
 import {
@@ -202,9 +203,7 @@ export function EventSummary({
           </button>
         )}
         {hosts.length > 0 && <EventHostRow hosts={hosts} linked />}
-        {event.description && (
-          <p className="event-description">{event.description}</p>
-        )}
+        {event.description && <EventDescription text={event.description} />}
       </div>
     </div>
   );

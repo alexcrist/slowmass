@@ -17,6 +17,7 @@ export function useEventAppearance(appearance?: EventAppearance) {
     const properties: Record<string, string> = {
       '--paper': palette.paper,
       '--paper-edge': palette.edge,
+      '--nav': palette.nav,
       '--surface': palette.surface,
       '--ink': palette.ink,
       '--muted': palette.muted,

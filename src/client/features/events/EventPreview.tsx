@@ -30,7 +30,7 @@ export function EventPreviewSummary({
     <div className="event-summary">
       <div
         className="event-photo event-preview-photo"
-        style={{ aspectRatio: `${width} / ${height}` }}
+        style={{ ['--event-photo-ratio' as string]: `${width} / ${height}` }}
       >
         {children}
       </div>

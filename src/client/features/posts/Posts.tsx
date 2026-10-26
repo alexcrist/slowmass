@@ -49,8 +49,22 @@ export function PostList({
     refresh,
   } = useApiResource<Page>(`/api/posts?${params}`);
   if (pending) return null;
+  const next = page?.next;
+  const pages = (top: boolean) =>
+    page && (
+      <PostPages
+        top={top}
+        number={history.length}
+        loading={loading}
+        onNewer={
+          history.length > 1 ? () => setHistory(history.slice(0, -1)) : null
+        }
+        onOlder={next ? () => setHistory([...history, next]) : null}
+      />
+    );
   return (
     <>
+      {history.length > 1 && pages(true)}
       {loading && !page && <p role="status">Loading posts…</p>}
       {error && (
         <div>
@@ -107,27 +121,8 @@ export function PostList({
         ))
       )}
       {page && (
-        <nav className="actions" aria-label="Post pages">
-          {history.length > 1 && (
-            <button
-              disabled={loading}
-              onClick={() => {
-                setHistory(history.slice(0, -1));
-              }}
-            >
-              Newer
-            </button>
-          )}
-          {page.next ? (
-            <button
-              disabled={loading}
-              onClick={() => {
-                setHistory([...history, page.next!]);
-              }}
-            >
-              Older
-            </button>
-          ) : !loading ? (
+        <>
+          {!page.next && !loading && (
             <svg
               className="end-of-posts"
               role="img"
@@ -141,10 +136,61 @@ export function PostList({
             >
               <path d="M0 8h48" />
             </svg>
-          ) : null}
-        </nav>
+          )}
+          {(history.length > 1 || page.next) && pages(false)}
+        </>
       )}
     </>
+  );
+}
+// Cursor pages have no total, so the number is the depth in this list's history.
+function PostPages({
+  top,
+  number,
+  loading,
+  onNewer,
+  onOlder,
+}: {
+  top: boolean;
+  number: number;
+  loading: boolean;
+  onNewer: (() => void) | null;
+  onOlder: (() => void) | null;
+}) {
+  return (
+    <nav
+      className={top ? 'page-nav page-nav-top' : 'page-nav'}
+      aria-label="Post pages"
+    >
+      {onNewer && (
+        <button className="page-newer" disabled={loading} onClick={onNewer}>
+          <Chevron path="m15 6-6 6 6 6" />
+          Newer
+        </button>
+      )}
+      <span className="page-number">{`Page ${number}`}</span>
+      {onOlder && (
+        <button className="page-older" disabled={loading} onClick={onOlder}>
+          Older
+          <Chevron path="m9 6 6 6-6 6" />
+        </button>
+      )}
+    </nav>
+  );
+}
+function Chevron({ path }: { path: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d={path} />
+    </svg>
   );
 }
 function PostCard({

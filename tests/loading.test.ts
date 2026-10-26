@@ -1484,6 +1484,50 @@ it('does not show an old feed page or end marker while paging', async () => {
   expect(visibleText()).not.toContain('End of posts');
 });
 
+it('numbers feed pages and repeats controls above later pages', async () => {
+  const navs = () =>
+    renderer.root
+      .findAllByType('nav')
+      .filter((nav) => nav.props['aria-label'] === 'Post pages');
+  await mount(createElement(PostList));
+  await reply(pending('/api/posts?'), { items: [post('only')], next: null });
+  expect(navs()).toHaveLength(0);
+  expect(visibleText()).not.toContain('Page 1');
+
+  await mount(createElement(PostList));
+  await reply(pending('/api/posts?'), { items: [post('first')], next: 'b' });
+  expect(navs()).toHaveLength(1);
+  expect(visibleText()).toContain('Page 1');
+  await click('Older');
+  await reply(pending('/api/posts?cursor=b'), {
+    items: [post('second')],
+    next: 'c',
+  });
+  expect(navs()).toHaveLength(2);
+  expect(navs()[0].props.className).toBe('page-nav page-nav-top');
+  expect(visibleText()).toContain('Page 2');
+  await click('Older');
+  await reply(pending('/api/posts?cursor=c'), {
+    items: [post('third')],
+    next: null,
+  });
+  expect(visibleText()).toContain('Page 3');
+  expect(
+    navs().map((nav) =>
+      nav.findAllByType('button').map((button) => button.props.className),
+    ),
+  ).toEqual([['page-newer'], ['page-newer']]);
+  expect(
+    renderer.root.findAllByProps({ 'aria-label': 'End of posts' }),
+  ).toHaveLength(1);
+  await click('Newer');
+  await reply(pending('/api/posts?cursor=b'), {
+    items: [post('second')],
+    next: 'c',
+  });
+  expect(visibleText()).toContain('Page 2');
+});
+
 it('waits for profile authorization before showing private or empty states', async () => {
   await mount(createElement(ProfilePage, { handle: 'alice' }));
   expect(visibleText()).toContain('Loading profile…');

@@ -444,7 +444,7 @@ it('keeps failed appearance edits retryable and aborts saves when editing unmoun
   const first = pending(`/api/events/${id}/appearance`);
   await reply(first, { error: 'The event changed. Reload it.' }, 409);
   expect(visibleText()).toContain('The event changed. Reload it.');
-  expect(rootStyle('--paper')).toBe('#202544');
+  expect(rootStyle('--paper')).toBe(palettes['after-hours'].paper);
   expect(button('Save color theme').props.disabled).toBe(false);
   await submit();
   const retry = pending(`/api/events/${id}/appearance`);
@@ -591,7 +591,7 @@ it('restores ordinary app styling on navigation and uses the next event’s own 
       appearance: { colorTheme: 'pool', fontPairing: 'bungee-shade' },
     }),
   });
-  expect(rootStyle('--paper')).toBe('#e5f3ff');
+  expect(rootStyle('--paper')).toBe(palettes.pool.paper);
   expect(rootStyle('--heading-font')).toContain('Bungee Shade');
 });
 
@@ -616,7 +616,7 @@ it('themes only the current authorized signed-out preview and clears it on leavi
       },
     },
   });
-  expect(rootStyle('--paper')).toBe('#33211e');
+  expect(rootStyle('--paper')).toBe(palettes.candlelight.paper);
   expect(rootStyle('--heading-font')).toContain('Monoton');
   expect(rootStyle('--body-font')).toBe('');
   await act(async () => {
