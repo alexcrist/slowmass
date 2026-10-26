@@ -30,6 +30,7 @@ import {
 import { EventAppearanceDialog } from './EventAppearanceDialog';
 import { useEventAppearance } from './useEventAppearance';
 import { EventDateIcon, EventLocationIcon, EventTimeIcon } from './EventIcons';
+import { EventHosts } from './EventHosts';
 import { EventHostRow } from './EventSummary';
 
 function nextDay(date: string) {
@@ -183,7 +184,7 @@ export function EditEvent({
 // creator's, for new events).
 export function EventForm({
   event,
-  hosts,
+  hosts: initialHosts,
   onSaved,
   onCancel,
 }: {
@@ -192,6 +193,11 @@ export function EventForm({
   onSaved: (id: string) => void;
   onCancel: () => void;
 }) {
+  const [hosts, setHosts] = useState(initialHosts);
+  const [pendingHosts, setPendingHosts] = useState(
+    event?.pendingHostMembers ?? [],
+  );
+  const [hostsOpen, setHostsOpen] = useState(false);
   const [appearance, setAppearance] = useState(
     event?.appearance ?? originalAppearance,
   );
@@ -565,7 +571,20 @@ export function EventForm({
                   />
                 </p>
                 {hosts.length > 0 && (
-                  <EventHostRow hosts={hosts} linked={false} />
+                  <div className="event-edit-hosts">
+                    <EventHostRow hosts={hosts} linked={false} />
+                    {event && (
+                      <button
+                        type="button"
+                        className="compact-button"
+                        disabled={busy}
+                        aria-haspopup="dialog"
+                        onClick={() => setHostsOpen(true)}
+                      >
+                        Add hosts
+                      </button>
+                    )}
+                  </div>
                 )}
                 <p className="event-description">
                   <InlineField
@@ -602,6 +621,22 @@ export function EventForm({
           </div>
         </div>
       </form>
+      {hostsOpen && event && (
+        <EventHosts
+          id={event.id}
+          hosts={hosts}
+          pending={pendingHosts}
+          onClose={() => setHostsOpen(false)}
+          onChange={(left, nextHosts, nextPending) => {
+            if (left) {
+              globalThis.location.hash = '#events';
+              return;
+            }
+            setHosts(nextHosts);
+            setPendingHosts(nextPending);
+          }}
+        />
+      )}
       {appearanceDialog && (
         <EventAppearanceDialog
           id={event?.id}

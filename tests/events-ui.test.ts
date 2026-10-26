@@ -1362,7 +1362,9 @@ it.each([
     await mount(createElement(EventPage, { id, linkProfiles: true }));
     await reply(pending(`/api/events/${id}`), { event: view({ viewer }) });
     expect(visibleText()).not.toContain('Share link');
-    await click('Share event link');
+    await click('Event options');
+    expect(visibleText()).not.toContain('Edit hosts');
+    await click('Invite people');
     expect(visibleText()).toContain(
       'Send the link to your friends to invite them.',
     );
@@ -1385,12 +1387,12 @@ it.each([
 );
 
 it('searches connections and invites members to co-host without email', async () => {
-  await mount(createElement(EventPage, { id, linkProfiles: true }));
+  await mount(
+    createElement(EditEvent, { id, onSaved: vi.fn(), onCancel: vi.fn() }),
+  );
   await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
-  await reply(pending(`/api/events/${id}/guests`), { items: [], next: null });
-  await reply(pending(`/api/events/${id}/activity`), { items: [], next: null });
-  await click('Event options');
-  await click('Edit hosts');
+  await type('event-title', 'Unsaved dinner title');
+  await click('Add hosts');
   const bob = { id: 'bob', handle: 'bob', displayName: 'Bob', hasAvatar: true };
   await reply(pending(`/api/events/${id}/host-candidates`), {
     items: [bob],
@@ -1414,22 +1416,27 @@ it('searches connections and invites members to co-host without email', async ()
     items: [],
     next: null,
   });
-  await reply(pending(`/api/events/${id}`), {
-    event: view({ viewer: host, pendingHostMembers: [bob] }),
-  });
   expect(visibleText()).toContain('Pending');
   expect(visibleText()).not.toContain('bob@example.com');
   await click('Cancel invitation for Bob');
   const removed = pending(`/api/events/${id}/hosts`);
   expect(removed.options?.method).toBe('DELETE');
   expect(JSON.parse(String(removed.options?.body))).toEqual({ userId: 'bob' });
+  await reply(removed, { ok: true });
+  await click('Done');
+  expect(renderer.root.findByProps({ id: 'event-title' }).props.value).toBe(
+    'Unsaved dinner title',
+  );
+  await click('Add hosts');
+  expect(visibleText()).not.toContain('Pending');
 });
 
 it('offers retry after connection loading fails and ignores an invite response after closing', async () => {
-  await mount(createElement(EventPage, { id, linkProfiles: true }));
+  await mount(
+    createElement(EditEvent, { id, onSaved: vi.fn(), onCancel: vi.fn() }),
+  );
   await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
-  await click('Event options');
-  await click('Edit hosts');
+  await click('Add hosts');
   await reply(
     pending(`/api/events/${id}/host-candidates`),
     { error: 'Try later' },
@@ -1446,6 +1453,98 @@ it('offers retry after connection loading fails and ignores an invite response a
   await act(async () => renderer.unmount());
   expect(request.options?.signal?.aborted).toBe(true);
   await reply(request, { ok: true });
+});
+
+it('keeps the event draft and invitation available after a failed host mutation', async () => {
+  await mount(
+    createElement(EditEvent, { id, onSaved: vi.fn(), onCancel: vi.fn() }),
+  );
+  await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
+  await type('event-description', 'Unsaved description');
+  await click('Add hosts');
+  const bob = { id: 'bob', handle: 'bob', displayName: 'Bob', hasAvatar: true };
+  await reply(pending(`/api/events/${id}/host-candidates`), {
+    items: [bob],
+    next: null,
+  });
+  await click('Invite Bob to co-host');
+  expect(button('Done').props.disabled).toBe(true);
+  expect(button('Close hosts').props.disabled).toBe(true);
+  await reply(pending(`/api/events/${id}/hosts`), { error: 'Try later' }, 503);
+  expect(visibleText()).toContain('Try later');
+  expect(button('Invite Bob to co-host').props.disabled).toBe(false);
+  expect(
+    renderer.root.findByProps({ 'aria-label': 'Pending host invitations' })
+      .children,
+  ).toHaveLength(0);
+  await click('Done');
+  expect(
+    renderer.root.findByProps({ id: 'event-description' }).props.value,
+  ).toBe('Unsaved description');
+});
+
+it.each(['Done', 'Close hosts'])(
+  '%s closes host management without changing saved invitations or the event draft',
+  async (close) => {
+    await mount(
+      createElement(EditEvent, { id, onSaved: vi.fn(), onCancel: vi.fn() }),
+    );
+    await reply(pending(`/api/events/${id}`), {
+      event: view({ viewer: host }),
+    });
+    await type('event-title', 'Draft title');
+    await click('Add hosts');
+    expect(visibleText()).toContain('No pending invitations.');
+    const bob = {
+      id: 'bob',
+      handle: 'bob',
+      displayName: 'Bob',
+      hasAvatar: true,
+    };
+    await reply(pending(`/api/events/${id}/host-candidates`), {
+      items: [bob],
+      next: null,
+    });
+    await click('Invite Bob to co-host');
+    await reply(pending(`/api/events/${id}/hosts`), { ok: true });
+    const writes = requests.filter(
+      (request) => request.options?.method === 'POST',
+    ).length;
+    await click(close);
+    expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
+    expect(renderer.root.findByProps({ id: 'event-title' }).props.value).toBe(
+      'Draft title',
+    );
+    expect(
+      requests.filter((request) => request.options?.method === 'POST'),
+    ).toHaveLength(writes);
+    await click('Add hosts');
+    expect(visibleText()).toContain('Pending');
+    expect(visibleText().replace(/\s+/g, ' ')).toContain('8 of 10 spots left');
+  },
+);
+
+it('leaves the editor after a co-host stops hosting', async () => {
+  const cohost = {
+    handle: 'bob',
+    displayName: 'Bob',
+    hasAvatar: true,
+    isCreator: false,
+    isViewer: true,
+  };
+  await mount(
+    createElement(EditEvent, { id, onSaved: vi.fn(), onCancel: vi.fn() }),
+  );
+  await reply(pending(`/api/events/${id}`), {
+    event: view({
+      viewer: { ...host, isCreator: false },
+      hosts: [...details.hosts, cohost],
+    }),
+  });
+  await click('Add hosts');
+  await click('Stop hosting');
+  await reply(pending(`/api/events/${id}/hosts/bob`), { ok: true });
+  expect(location.hash).toBe('#events');
 });
 
 it('asks invited members to accept hosting', async () => {
@@ -1796,11 +1895,6 @@ it('links available avatars in host, guest, activity, and host-dialog sections',
   ).toBe(true);
   expect(
     renderer.root.findAllByProps({ className: 'event-person-initial' }),
-  ).toHaveLength(2);
-  await click('Event options');
-  await click('Edit hosts');
-  expect(
-    avatarLinks().filter((link) => link.props.href === '#profile/alice'),
   ).toHaveLength(2);
 });
 

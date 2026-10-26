@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useApiResource } from '../../api/useApiResource';
 import { ScreenBoundary } from '../../ui/ScreenBoundary';
 import { ViewerProvider } from '../../ui/Viewer';
 import { profileHref, useRoute } from '../../navigation';
@@ -370,19 +371,7 @@ function MemberPages({
                 Notifications
               </a>
               <InstallApp />
-              <button
-                type="button"
-                className="settings-row"
-                onClick={() => location.reload()}
-                disabled={signingOut}
-              >
-                <SettingsRowIcon name="reload" />
-                Reload app
-              </button>
-              <a className="settings-row" href="#blocked">
-                <SettingsRowIcon name="blocked" />
-                Blocked accounts
-              </a>
+              <BlockedAccountsRow />
               <SignOutRow signingOut={signingOut} onSignOut={onSignOut} />
               <DeleteAccountRow />
             </div>
@@ -516,5 +505,19 @@ function InviteSettingsRow({ disabled }: { disabled: boolean }) {
       </button>
       {inviting && <InviteLinkDialog onClose={() => setInviting(false)} />}
     </>
+  );
+}
+
+function BlockedAccountsRow() {
+  const { data, error } = useApiResource<{ items: { handle: string }[] }>(
+    '/api/people/connections?kind=blocked&after=',
+  );
+  // A failed check must not prevent members from managing existing blocks.
+  if (!error && !data?.items.length) return null;
+  return (
+    <a className="settings-row" href="#blocked">
+      <SettingsRowIcon name="blocked" />
+      Blocked accounts
+    </a>
   );
 }

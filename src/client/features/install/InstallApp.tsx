@@ -128,19 +128,7 @@ export function useInstallState() {
 function InstallControls() {
   const context = useInstallState();
   if (!context?.mobile) return null;
-  const { appleMobile, installed, running, prompt, busy, message, install } =
-    context;
-  if (running)
-    return <p role="status">Installed. You’re using the slowmass app.</p>;
-  if (installed)
-    return (
-      <p role="status">
-        Installed.{' '}
-        {appleMobile
-          ? 'Open the slowmass icon on your Home Screen.'
-          : 'Available from your Home Screen.'}
-      </p>
-    );
+  const { appleMobile, prompt, busy, message, install } = context;
   return (
     <div className="install-help">
       <p>
@@ -239,7 +227,7 @@ export function InstallInstructions({
 }
 export function InstallApp() {
   const context = useInstallState();
-  if (!context?.mobile) return null;
+  if (!context?.mobile || context.installed) return null;
   return (
     <details className="settings-disclosure">
       <summary className="settings-row">

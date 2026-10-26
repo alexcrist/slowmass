@@ -6,7 +6,6 @@ import { ConfirmDialog } from '../../ui/ConfirmDialog';
 import { OverflowMenu } from '../../ui/OverflowMenu';
 import { EventAnswers, EventCover, EventSummary } from './EventSummary';
 import { EventGuests } from './EventGuests';
-import { EventHosts } from './EventHosts';
 import { EventLinkDialog } from './EventLinkDialog';
 import { EventUpdateBlastDialog } from './EventUpdateBlastDialog';
 import { EventCalendarDialog } from './EventCalendarDialog';
@@ -112,7 +111,7 @@ export function EventPage({
   useEffect(() => () => deletion.current?.abort(), []);
   const [failure, setFailure] = useState('');
   const [dialog, setDialog] = useState<
-    'link' | 'hosts' | 'update-blast' | 'cancel' | 'delete' | 'calendar' | null
+    'link' | 'update-blast' | 'cancel' | 'delete' | 'calendar' | null
   >(null);
   const [messageId] = useState(() => crypto.randomUUID());
   const [updateBlastsSent, setUpdateBlastsSent] = useState(0);
@@ -221,8 +220,8 @@ export function EventPage({
                               },
                             },
                             {
-                              label: 'Edit hosts',
-                              onSelect: () => setDialog('hosts'),
+                              label: 'Invite people',
+                              onSelect: () => setDialog('link'),
                             },
                             {
                               label: 'Send update blast',
@@ -345,19 +344,6 @@ export function EventPage({
           onSent={() => {
             closeDialog();
             setUpdateBlastsSent((value) => value + 1);
-          }}
-        />
-      )}
-      {dialog === 'hosts' && (
-        <EventHosts
-          id={id}
-          hosts={event.hosts}
-          pending={event.pendingHostMembers ?? []}
-          onClose={closeDialog}
-          onChange={(left) => {
-            // Someone who stops hosting may no longer see the event.
-            if (left) location.hash = '#events';
-            else refresh();
           }}
         />
       )}

@@ -2168,6 +2168,109 @@ a.profile-tab {
 .event-host-invite .text-button {
   display: block;
 }
+/* Keep host management compact without squeezing names or search on phones. */
+.event-edit-hosts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.event-edit-hosts > .compact-button {
+  margin-left: auto;
+}
+.event-host-manager > .field-help {
+  margin: 4px 0 20px;
+}
+.event-host-group {
+  margin-top: 20px;
+}
+.event-host-group-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 0 4px 8px;
+}
+.event-host-group-heading h3 {
+  margin: 0;
+  font: 600 16px var(--body-font);
+}
+.event-host-group-heading h3 .event-list-meta {
+  margin-left: 6px;
+  font-weight: 400;
+}
+.event-host-group-heading > .event-list-meta {
+  font-size: 14px;
+}
+.event-host-group > .field-help {
+  margin: -4px 4px 8px;
+}
+.event-host-card {
+  border: 1px solid var(--control-line);
+  border-radius: 12px;
+}
+.event-host-manager .event-host-list {
+  margin: 0;
+}
+.event-host-manager .event-host-list > li {
+  gap: 10px;
+  min-height: 60px;
+  padding: 8px 12px;
+}
+.event-host-manager .event-host-list > li + li {
+  border-top: 1px solid var(--line);
+}
+.event-host-manager .event-host-pending {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.event-host-manager .compact-button {
+  flex: none;
+  width: auto;
+  min-height: 44px;
+  margin-block: 0;
+}
+.event-host-search-controls {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.event-host-search-controls input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  background: var(--hover);
+  border-color: var(--hover);
+}
+.event-host-search-controls input:focus {
+  background: var(--surface);
+  border-color: var(--control-line);
+}
+.event-host-search-controls button {
+  flex: none;
+  margin: 0;
+}
+.event-host-notice {
+  margin: 0;
+  padding: 12px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.event-host-card > .actions:not(:empty) {
+  margin: 0;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+}
+.event-host-card > .actions:empty {
+  display: none;
+}
+.event-host-done {
+  width: 100%;
+  margin-top: 16px;
+}
 .event-host-list .compact-button {
   margin-left: auto;
 }

@@ -1878,7 +1878,7 @@ it('preserves draft input and normal modified navigation when a tab is selected 
   expect(requests).toHaveLength(count);
 });
 
-it('Profile navigates home from another member and Settings provides the only full-app reload control', async () => {
+it('Profile navigates home from another member and Settings hides empty blocked accounts', async () => {
   location.hash = '#profile/bob';
   await mount(
     createElement(MemberApp, {
@@ -1896,6 +1896,10 @@ it('Profile navigates home from another member and Settings provides the only fu
     location.hash = '#settings';
     window.dispatchEvent(new Event('hashchange'));
   });
+  await reply(pending('/api/people/connections?kind=blocked'), {
+    items: [],
+    next: null,
+  });
   // Every row leads with a decorative icon, in this order.
   const rows = renderer.root.findAll(
     (node) =>
@@ -1910,8 +1914,6 @@ it('Profile navigates home from another member and Settings provides the only fu
     'Edit profile',
     'Invite to slowmass',
     'Notifications',
-    'Reload app',
-    'Blocked accounts',
     'Sign out',
     'Delete account',
   ]);
@@ -1919,9 +1921,45 @@ it('Profile navigates home from another member and Settings provides the only fu
     expect(
       row.findByProps({ className: 'settings-icon' }).props['aria-hidden'],
     ).toBe('true');
-  await click('Reload app');
-  expect(location.reload).toHaveBeenCalledOnce();
+  expect(visibleText()).not.toContain('Reload app');
+  expect(visibleText()).not.toContain('Blocked accounts');
 });
+
+it.each([
+  { data: { items: [{ handle: 'bob' }], next: null }, status: 200 },
+  { data: { error: 'Unavailable' }, status: 503 },
+])(
+  'keeps blocked-account management accessible for $status responses',
+  async ({ data, status }) => {
+    location.hash = '#settings';
+    await mount(
+      createElement(MemberApp, {
+        initialProfile: ownProfile,
+        onSignOut: vi.fn(),
+        signingOut: false,
+      }),
+    );
+    await reply(pending('/api/people/connections?kind=blocked'), data, status);
+    expect(renderer.root.findByProps({ href: '#blocked' })).toBeDefined();
+    await act(async () => {
+      location.hash = '#blocked';
+      window.dispatchEvent(new Event('hashchange'));
+    });
+    await reply(pending('/api/people/connections?kind=blocked'), {
+      items: [],
+      next: null,
+    });
+    await act(async () => {
+      location.hash = '#settings';
+      window.dispatchEvent(new Event('hashchange'));
+    });
+    await reply(pending('/api/people/connections?kind=blocked'), {
+      items: [],
+      next: null,
+    });
+    expect(visibleText()).not.toContain('Blocked accounts');
+  },
+);
 
 it('paginates one activity timeline and resolves inline requests without leaving the page', async () => {
   location.hash = '#notifications';
@@ -3011,7 +3049,9 @@ it.each([
     );
     await go('#settings');
     expect(visibleText()).toContain('Notifications');
-    if (summary) expect(visibleText()).toContain('Install slowmass');
+    if (summary && !device.standalone)
+      expect(visibleText()).toContain('Install slowmass');
+    else expect(visibleText()).not.toContain('Install slowmass');
     expect(permission).not.toHaveBeenCalled();
   },
 );

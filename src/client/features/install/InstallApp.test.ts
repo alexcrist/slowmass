@@ -70,10 +70,7 @@ it.each([
     await act(async () => {
       events.dispatchEvent(new Event('appinstalled'));
     });
-    expect(renderer!.root.findAllByType('details')).toHaveLength(1);
-    expect(renderer!.root.findByType('p').children.join('')).toContain(
-      'Installed.',
-    );
+    expect(renderer!.toJSON()).toBeNull();
   },
 );
 
@@ -104,12 +101,9 @@ it.each([
   },
 );
 
-it('preserves installed status on mobile without showing installation help', async () => {
+it('hides the installation section when running as an installed app', async () => {
   await setup('iPhone', 'iPhone', 5, true);
-  expect(renderer!.root.findAllByType('details')).toHaveLength(1);
-  expect(renderer!.root.findByType('p').children.join('')).toContain(
-    'Installed.',
-  );
+  expect(renderer!.toJSON()).toBeNull();
 });
 
 it.each(['dismissed', 'failed'])(

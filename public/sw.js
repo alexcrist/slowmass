@@ -36,6 +36,7 @@ self.addEventListener('push', (event) => {
         text(data.body, 400) ||
         'You have new activity. Open slowmass to see it.',
       icon: '/icons/app-192.png',
+      badge: '/icons/notification-badge-96.png',
       tag: `slowmass:${subscription}:${key}`,
       data: { key, version },
       renotify: false,
