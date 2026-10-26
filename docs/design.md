@@ -17,6 +17,12 @@ The app name is always styled `slowmass` in lowercase, including browser titles,
 
 Both fonts are served locally from `public/fonts`, with their SIL Open Font Licenses included. No third-party font or image requests. The reusable wordmark is also available at `/slowmass-wordmark.svg` as standalone vector outlines.
 
+## Vertical whitespace
+
+Consistent vertical whitespace is one of the clearest signs of a high-quality interface. Space between elements should look intentional: the same relationship (a username and its timestamp, one comment and the next, one section and the next) gets the same space everywhere, and things that belong together sit closer than things that don’t. Uneven gaps make a screen look careless even when every element on it is well designed.
+
+Judge the space a person sees, not the numbers in the stylesheet. Text is the usual source of drift: line-height adds invisible space above and below each line, by a different amount at each font size, so two gaps with the same value can look different, and a gap beside text looks larger than one between boxes. Invisible touch-target padding has the same effect. Getting elements to sit evenly can take deliberate handling. When spacing looks uneven, find where the extra space comes from rather than nudging values until it looks close.
+
 ## Layout and interaction
 
 On mobile, profile tabs share the identity header's 16px side inset, including their divider and active underline. The photo grid remains edge to edge.
