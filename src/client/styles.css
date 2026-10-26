@@ -2148,8 +2148,57 @@ a.profile-tab {
 .event section > h2 {
   margin-top: 36px;
 }
-.event .event-guests > h2 {
-  margin-bottom: 4px;
+.event-guests-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 36px;
+}
+.event-guests-heading h2 {
+  margin: 0;
+}
+.event-guests-heading p {
+  margin: 2px 0 0;
+  color: var(--muted);
+}
+.event-guests-heading > button {
+  flex: none;
+}
+/* Five 52px cells with 10px gaps fit the narrowest themed column (311px). */
+.event-guest-row {
+  display: flex;
+  gap: 10px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.event-guest-row > li {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 6px;
+  width: 52px;
+  font-size: 13px;
+}
+.event-guest-row > li > span[aria-hidden] {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.event-guest-more {
+  width: 52px;
+  height: 52px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--hover);
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 15px;
+}
+.event-guest-more:hover {
+  color: var(--ink);
 }
 .event-guest-list {
   list-style: none;

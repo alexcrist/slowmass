@@ -2,6 +2,7 @@ import { useId, useRef, useState } from 'react';
 import { useApiResource } from '../../api/useApiResource';
 import { profileHref } from '../../navigation';
 import { usePageHistory } from '../../navigation/PageHistory';
+import { Dialog } from '../../ui/Dialog';
 import { PersonPhoto } from './EventSummary';
 import { answerEmoji, answers, type Answer } from './types';
 
@@ -29,7 +30,121 @@ export function guestPhoto(guest: Guest) {
     : null;
 }
 
+// The page shows a row of guests; View all opens every answer's full list.
+const rowSize = 5;
+
+// Captions fit about seven characters, so they show the first name.
+function firstName(name: string) {
+  return name.trim().split(/\s+/)[0];
+}
+
 export function EventGuests({
+  id,
+  headingId,
+  counts,
+  linkProfiles,
+}: {
+  id: string;
+  headingId: string;
+  counts: Record<Answer, number>;
+  linkProfiles: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  // Going leads the row; an event with no one going yet shows maybe instead.
+  const shown = answers.find(
+    (answer) => answer.value !== 'declined' && counts[answer.value] > 0,
+  );
+  const summary = answers
+    .filter((answer) => counts[answer.value] > 0)
+    .map((answer) => `${counts[answer.value]} ${answer.label.toLowerCase()}`)
+    .join(' · ');
+  return (
+    <>
+      <div className="event-guests-heading">
+        <div>
+          <h2 id={headingId}>Guests</h2>
+          <p>{summary || 'No answers yet.'}</p>
+        </div>
+        <button type="button" onClick={() => setOpen(true)}>
+          View all
+        </button>
+      </div>
+      {shown && (
+        <GuestRow
+          id={id}
+          answer={shown}
+          total={counts[shown.value]}
+          onMore={() => setOpen(true)}
+        />
+      )}
+      {open && (
+        <Dialog title="Guests" onClose={() => setOpen(false)}>
+          <GuestList id={id} counts={counts} linkProfiles={linkProfiles} />
+        </Dialog>
+      )}
+    </>
+  );
+}
+
+function GuestRow({
+  id,
+  answer,
+  total,
+  onMore,
+}: {
+  id: string;
+  answer: (typeof answers)[number];
+  total: number;
+  onMore: () => void;
+}) {
+  const { data, error, loading, reload } = useApiResource<{
+    items: Guest[];
+    next: string | null;
+  }>(`/api/events/${id}/guests?status=${answer.value}`);
+  if (loading && !data) return <p role="status">Loading guests…</p>;
+  if (error)
+    return (
+      <div>
+        <p role="alert">{error}</p>
+        <button onClick={reload}>Retry</button>
+      </div>
+    );
+  if (!data) return null;
+  // A full row ends with a count of everyone else instead of a fifth guest.
+  const guests =
+    total > rowSize ? data.items.slice(0, rowSize - 1) : data.items;
+  const more = total - guests.length;
+  return (
+    <ul className="event-guest-row">
+      {guests.map((guest) => (
+        <li key={guest.handle}>
+          <PersonPhoto
+            name={guest.displayName}
+            profileHandle={guest.hasAvatar ? guest.handle : undefined}
+            src={guestPhoto(guest)}
+            size={52}
+          />
+          <span aria-hidden="true">{firstName(guest.displayName)}</span>
+          <span className="visually-hidden">{guest.displayName}</span>
+        </li>
+      ))}
+      {more > 0 && (
+        <li>
+          <button
+            type="button"
+            className="event-guest-more"
+            aria-label={`View all ${total} ${answer.label.toLowerCase()}`}
+            onClick={onMore}
+          >
+            +{more}
+          </button>
+        </li>
+      )}
+    </ul>
+  );
+}
+
+function GuestList({
   id,
   counts,
   linkProfiles,

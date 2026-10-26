@@ -1936,6 +1936,72 @@ it('links available avatars in host, guest, activity, and host-dialog sections',
   ).toHaveLength(2);
 });
 
+it('summarizes guests in a row and lists every answer under View all', async () => {
+  await mount(createElement(EventPage, { id, linkProfiles: true }));
+  await reply(pending(`/api/events/${id}`), {
+    event: view({
+      viewer: host,
+      counts: { going: 7, maybe: 0, declined: 1 },
+    }),
+  });
+  expect(visibleText()).toContain('7 going · 1 can’t go');
+  const row = pending(`/api/events/${id}/guests`);
+  expect(row.path).toBe(`/api/events/${id}/guests?status=going`);
+  await reply(row, {
+    items: [
+      {
+        handle: 'a1',
+        displayName: 'Alexandra Montgomery-Whitfield',
+        hasAvatar: true,
+      },
+      { handle: 'b1', displayName: 'Bob', hasAvatar: false },
+      { handle: 'c1', displayName: 'Cy', hasAvatar: true },
+      { handle: 'd1', displayName: 'Di', hasAvatar: true },
+      { handle: 'e1', displayName: 'Ed', hasAvatar: true },
+      { handle: 'f1', displayName: 'Flo', hasAvatar: true },
+      { handle: 'g1', displayName: 'Gus', hasAvatar: true },
+    ],
+    next: null,
+  });
+  await reply(pending(`/api/events/${id}/activity`), { items: [], next: null });
+  const guestRow = renderer.root.findByProps({ className: 'event-guest-row' });
+  // A full row shows four guests and counts the rest; captions use first names
+  // while assistive technology hears the whole name.
+  expect(guestRow.findAllByType('li')).toHaveLength(5);
+  expect(visibleText(renderer.toJSON())).toContain('Alexandra');
+  expect(
+    guestRow.findAllByProps({ className: 'visually-hidden' })[0].children,
+  ).toEqual(['Alexandra Montgomery-Whitfield']);
+  expect(button('View all 7 going').children).toEqual(['+', '3']);
+  expect(renderer.root.findAllByProps({ role: 'tablist' })).toHaveLength(0);
+  await click('View all');
+  expect(renderer.root.findAllByProps({ role: 'tablist' })).toHaveLength(1);
+  await reply(pending(`/api/events/${id}/guests?status=going`), {
+    items: [
+      {
+        handle: 'a1',
+        displayName: 'Alexandra Montgomery-Whitfield',
+        hasAvatar: true,
+      },
+    ],
+    next: null,
+  });
+  expect(visibleText()).toContain('Alexandra Montgomery-Whitfield');
+  await click('Close guests');
+  expect(renderer.root.findAllByProps({ role: 'tablist' })).toHaveLength(0);
+});
+
+it('shows maybe guests in the row when no one is going', async () => {
+  await mount(createElement(EventPage, { id, linkProfiles: true }));
+  await reply(pending(`/api/events/${id}`), {
+    event: view({ viewer: host, counts: { going: 0, maybe: 2, declined: 0 } }),
+  });
+  expect(visibleText()).toContain('2 maybe');
+  expect(pending(`/api/events/${id}/guests`).path).toBe(
+    `/api/events/${id}/guests?status=maybe`,
+  );
+});
+
 it('opens the authorized event cover in the shared photo modal and closes it', async () => {
   await mount(createElement(EventPage, { id, linkProfiles: true }));
   await reply(pending(`/api/events/${id}`), { event: view({ counts: null }) });

@@ -299,10 +299,10 @@ export function EventPage({
                 className="event-guests"
                 aria-labelledby={`guests-${id}`}
               >
-                <h2 id={`guests-${id}`}>Guests</h2>
                 <EventGuests
                   key={JSON.stringify(event.counts)}
                   id={id}
+                  headingId={`guests-${id}`}
                   counts={event.counts}
                   linkProfiles={linkProfiles}
                 />
