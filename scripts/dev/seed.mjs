@@ -112,6 +112,119 @@ const comments = [
   'Tiny paws 😭',
   'Good dog.',
 ];
+// Events give the bootstrap member every relationship the Events tab shows:
+// hosting with a co-host, co-hosting, answered, invited (link opened only),
+// asked to co-host, cancelled, and past. Days are relative to today;
+// answers map handles to going, maybe, or declined.
+const zone = 'America/Los_Angeles';
+const seedEvents = [
+  {
+    host: 'alex',
+    cohost: 'maya',
+    title: 'Saturday dog park meetup',
+    description:
+      'Bring a ball and a towel. We’ll grab coffee after if the dogs are tired enough.',
+    location: 'Volunteer Park, off-leash area',
+    days: 5,
+    hour: 10,
+    hours: 2,
+    colorTheme: 'after-hours',
+    fontPairing: 'classic',
+    answers: {
+      maya: 'going',
+      jonah: 'going',
+      priya: 'maybe',
+      lena: 'declined',
+    },
+    messages: [
+      ['jonah', 'Biscuit is already packed.'],
+      ['priya', 'Might bring one of the fosters!'],
+    ],
+  },
+  {
+    host: 'maya',
+    title: 'Corgi birthday party',
+    description:
+      'Pupcakes at 3. Hats are optional for humans and strongly encouraged for dogs.',
+    location: 'Maya’s backyard',
+    days: 9,
+    hour: 15,
+    hours: 3,
+    colorTheme: 'cherry',
+    fontPairing: 'handwritten',
+    answers: { alex: 'going', theo: 'going', lena: 'maybe', sam: 'going' },
+    messages: [
+      ['alex', 'Wouldn’t miss it.'],
+      ['maya', 'Parking is on the street out front.'],
+    ],
+  },
+  {
+    host: 'priya',
+    title: 'Foster adoption day',
+    description: 'Four very good dogs looking for homes. Come say hi.',
+    location: 'Ballard Community Center',
+    days: 14,
+    hour: 11,
+    hours: 4,
+    colorTheme: 'citrus',
+    fontPairing: 'original',
+    invited: ['alex'],
+    answers: { nora: 'going', rafael: 'maybe' },
+  },
+  {
+    host: 'jonah',
+    askToHost: 'alex',
+    title: 'Rattlesnake Ledge hike',
+    description: 'Moderate pace, leashes required on the trail.',
+    location: 'Rattlesnake Lake trailhead',
+    days: 20,
+    hour: 8,
+    hours: 5,
+    colorTheme: 'evergreen',
+    fontPairing: 'rubik-wet-paint',
+    answers: { sam: 'going' },
+  },
+  {
+    host: 'theo',
+    cancel: true,
+    title: 'Candlelit pup dinner',
+    description: 'Dogs eat first.',
+    location: 'Theo’s place',
+    days: 3,
+    hour: 19,
+    hours: 3,
+    colorTheme: 'candlelight',
+    fontPairing: 'monoton',
+    answers: { alex: 'going', jonah: 'maybe' },
+  },
+  {
+    host: 'alex',
+    past: true,
+    title: 'Beach day at Golden Gardens',
+    description: 'Sandy dogs, sunset, and a lot of fetch.',
+    location: 'Golden Gardens Park',
+    days: -12,
+    hour: 16,
+    hours: 4,
+    colorTheme: 'pool',
+    fontPairing: 'bungee-shade',
+    answers: { lena: 'going', maya: 'going', theo: 'maybe' },
+    messages: [['lena', 'Best day. Same time next year?']],
+  },
+  {
+    host: 'lena',
+    past: true,
+    title: 'Wine and whiskers',
+    description: 'A grown-up evening. Well-behaved dogs welcome.',
+    location: 'Lena’s apartment',
+    days: -5,
+    hour: 19,
+    hours: 3,
+    colorTheme: 'wine',
+    fontPairing: 'fascinate-inline',
+    answers: { alex: 'going', priya: 'going' },
+  },
+];
 const postsPerMember = { alex: 4, maya: 4, jonah: 3, priya: 4, theo: 2 };
 const defaultPosts = 2;
 const pick = (list, i) => list[i % list.length];
@@ -119,6 +232,7 @@ const pick = (list, i) => list[i % list.length];
 // Photos come from the public dog.ceo API and are cached outside source control.
 const photoCount =
   members.length +
+  seedEvents.length +
   members.reduce((n, m) => n + (postsPerMember[m.handle] ?? defaultPosts), 0);
 await mkdir(photoDir, { recursive: true });
 let photos = (await readdir(photoDir)).filter((f) => f.endsWith('.jpg'));
@@ -155,6 +269,25 @@ wrangler('d1', 'migrations', 'apply', 'slowmass', '--local');
 const now = Date.now();
 const iso = new Date(now).toISOString();
 const expires = new Date(now + 3600000).toISOString();
+// A UTC instant for an hour of the local day in the events' time zone.
+function zonedTime(days, hour) {
+  const date = new Date(now + days * 86400000);
+  const [y, m, d] = new Intl.DateTimeFormat('en-CA', { timeZone: zone })
+    .format(date)
+    .split('-')
+    .map(Number);
+  const guess = Date.UTC(y, m - 1, d, hour);
+  const offset = new Intl.DateTimeFormat('en-US', {
+    timeZone: zone,
+    timeZoneName: 'longOffset',
+  })
+    .formatToParts(new Date(guess))
+    .find((part) => part.type === 'timeZoneName')
+    .value.match(/([+-])(\d\d):(\d\d)/);
+  const minutes =
+    (Number(offset[2]) * 60 + Number(offset[3])) * (offset[1] === '-' ? -1 : 1);
+  return guess - minutes * 60000;
+}
 const quote = (v) =>
   v === null ? 'NULL' : `'${String(v).replace(/'/g, "''")}'`;
 const sql = [];
@@ -178,37 +311,45 @@ for (const m of members) {
 await writeFile(sqlFile, sql.join('\n'));
 wrangler('d1', 'execute', 'slowmass', '--local', '--file', sqlFile);
 
-const worker = await unstable_startWorker({
-  config: 'wrangler.jsonc',
-  dev: {
-    server: { hostname: 'localhost', port: 8787 },
-    inspector: false,
-    logLevel: 'warn',
-  },
-});
-try {
-  await worker.ready;
-  const api = async (handle, method, path, body, headers = {}) => {
-    const response = await fetch(origin + path, {
-      method,
-      headers: {
-        Origin: origin,
-        Cookie: cookies[handle],
-        ...(body instanceof Uint8Array
-          ? { 'Content-Type': 'image/jpeg' }
-          : { 'Content-Type': 'application/json' }),
-        ...headers,
-      },
-      body:
-        body === undefined || body instanceof Uint8Array
-          ? body
-          : JSON.stringify(body),
-    });
-    if (!response.ok)
-      throw new Error(`${method} ${path} as ${handle}: ${response.status}`);
-    return response.json();
-  };
+// Seeding drives the application's own API through a local worker.
+const api = async (handle, method, path, body, headers = {}) => {
+  const response = await fetch(origin + path, {
+    method,
+    headers: {
+      Origin: origin,
+      Cookie: cookies[handle],
+      ...(body instanceof Uint8Array
+        ? { 'Content-Type': 'image/jpeg' }
+        : { 'Content-Type': 'application/json' }),
+      ...headers,
+    },
+    body:
+      body === undefined || body instanceof Uint8Array
+        ? body
+        : JSON.stringify(body),
+  });
+  if (!response.ok)
+    throw new Error(`${method} ${path} as ${handle}: ${response.status}`);
+  return response.json();
+};
 
+async function withWorker(seed) {
+  const worker = await unstable_startWorker({
+    config: 'wrangler.jsonc',
+    dev: {
+      server: { hostname: 'localhost', port: 8787 },
+      inspector: false,
+      logLevel: 'warn',
+    },
+  });
+  try {
+    await worker.ready;
+    await seed();
+  } finally {
+    await worker.dispose();
+  }
+}
+await withWorker(async () => {
   console.log('Creating profiles…');
   for (const m of members) {
     await api(m.handle, 'PUT', '/api/people/self', {
@@ -263,9 +404,77 @@ try {
           body: 'Ha, thank you!',
         });
     }
-} finally {
-  await worker.dispose();
-}
+});
+// Each member may start five photo uploads a day, which profiles and posts
+// have used up; age those attempts past the daily window before events add
+// covers.
+wrangler(
+  'd1',
+  'execute',
+  'slowmass',
+  '--local',
+  '--command',
+  'UPDATE photo_attempt SET created_at=created_at-86400000',
+);
+const pastEvents = [];
+await withWorker(async () => {
+  console.log('Creating events…');
+  // Answers close once an event is over, so past events are created in the
+  // future, answered, and moved back after the worker stops.
+  for (const [i, e] of seedEvents.entries()) {
+    const id = randomUUID();
+    const answerDays = e.past ? 1 + i : e.days;
+    const startsAt = zonedTime(answerDays, e.hour);
+    await api(e.host, 'POST', '/api/events', {
+      id,
+      title: e.title,
+      description: e.description,
+      location: e.location,
+      startsAt,
+      endsAt: startsAt + e.hours * 3600000,
+      timeZone: zone,
+      appearance: { colorTheme: e.colorTheme, fontPairing: e.fontPairing },
+    });
+    await api(e.host, 'PUT', `/api/events/${id}/photo`, await photo(), {
+      'Idempotency-Key': randomUUID(),
+    });
+    if (e.past) {
+      const start = zonedTime(e.days, e.hour);
+      pastEvents.push([id, start, start + e.hours * 3600000]);
+    }
+    const { event } = await api(e.host, 'GET', `/api/events/${id}`);
+    const token = new URL(event.url).pathname.split('/').pop();
+    for (const handle of [...Object.keys(e.answers), ...(e.invited ?? [])])
+      if (handle !== e.host)
+        await api(handle, 'POST', '/api/events/open', { token });
+    await api(e.host, 'POST', `/api/events/${id}/response`, {
+      status: 'going',
+    });
+    for (const [handle, status] of Object.entries(e.answers))
+      if (handle !== e.host)
+        await api(handle, 'POST', `/api/events/${id}/response`, { status });
+    for (const [handle, body] of e.messages ?? [])
+      await api(handle, 'POST', `/api/events/${id}/messages`, {
+        id: randomUUID(),
+        body,
+      });
+    const hostId = (handle) => members.find((m) => m.handle === handle).id;
+    if (e.cohost) {
+      await api(e.host, 'POST', `/api/events/${id}/hosts`, {
+        userId: hostId(e.cohost),
+      });
+      await api(e.cohost, 'POST', `/api/events/${id}/hosting`);
+    }
+    if (e.askToHost)
+      await api(e.host, 'POST', `/api/events/${id}/hosts`, {
+        userId: hostId(e.askToHost),
+      });
+    if (e.cancel)
+      await api(e.host, 'POST', `/api/events/${id}/cancel`, {
+        messageId: randomUUID(),
+      });
+  }
+});
 wrangler(
   'd1',
   'execute',
@@ -274,6 +483,20 @@ wrangler(
   '--command',
   "DELETE FROM session WHERE id LIKE 'seed-session-%'",
 );
+if (pastEvents.length)
+  wrangler(
+    'd1',
+    'execute',
+    'slowmass',
+    '--local',
+    '--command',
+    pastEvents
+      .map(
+        ([id, start, end]) =>
+          `UPDATE event SET starts_at=${start},ends_at=${end} WHERE id=${quote(id)};`,
+      )
+      .join(''),
+  );
 await rm(sqlFile);
 console.log(
   `Seeded ${members.length} members. Run \`npm run dev\` and sign in as ${members[0].email}.`,

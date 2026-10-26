@@ -1,4 +1,5 @@
 import type { NotificationCategory } from '../../../shared/notification-categories';
+import { EVENT_OVER_AFTER } from '../../membership';
 // The source index finds recent candidates without aggregating lifetime history.
 // Visibility remains authoritative at read time, including when a block hides
 // the newest like and the group's visible timestamp must move backwards.
@@ -8,15 +9,29 @@ const visibleActor = (alias: string) => `
 const latestLike = `SELECT n.actor_id FROM activity_source n
  WHERE n.recipient_id=e.recipient_id AND n.event_key=e.event_key AND ${visibleActor('n')}
  ORDER BY n.created_at DESC,n.actor_id DESC LIMIT 1`;
-// Event keys name their source, like comment keys: 'event_response:<event>.<member>'
-// and 'event_message:<message>'. Event activity follows event access: a
-// published event whose creator is active and unblocked, which the recipient
-// still hosts or has answered.
+// Event keys name their source, like comment keys: 'event_response:<event>.<member>',
+// 'event_message:<message>', 'host_invite:<event>' and 'host_accepted:<event>.<member>'.
+// Event activity follows event access: a published event whose creator is
+// active and unblocked, which the recipient still hosts or has answered.
 const eventId = `CASE e.kind WHEN 'event_response' THEN substr(e.event_key,16,36)
- WHEN 'event_message' THEN (SELECT event_id FROM event_message WHERE id=substr(e.event_key,15)) END`;
+ WHEN 'event_message' THEN (SELECT event_id FROM event_message WHERE id=substr(e.event_key,15))
+ WHEN 'host_invite' THEN substr(e.event_key,13,36)
+ WHEN 'host_accepted' THEN substr(e.event_key,15,36) END`;
 const eventAccess = `ev.state='published'
  AND EXISTS(SELECT 1 FROM membership c WHERE c.user_id=ev.creator_id AND c.status='active')
  AND NOT EXISTS(SELECT 1 FROM block WHERE (blocker_id=e.recipient_id AND target_id=ev.creator_id) OR (blocker_id=ev.creator_id AND target_id=e.recipient_id))`;
+const recipientHosts = `EXISTS(SELECT 1 FROM event_host WHERE event_id=ev.id AND user_id=e.recipient_id)`;
+// A co-host invitation shows while it can still be accepted: its sender hosts,
+// both people stay connected, and the event is current and open. Once
+// accepted, it remains as the record of hosting while the recipient hosts.
+const hostInvitation = `EXISTS(SELECT 1 FROM event ev WHERE ev.id=substr(e.event_key,13,36) AND ${eventAccess}
+ AND (${recipientHosts}
+   OR (ev.cancelled_at IS NULL AND COALESCE(ev.ends_at,ev.starts_at+${EVENT_OVER_AFTER})>unixepoch()*1000
+     AND EXISTS(SELECT 1 FROM event_host_member_invite i
+       JOIN event_host h ON h.event_id=i.event_id AND h.user_id=i.invited_by
+       WHERE i.event_id=ev.id AND i.user_id=e.recipient_id AND i.invited_by=e.actor_id AND i.link_id=ev.link_id)
+     AND EXISTS(SELECT 1 FROM follow WHERE status='accepted'
+       AND ((follower_id=e.actor_id AND target_id=e.recipient_id) OR (follower_id=e.recipient_id AND target_id=e.actor_id))))))`;
 const visibleSource = `
  EXISTS(SELECT 1 FROM membership v WHERE v.user_id=e.recipient_id AND v.status='active')
  AND ${visibleActor('e')}
@@ -30,6 +45,10 @@ const visibleSource = `
      WHERE ${eventAccess}
        AND (EXISTS(SELECT 1 FROM event_host WHERE event_id=ev.id AND user_id=e.recipient_id)
          OR EXISTS(SELECT 1 FROM event_response WHERE event_id=ev.id AND user_id=e.recipient_id))))
+   OR (e.kind='host_invite' AND ${hostInvitation})
+   OR (e.kind='host_accepted' AND EXISTS(SELECT 1 FROM event ev
+     JOIN event_host h ON h.event_id=ev.id AND h.user_id=e.actor_id
+     WHERE ev.id=substr(e.event_key,15,36) AND ${eventAccess} AND ${recipientHosts}))
    OR (e.kind='joined'
      AND EXISTS(SELECT 1 FROM membership child WHERE child.user_id=e.actor_id AND child.invited_by=e.recipient_id)
      AND EXISTS(SELECT 1 FROM avatar WHERE user_id=e.actor_id)
@@ -50,13 +69,17 @@ export type Notification = {
     | 'likes'
     | 'comment'
     | 'event_response'
-    | 'event_message';
+    | 'event_message'
+    | 'host_invite'
+    | 'host_accepted';
   postId: string | null;
   eventId: string | null;
   eventTitle: string | null;
   // The guest's current answer, or the kind of event message.
   response: 'going' | 'maybe' | 'declined' | null;
   messageKind: 'message' | 'cancelled' | null;
+  // Whether the recipient of a co-host invitation has accepted it.
+  hosting: boolean;
   handle: string | null;
   // Event activity names people, since guests never choose a username.
   displayName: string | null;
@@ -89,17 +112,22 @@ export function parsePage(
   }
 }
 export function validNotificationKey(key: string) {
-  return /^(?:(?:request|follower|joined|likes|comment):[a-zA-Z0-9-]{1,64}|event_response:[a-f0-9-]{36}\.[a-zA-Z0-9-]{1,64}|event_message:[a-f0-9-]{36})$/.test(
+  return /^(?:(?:request|follower|joined|likes|comment):[a-zA-Z0-9-]{1,64}|event_response:[a-f0-9-]{36}\.[a-zA-Z0-9-]{1,64}|event_message:[a-f0-9-]{36}|host_invite:[a-f0-9-]{36}|host_accepted:[a-f0-9-]{36}\.[a-zA-Z0-9-]{1,64})$/.test(
     key,
   );
 }
 // Older open clients cannot render newer kinds; this affects rendering only.
-export type ActivityKinds = { joined: boolean; events: boolean };
-const allKinds: ActivityKinds = { joined: true, events: true };
+export type ActivityKinds = {
+  joined: boolean;
+  events: boolean;
+  hosting: boolean;
+};
+const allKinds: ActivityKinds = { joined: true, events: true, hosting: true };
 function kindFilter(kinds: ActivityKinds) {
   const hidden = [
     ...(kinds.joined ? [] : ["'joined'"]),
     ...(kinds.events ? [] : ["'event_response'", "'event_message'"]),
+    ...(kinds.hosting ? [] : ["'host_invite'", "'host_accepted'"]),
   ];
   return hidden.length ? `e.kind NOT IN (${hidden.join(',')})` : '1';
 }
@@ -138,8 +166,9 @@ export async function notificationPage(
     (SELECT title FROM event WHERE id=${eventId}) AS eventTitle,
     CASE WHEN e.kind='event_response' THEN (SELECT status FROM event_response WHERE event_id=${eventId} AND user_id=e.actor_id) END AS response,
     CASE WHEN e.kind='event_message' THEN (SELECT kind FROM event_message WHERE id=substr(e.event_key,15)) END AS messageKind,
+    (e.kind='host_invite' AND EXISTS(SELECT 1 FROM event_host WHERE event_id=${eventId} AND user_id=e.recipient_id)) AS hosting,
     CASE WHEN e.kind!='likes' THEN (SELECT handle FROM profile WHERE user_id=e.actor_id) END AS handle,
-    CASE WHEN e.kind IN ('event_response','event_message') THEN (SELECT display_name FROM profile WHERE user_id=e.actor_id) END AS displayName,
+    CASE WHEN e.kind IN ('event_response','event_message','host_invite','host_accepted') THEN (SELECT display_name FROM profile WHERE user_id=e.actor_id) END AS displayName,
     CASE WHEN e.kind='comment' THEN (SELECT body FROM comment WHERE id=substr(e.event_key,9))
       WHEN e.kind='event_message' THEN (SELECT body FROM event_message WHERE id=substr(e.event_key,15)) END AS body,
     CASE WHEN e.kind='likes' THEN (SELECT COUNT(*) FROM activity_source n WHERE n.recipient_id=e.recipient_id AND n.event_key=e.event_key AND ${visibleActor('n')}) ELSE 1 END AS count,
@@ -162,10 +191,11 @@ export async function notificationPage(
     )
     .bind(actor, cursor?.time ?? Number.MAX_SAFE_INTEGER, cursor?.key ?? '')
     .all<
-      Omit<Notification, 'unread' | 'canFollowBack' | 'more'> & {
+      Omit<Notification, 'unread' | 'canFollowBack' | 'more' | 'hosting'> & {
         unread: number;
         canFollowBack: number;
         more: number;
+        hosting: number;
       }
     >();
   const items = rows.results.slice(0, 20).map((item) => ({
@@ -173,6 +203,7 @@ export async function notificationPage(
       unread: Boolean(item.unread),
       canFollowBack: Boolean(item.canFollowBack),
       more: Boolean(item.more),
+      hosting: Boolean(item.hosting),
     })),
     last = items.at(-1);
   return {

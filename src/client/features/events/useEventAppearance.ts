@@ -18,6 +18,7 @@ export function useEventAppearance(appearance?: EventAppearance) {
       '--paper': palette.paper,
       '--paper-edge': palette.edge,
       '--nav': palette.nav,
+      '--nav-ink': palette.navInk,
       '--surface': palette.surface,
       '--ink': palette.ink,
       '--muted': palette.muted,

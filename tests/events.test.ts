@@ -920,7 +920,7 @@ it('invites connected members in-app, shares guest access, and preserves consent
   });
   expect(await view('bob')).toMatchObject({
     pendingHostMembers: [],
-    viewer: { isHost: false, hostInvited: true },
+    viewer: { isHost: false, hostInvited: true, hostInvitedBy: 'Alice' },
   });
   expect(
     await (await runtime.request('bob', '/api/events')).json(),
@@ -940,7 +940,7 @@ it('invites connected members in-app, shares guest access, and preserves consent
   const accepted = await Promise.all([accept('bob'), accept('bob')]);
   expect(accepted.map((r) => r.status)).toEqual([200, 200]);
   expect(await view('bob')).toMatchObject({
-    viewer: { isHost: true, hostInvited: false },
+    viewer: { isHost: true, hostInvited: false, hostInvitedBy: null },
   });
   expect((await view('alice')).pendingHostMembers).toEqual([]);
   expect((await add('alice', 'carol')).status).toBe(200);
@@ -985,6 +985,162 @@ it('invites connected members in-app, shares guest access, and preserves consent
         .all()
     ).results,
   ).toEqual(beforeMembership);
+});
+
+it('notifies co-host invitations, tells the inviter about acceptance, and quiets invitations after a decline', async () => {
+  const { id } = await event();
+  const title = details().title;
+  const hostingActivity = async (actor: string) =>
+    (
+      (await (
+        await runtime.request(
+          actor,
+          '/api/notifications?includeJoined=1&includeEvents=1&includeHosting=1',
+        )
+      ).json()) as { items: (Activity & { hosting: boolean })[] }
+    ).items.filter((item) => item.kind.startsWith('host_'));
+  const hostingUnread = async (actor: string) =>
+    (
+      (await (
+        await runtime.request(
+          actor,
+          '/api/notifications/unread-count?includeJoined=1&includeEvents=1&includeHosting=1',
+        )
+      ).json()) as { count: number }
+    ).count;
+  const queuedEmail = (actor: string) =>
+    runtime.db
+      .prepare(
+        "SELECT event_key AS key FROM email_delivery WHERE recipient_id=? AND event_key LIKE 'host_%'",
+      )
+      .bind(actor)
+      .all<{ key: string }>()
+      .then((rows) => rows.results.map((row) => row.key));
+  const add = (userId: string) =>
+    runtime.request('alice', `/api/events/${id}/hosts`, 'POST', { userId });
+  const hosting = (actor: string, method: 'POST' | 'DELETE') =>
+    runtime.request(actor, `/api/events/${id}/hosting`, method);
+  await connect('alice', 'bob');
+  await connect('carol', 'alice');
+  // Connecting already produced follower activity; count only what follows.
+  const before = {
+    bob: await hostingUnread('bob'),
+    carol: await hostingUnread('carol'),
+  };
+
+  // A retried invitation is one unread notification with one queued email.
+  expect(
+    (await Promise.all([add('bob'), add('bob')])).map((r) => r.status),
+  ).toEqual([200, 200]);
+  const [invite] = await hostingActivity('bob');
+  expect(invite).toMatchObject({
+    key: `host_invite:${id}`,
+    kind: 'host_invite',
+    eventId: id,
+    eventTitle: title,
+    displayName: 'Alice',
+    hosting: false,
+    unread: true,
+  });
+  expect(await hostingUnread('bob')).toBe(before.bob + 1);
+  expect(await queuedEmail('bob')).toEqual([`host_invite:${id}`]);
+  // Older open clients never receive rows they cannot render.
+  expect((await activity('bob')).map((item) => item.kind)).not.toContain(
+    'host_invite',
+  );
+  expect(await unread('bob')).toBe(before.bob);
+
+  // Withdrawing removes the notification and its queued email.
+  expect(
+    (
+      await runtime.request('alice', `/api/events/${id}/hosts`, 'DELETE', {
+        userId: 'bob',
+      })
+    ).status,
+  ).toBe(200);
+  expect(await hostingActivity('bob')).toEqual([]);
+  expect(await queuedEmail('bob')).toEqual([]);
+
+  // Accepting keeps a read record for the new host and tells the inviter.
+  expect((await add('bob')).status).toBe(200);
+  const [again] = await hostingActivity('bob');
+  expect(again.version).toBeGreaterThan(invite.version);
+  expect(
+    (await Promise.all([hosting('bob', 'POST'), hosting('bob', 'POST')])).map(
+      (r) => r.status,
+    ),
+  ).toEqual([200, 200]);
+  expect(await hostingActivity('bob')).toEqual([
+    expect.objectContaining({
+      kind: 'host_invite',
+      hosting: true,
+      unread: false,
+    }),
+  ]);
+  expect(await hostingUnread('bob')).toBe(before.bob);
+  expect(await hostingActivity('alice')).toEqual([
+    expect.objectContaining({
+      key: `host_accepted:${id}.bob`,
+      kind: 'host_accepted',
+      eventId: id,
+      displayName: 'Bob',
+      unread: true,
+    }),
+  ]);
+  // Accepted-invitation alerts are push only by default.
+  expect(await queuedEmail('alice')).toEqual([]);
+
+  // Leaving hosting retires both records.
+  expect(
+    (await runtime.request('bob', `/api/events/${id}/hosts/bob`, 'DELETE'))
+      .status,
+  ).toBe(200);
+  expect(await hostingActivity('bob')).toEqual([]);
+  expect(await hostingActivity('alice')).toEqual([]);
+
+  // Declining is silent for the inviter and removes the invitation.
+  expect((await add('carol')).status).toBe(200);
+  expect(await hostingUnread('carol')).toBe(before.carol + 1);
+  expect((await hosting('carol', 'DELETE')).status).toBe(200);
+  expect(await hostingActivity('carol')).toEqual([]);
+  expect(await hostingActivity('alice')).toEqual([]);
+  expect(await queuedEmail('carol')).toEqual([]);
+  // Inviting again after a decline arrives quietly: read, with no alert.
+  expect((await add('carol')).status).toBe(200);
+  expect(await hostingActivity('carol')).toEqual([
+    expect.objectContaining({
+      kind: 'host_invite',
+      hosting: false,
+      unread: false,
+    }),
+  ]);
+  expect(await hostingUnread('carol')).toBe(before.carol);
+  expect(
+    await runtime.db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM email_delivery e JOIN activity_read_state r ON r.revision=e.version WHERE e.recipient_id='carol' AND r.is_read=0",
+      )
+      .first('n'),
+  ).toBe(0);
+  // Accepting clears the decline, so later invitations notify normally.
+  expect((await hosting('carol', 'POST')).status).toBe(200);
+  expect(
+    (await runtime.request('carol', `/api/events/${id}/hosts/carol`, 'DELETE'))
+      .status,
+  ).toBe(200);
+  expect((await add('carol')).status).toBe(200);
+  expect(await hostingUnread('carol')).toBe(before.carol + 1);
+
+  // A cancelled event's open invitation leaves Activity.
+  expect(
+    (
+      await runtime.request('alice', `/api/events/${id}/cancel`, 'POST', {
+        messageId: crypto.randomUUID(),
+        body: '',
+      })
+    ).status,
+  ).toBe(200);
+  expect(await hostingActivity('carol')).toEqual([]);
 });
 
 it('searches only eligible connections and rechecks follow, block and event state on invitation and acceptance', async () => {

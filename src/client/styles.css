@@ -1797,7 +1797,7 @@ img.composer-avatar {
 :is(.event-preview-shell, .event-join) .event-details,
 .event-preview-intro,
 .event-join-form {
-  padding-inline: 32px;
+  padding-inline: var(--event-inset, 32px);
 }
 :is(.event-preview-shell, .event-join) .event-title {
   margin: 20px 0 8px;
@@ -2506,7 +2506,7 @@ a.profile-tab {
 @media (max-width: 899px) {
   .photo-screen .event-details,
   .photo-screen .event-appearance-controls {
-    padding-inline: 32px;
+    padding-inline: var(--event-inset, 32px);
   }
   .photo-screen .event > .event-photo,
   .event-summary > .event-photo {
@@ -2593,23 +2593,47 @@ a.profile-tab {
 :root[data-event-appearance] {
   accent-color: var(--brand);
   /* Accents at the viewport's sides, anchored to the viewport. The left one
-     starts after the desktop sidebar (--edge-start). */
-  --edge-width: clamp(20px, 9vw, 160px);
+     starts after the desktop sidebar (--edge-start). Each accent eases out:
+     its share of the color is (1 - t)², strongest at the viewport edge and
+     flattening into paper without a visible band end. Mixing in oklab keeps
+     the midtones from going muddy. */
+  --edge-width: clamp(20px, 5vw, 40px);
   --edge-start: 0px;
-  --canvas: linear-gradient(
-      to right,
-      var(--paper-edge) var(--edge-start),
-      var(--paper) calc(var(--edge-start) + var(--edge-width)),
-      var(--paper) calc(100% - var(--edge-width)),
-      var(--paper-edge)
-    )
-    fixed var(--paper);
+  --edge-fade:
+    var(--paper-edge) 0%,
+    color-mix(in oklab, var(--paper-edge) 76.6%, var(--paper)) 12.5%,
+    color-mix(in oklab, var(--paper-edge) 56.2%, var(--paper)) 25%,
+    color-mix(in oklab, var(--paper-edge) 39.1%, var(--paper)) 37.5%,
+    color-mix(in oklab, var(--paper-edge) 25%, var(--paper)) 50%,
+    color-mix(in oklab, var(--paper-edge) 14.1%, var(--paper)) 62.5%,
+    color-mix(in oklab, var(--paper-edge) 6.2%, var(--paper)) 75%,
+    color-mix(in oklab, var(--paper-edge) 1.6%, var(--paper)) 87.5%,
+    var(--paper) 100%;
+  --canvas:
+    linear-gradient(to right, var(--edge-fade)) var(--edge-start) 0 /
+      var(--edge-width) 100% no-repeat fixed,
+    linear-gradient(to left, var(--edge-fade)) 100% 0 / var(--edge-width) 100%
+      no-repeat fixed,
+    var(--paper);
+  /* Content clears the accents by 12px. */
+  --event-inset: calc(var(--edge-width) + 12px);
   background: var(--canvas);
 }
 @media (min-width: 900px) {
   :root[data-event-appearance] {
+    --edge-width: clamp(40px, 7vw, 140px);
+  }
+  :root[data-event-appearance]:has(.app-navigation) {
     --edge-start: 72px;
   }
+  /* The member column sits between the sidebar's accent and the right one. */
+  [data-event-appearance] .member-shell:has(.app-navigation) {
+    padding-inline: calc(var(--edge-start) + var(--event-inset))
+      var(--event-inset);
+  }
+}
+[data-event-appearance] .masthead {
+  padding-inline: max(var(--event-inset), (100% - 640px) / 2);
 }
 /* The header repaints the same viewport-anchored canvas so the edge accents
    run unbroken behind it; content columns let it show through. Navigation
@@ -2617,14 +2641,21 @@ a.profile-tab {
 [data-event-appearance] .masthead {
   background: var(--canvas);
 }
+/* The deep bar gets its own light ink: icons, labels, the wordmark, avatar
+   rings, focus outlines and the Activity badge (inverted) all follow it. */
 [data-event-appearance] .app-navigation {
+  --ink: var(--nav-ink);
+  --detail: var(--nav-ink);
+  --brand: var(--nav-ink);
+  --paper: var(--nav);
+  --line: var(--nav);
   background: var(--nav);
-  border-color: var(--nav);
+  color: var(--nav-ink);
 }
 [data-event-appearance]
   .app-navigation
   .nav-link:is(:hover, [aria-current='page']) {
-  background: color-mix(in srgb, var(--ink) 12%, transparent);
+  background: color-mix(in srgb, var(--nav-ink) 16%, transparent);
 }
 [data-event-appearance] :is(.member-content, .guest-shell .account-section) {
   background: transparent;

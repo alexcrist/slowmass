@@ -111,7 +111,13 @@ export function EventPage({
   useEffect(() => () => deletion.current?.abort(), []);
   const [failure, setFailure] = useState('');
   const [dialog, setDialog] = useState<
-    'link' | 'update-blast' | 'cancel' | 'delete' | 'calendar' | null
+    | 'link'
+    | 'update-blast'
+    | 'cancel'
+    | 'delete'
+    | 'calendar'
+    | 'decline-hosting'
+    | null
   >(null);
   const [messageId] = useState(() => crypto.randomUUID());
   const [updateBlastsSent, setUpdateBlastsSent] = useState(0);
@@ -157,12 +163,13 @@ export function EventPage({
     });
   }
   // Accepting is the member's consent to appear as a host to everyone with
-  // the link.
+  // the link. Declining is confirmed first, since only a host can re-invite.
   function host(accept: boolean) {
     void run(async () => {
       await api(`/api/events/${id}/hosting`, {
         method: accept ? 'POST' : 'DELETE',
       });
+      setDialog(null);
       refresh();
     });
   }
@@ -254,8 +261,8 @@ export function EventPage({
           {event.viewer.hostInvited && (
             <div className="event-notice event-host-invite">
               <p>
-                You’ve been asked to host this event. Hosts appear with their
-                name and profile photo to everyone with the link.
+                {event.viewer.hostInvitedBy ?? 'A host'} invited you to co-host.
+                Co-hosts are shown to everyone with the link.
               </p>
               <button
                 type="button"
@@ -263,13 +270,13 @@ export function EventPage({
                 disabled={busy}
                 onClick={() => host(true)}
               >
-                Become a host
+                Accept co-host invitation
               </button>
               <button
                 type="button"
                 className="text-button"
                 disabled={busy}
-                onClick={() => host(false)}
+                onClick={() => setDialog('decline-hosting')}
               >
                 Decline
               </button>
@@ -322,11 +329,6 @@ export function EventPage({
                   ? 'RSVP to see who’s going.'
                   : 'The guest list is hidden. RSVPs are closed.'}
               </p>
-              {open && (
-                <p className="status-copy">
-                  Any answer unlocks the guest list and event activity.
-                </p>
-              )}
             </section>
           )}
         </div>
@@ -346,6 +348,23 @@ export function EventPage({
             setUpdateBlastsSent((value) => value + 1);
           }}
         />
+      )}
+      {dialog === 'decline-hosting' && (
+        <ConfirmDialog
+          title="Decline co-host invitation?"
+          confirmLabel="Decline"
+          danger
+          busy={busy}
+          error={failure}
+          onClose={closeDialog}
+          onConfirm={() => host(false)}
+        >
+          <p>
+            You’ll still be able to see the event.{' '}
+            {event.viewer.hostInvitedBy ?? 'A host'} would need to invite you
+            again for you to co-host.
+          </p>
+        </ConfirmDialog>
       )}
       {dialog === 'cancel' && (
         <ConfirmDialog

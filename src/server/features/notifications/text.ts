@@ -95,6 +95,16 @@ export function notificationText(item: Content): NotificationText {
       summary: `${name} cancelled ${event}.`,
       path: eventPath,
     }),
+    host_invite: () => ({
+      title: event,
+      summary: `${name} asked you to co-host ${event}.`,
+      path: eventPath,
+    }),
+    host_accepted: () => ({
+      title: event,
+      summary: `${name} is now co-hosting ${event}.`,
+      path: eventPath,
+    }),
   };
   return {
     ...sentences[item.category](),

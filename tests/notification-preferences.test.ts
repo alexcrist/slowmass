@@ -79,6 +79,8 @@ it('returns defaults that match earlier behavior and saves validated choices', a
     { category: 'event_message', push: true, email: false },
     { category: 'update_blast', push: true, email: true },
     { category: 'event_cancelled', push: true, email: false },
+    { category: 'host_invite', push: true, email: true },
+    { category: 'host_accepted', push: true, email: false },
   ]);
   for (const body of [
     { category: 'nope', push: true, email: true },
@@ -114,7 +116,7 @@ it('returns defaults that match earlier behavior and saves validated choices', a
     email: false,
   });
   await runtime.db.prepare("DELETE FROM avatar WHERE user_id='bob'").run();
-  expect((await preferences('bob')).length).toBe(9);
+  expect((await preferences('bob')).length).toBe(11);
 });
 
 it('emails only unread activity, describes it, and unsubscribes one category by link', async () => {

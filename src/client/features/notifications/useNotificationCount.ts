@@ -14,7 +14,7 @@ export function useNotificationCount(enabled: boolean) {
     active.current = controller;
     const timeout = setTimeout(() => controller.abort(), 15_000);
     api<{ count: number }>(
-      '/api/notifications/unread-count?includeJoined=1&includeEvents=1',
+      '/api/notifications/unread-count?includeJoined=1&includeEvents=1&includeHosting=1',
       {
         signal: controller.signal,
       },

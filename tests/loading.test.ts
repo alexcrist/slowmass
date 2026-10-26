@@ -571,7 +571,7 @@ it('loads the feed after one bootstrap request without login, onboarding, or red
   expect(requests.map((request) => request.path)).toEqual([
     '/api/bootstrap',
     '/api/posts?',
-    '/api/notifications/unread-count?includeJoined=1&includeEvents=1',
+    '/api/notifications/unread-count?includeJoined=1&includeEvents=1&includeHosting=1',
   ]);
   await reply(pending('/api/posts?'), { items: [], next: null });
   expect(visibleText()).toContain('No posts on this page.');
@@ -2092,7 +2092,7 @@ it('paginates one activity timeline and resolves inline requests without leaving
   await reply(pending('/api/people/bob/accept'), { ok: true });
   expect(location.hash).toBe('#notifications');
   expect(pending('/api/notifications?').path).toBe(
-    '/api/notifications?cursor=&includeJoined=1&includeEvents=1',
+    '/api/notifications?cursor=&includeJoined=1&includeEvents=1&includeHosting=1',
   );
   await reply(pending('/api/notifications?'), { items: [], next: 'older' });
   await click('Older');
@@ -2103,7 +2103,7 @@ it('paginates one activity timeline and resolves inline requests without leaving
   expect(visibleText()).toContain('No activity on this page.');
   await click('Newer');
   expect(pending('/api/notifications?').path).toBe(
-    '/api/notifications?cursor=&includeJoined=1&includeEvents=1',
+    '/api/notifications?cursor=&includeJoined=1&includeEvents=1&includeHosting=1',
   );
   expect(
     requests.some(
@@ -2113,6 +2113,91 @@ it('paginates one activity timeline and resolves inline requests without leaving
         item.path.includes('/notifications/read'),
     ),
   ).toBe(false);
+});
+
+it('answers co-host invitations in Activity and shows accepted ones', async () => {
+  location.hash = '#notifications';
+  await mount(
+    createElement(MemberApp, {
+      initialProfile: ownProfile,
+      onSignOut: vi.fn(),
+      signingOut: false,
+    }),
+  );
+  const invite = (eventId: string, eventTitle: string, createdAt: number) => ({
+    key: `host_invite:${eventId}`,
+    kind: 'host_invite',
+    eventId,
+    eventTitle,
+    displayName: 'Alice',
+    hosting: false,
+    createdAt,
+  });
+  await reply(pending('/api/notifications?'), {
+    items: [
+      invite('e1', 'Dinner', 3),
+      invite('e2', 'Picnic', 2),
+      {
+        key: 'host_accepted:e3.bob',
+        kind: 'host_accepted',
+        eventId: 'e3',
+        eventTitle: 'Brunch',
+        displayName: 'Bob',
+        createdAt: 1,
+      },
+    ],
+    next: null,
+  });
+  expect(visibleText()).toContain('Alice asked you to co-host Dinner.');
+  expect(visibleText()).toContain('Bob is now co-hosting Brunch.');
+  const rows = () =>
+    renderer.root
+      .findByProps({ className: 'notification-list' })
+      .findAllByType('li');
+  expect(rows()[0].findByType('a').props.href).toBe('#event/e1');
+  expect(rows()[0].findAllByType('button')).toHaveLength(2);
+  expect(rows()[2].findAllByType('button')).toHaveLength(0);
+  // A failed answer keeps the actions for retry.
+  await click('Accept');
+  const failed = pending('/api/events/e1/hosting');
+  expect(failed.options?.method).toBe('POST');
+  await reply(
+    failed,
+    { error: 'This host invitation is no longer available.' },
+    409,
+  );
+  expect(visibleText()).toContain(
+    'This host invitation is no longer available.',
+  );
+  await click('Accept');
+  await reply(pending('/api/events/e1/hosting'), { ok: true });
+  expect(visibleText()).toContain('You’re co-hosting Dinner with Alice.');
+  expect(rows()[0].findAllByType('button')).toHaveLength(0);
+  // The accepted row stays while Activity revalidates.
+  await reply(pending('/api/notifications?'), {
+    items: [
+      { ...invite('e1', 'Dinner', 3), hosting: true },
+      invite('e2', 'Picnic', 2),
+    ],
+    next: null,
+  });
+  expect(visibleText()).toContain('You’re co-hosting Dinner with Alice.');
+  // Declining asks first, then removes the invitation.
+  await click('Decline');
+  expect(requests.some((item) => item.path === '/api/events/e2/hosting')).toBe(
+    false,
+  );
+  await confirmAction('Decline');
+  const declined = pending('/api/events/e2/hosting');
+  expect(declined.options?.method).toBe('DELETE');
+  await reply(declined, { ok: true });
+  expect(visibleText()).not.toContain('Picnic');
+  await reply(pending('/api/notifications?'), {
+    items: [{ ...invite('e1', 'Dinner', 3), hosting: true }],
+    next: null,
+  });
+  expect(visibleText()).not.toContain('Picnic');
+  expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
 });
 
 it('opens older follow-request links in Activity', async () => {

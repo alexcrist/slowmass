@@ -39,9 +39,10 @@ it('keeps readable text, action labels and focus indicators across light and eve
           `${name}: ${foreground} on ${background}`,
         ).toBeGreaterThanOrEqual(4.5);
     }
-    expect(contrast(p.ink, p.nav), `${name} navigation`).toBeGreaterThanOrEqual(
-      4.5,
-    );
+    expect(
+      contrast(p.navInk, p.nav),
+      `${name} navigation`,
+    ).toBeGreaterThanOrEqual(4.5);
     expect(
       contrast(p.muted, p.paper),
       `${name} secondary text`,

@@ -30,6 +30,7 @@ function kinds(c: { req: { query: (name: string) => string | undefined } }) {
   return {
     joined: c.req.query('includeJoined') === '1',
     events: c.req.query('includeEvents') === '1',
+    hosting: c.req.query('includeHosting') === '1',
   };
 }
 notifications.get('/', async (c) => {

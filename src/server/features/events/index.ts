@@ -410,6 +410,8 @@ async function readEvent(db: D1Database, viewer: string, id: string) {
       `WITH viewer AS (SELECT ? AS id) SELECT ${detailColumns},
       ${hosting} AS isHost,e.creator_id=viewer.id AS isCreator,
       NOT ${hosting} AND ${promotable} AS hostInvited,
+      (SELECT p.display_name FROM event_host_member_invite i JOIN profile p ON p.user_id=i.invited_by
+        WHERE i.event_id=e.id AND i.user_id=viewer.id) AS hostInviter,
       (SELECT status FROM event_response WHERE event_id=e.id AND user_id=viewer.id) AS response,
       e.link_encrypted AS link,
       ${statuses
@@ -428,6 +430,7 @@ async function readEvent(db: D1Database, viewer: string, id: string) {
         isHost: number;
         isCreator: number;
         hostInvited: number;
+        hostInviter: string | null;
         response: ResponseStatus | null;
         link: string | null;
       } & Record<ResponseStatus, number | null>
@@ -440,7 +443,7 @@ export async function acceptHosting(
   id: string,
 ) {
   const now = Date.now();
-  const [, , host] = await db.batch([
+  const [, , , host] = await db.batch([
     db
       .prepare(
         `WITH viewer AS (SELECT ? AS id) INSERT INTO event_host(event_id,user_id,created_at)
@@ -455,6 +458,14 @@ export async function acceptHosting(
         AND EXISTS(SELECT 1 FROM event_host WHERE event_id=? AND user_id=?)`,
       )
       .bind(id, viewer, id, viewer),
+    // A new host has accepted, so later invitations notify normally again.
+    db
+      .prepare(
+        `UPDATE event_access SET hosting_declined_at=NULL WHERE event_id=? AND user_id=?
+        AND hosting_declined_at IS NOT NULL
+        AND EXISTS(SELECT 1 FROM event_host WHERE event_id=? AND user_id=?)`,
+      )
+      .bind(id, viewer, id, viewer),
     db
       .prepare(
         `WITH viewer AS (SELECT ? AS id) SELECT 1 AS host FROM event e CROSS JOIN viewer
@@ -465,17 +476,26 @@ export async function acceptHosting(
   return host.results.length > 0;
 }
 // Declining removes only the member's own invitation; shared guest access stays.
+// It is remembered on that access, so a later invitation to this event arrives
+// in Activity without an alert.
 export async function declineHosting(
   db: D1Database,
   viewer: string,
   id: string,
 ) {
-  await db
-    .prepare(
-      'DELETE FROM event_host_member_invite WHERE event_id=? AND user_id=?',
-    )
-    .bind(id, viewer)
-    .run();
+  await db.batch([
+    db
+      .prepare(
+        `UPDATE event_access SET hosting_declined_at=? WHERE event_id=? AND user_id=?
+        AND EXISTS(SELECT 1 FROM event_host_member_invite WHERE event_id=? AND user_id=?)`,
+      )
+      .bind(Date.now(), id, viewer, id, viewer),
+    db
+      .prepare(
+        'DELETE FROM event_host_member_invite WHERE event_id=? AND user_id=?',
+      )
+      .bind(id, viewer),
+  ]);
 }
 
 export async function findEvent(env: Env, viewer: string, id: string) {
@@ -485,6 +505,7 @@ export async function findEvent(env: Env, viewer: string, id: string) {
     isHost,
     isCreator,
     hostInvited,
+    hostInviter,
     response,
     link,
     going,
@@ -511,6 +532,8 @@ export async function findEvent(env: Env, viewer: string, id: string) {
       isCreator: Boolean(isCreator),
       // A connected host invited this member; they can accept or decline.
       hostInvited: Boolean(hostInvited),
+      // The inviting host's name, only while the invitation is usable.
+      hostInvitedBy: hostInvited ? hostInviter : null,
       response,
     },
   };

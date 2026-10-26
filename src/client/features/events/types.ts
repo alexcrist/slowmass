@@ -55,6 +55,8 @@ export type EventView = EventDetails & {
     isCreator: boolean;
     // A connected host invited this member; accepting makes them a host.
     hostInvited: boolean;
+    // The inviting host's name while the invitation is usable.
+    hostInvitedBy: string | null;
     response: Answer | null;
   };
 };

@@ -71,6 +71,16 @@ it('describes each category the way Activity does', () => {
       'Alice cancelled Dinner.',
       '#event/e1',
     ],
+    [
+      { category: 'host_invite', eventId: 'e1', eventTitle: 'Dinner' },
+      'Alice asked you to co-host Dinner.',
+      '#event/e1',
+    ],
+    [
+      { category: 'host_accepted', eventId: 'e1', eventTitle: 'Dinner' },
+      'Alice is now co-hosting Dinner.',
+      '#event/e1',
+    ],
   ] as const;
   for (const [overrides, summary, path] of cases)
     expect(notificationText({ ...base, ...overrides })).toMatchObject({

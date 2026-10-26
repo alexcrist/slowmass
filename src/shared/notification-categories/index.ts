@@ -11,6 +11,12 @@ export const notificationCategories = [
   { id: 'event_message', group: 'Events', label: 'Event messages' },
   { id: 'update_blast', group: 'Events', label: 'Update blasts from hosts' },
   { id: 'event_cancelled', group: 'Events', label: 'Cancelled events' },
+  { id: 'host_invite', group: 'Events', label: 'Co-host invitations' },
+  {
+    id: 'host_accepted',
+    group: 'Events',
+    label: 'People accepting your co-host invitations',
+  },
 ] as const;
 export type NotificationCategory =
   (typeof notificationCategories)[number]['id'];

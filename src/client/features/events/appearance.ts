@@ -7,8 +7,10 @@ type Palette = {
   // Accent at the canvas's left and right edges, fading into paper: darker
   // than paper on light palettes, lighter on evening ones.
   edge: string;
-  // Navigation bar fill: darker than paper, so the bars recede behind content.
+  // Navigation bar fill: deep on every palette, so the bars recede behind
+  // content, with its own light text and icon color.
   nav: string;
+  navInk: string;
   // Replace neutral input surfaces, dividers and control outlines with tones
   // from the palette; outlines stay stronger than structural separators.
   surface: string;
@@ -32,16 +34,19 @@ export const palettes: Record<ColorTheme, Palette> = {
   original: {
     name: 'Original',
     scheme: 'light',
+    // The white app with slowmass accents: a misty Douglas Fir edge, a
+    // deep fir navigation bar, and Douglas Fir headings, icons and wordmark.
     paper: '#ffffff',
-    edge: '#ffffff',
-    nav: '#ffffff',
+    edge: '#b4d3bf',
+    nav: '#16362a',
+    navInk: '#ffffff',
     surface: '#ffffff',
     ink: '#171717',
     muted: '#737373',
-    line: '#e5e5e5',
+    line: '#e2e9e4',
     controlLine: '#d4d4d4',
-    hover: '#f5f5f5',
-    detail: '#171717',
+    hover: '#f0f5f2',
+    detail: '#214c3b',
     brand: '#214c3b',
     brandHover: '#193e30',
     onBrand: '#ffffff',
@@ -56,7 +61,8 @@ export const palettes: Record<ColorTheme, Palette> = {
     scheme: 'light',
     paper: '#d4eaff',
     edge: '#6aaeff',
-    nav: '#b5d8ff',
+    nav: '#0b1d47',
+    navInk: '#e6f1ff',
     surface: '#e6f3ff',
     ink: '#0d2250',
     muted: '#2f4c78',
@@ -78,7 +84,8 @@ export const palettes: Record<ColorTheme, Palette> = {
     scheme: 'light',
     paper: '#e8d9ff',
     edge: '#b28af4',
-    nav: '#d4bcfa',
+    nav: '#24103f',
+    navInk: '#f3eaff',
     surface: '#f3eaff',
     ink: '#2b1150',
     muted: '#5a4080',
@@ -100,7 +107,8 @@ export const palettes: Record<ColorTheme, Palette> = {
     scheme: 'light',
     paper: '#fff094',
     edge: '#ffc433',
-    nav: '#fbdc5c',
+    nav: '#2b2405',
+    navInk: '#fff7c4',
     surface: '#fff7c4',
     ink: '#2b2705',
     muted: '#585116',
@@ -122,7 +130,8 @@ export const palettes: Record<ColorTheme, Palette> = {
     scheme: 'light',
     paper: '#ffd6e0',
     edge: '#ff7ba3',
-    nav: '#ffb8ca',
+    nav: '#3a0819',
+    navInk: '#ffe6ee',
     surface: '#ffeaf0',
     ink: '#45091f',
     muted: '#77304a',
@@ -145,6 +154,7 @@ export const palettes: Record<ColorTheme, Palette> = {
     paper: '#0e1342',
     edge: '#2c44c4',
     nav: '#070a26',
+    navInk: '#f4f5ff',
     surface: '#171d57',
     ink: '#f4f5ff',
     muted: '#b4bcf0',
@@ -167,6 +177,7 @@ export const palettes: Record<ColorTheme, Palette> = {
     paper: '#2c0a22',
     edge: '#8a1d5c',
     nav: '#170412',
+    navInk: '#fff0f7',
     surface: '#3a1030',
     ink: '#fff0f7',
     muted: '#e0afc8',
@@ -189,6 +200,7 @@ export const palettes: Record<ColorTheme, Palette> = {
     paper: '#062a20',
     edge: '#117450',
     nav: '#021510',
+    navInk: '#effaf2',
     surface: '#0b3529',
     ink: '#effaf2',
     muted: '#a8d4bf',
@@ -211,6 +223,7 @@ export const palettes: Record<ColorTheme, Palette> = {
     paper: '#2a1308',
     edge: '#a0430f',
     nav: '#160902',
+    navInk: '#fff3e6',
     surface: '#371a0c',
     ink: '#fff3e6',
     muted: '#e3bea0',

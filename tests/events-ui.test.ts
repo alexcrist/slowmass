@@ -1547,6 +1547,41 @@ it('leaves the editor after a co-host stops hosting', async () => {
   expect(location.hash).toBe('#events');
 });
 
+it('confirms before declining a co-host invitation', async () => {
+  await mount(createElement(EventPage, { id, linkProfiles: true }));
+  const invited = {
+    isHost: false,
+    isCreator: false,
+    hostInvited: true,
+    hostInvitedBy: 'Alice Avery',
+    response: null,
+  };
+  await reply(pending(`/api/events/${id}`), {
+    event: view({ counts: null, viewer: invited }),
+  });
+  await click('Decline');
+  expect(renderer.root.findByType('dialog')).toBeDefined();
+  expect(visibleText()).toMatch(/Alice Avery\s+would need to invite you/);
+  await cancelDialog();
+  expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
+  expect(requests.some((r) => r.path.endsWith('/hosting'))).toBe(false);
+  await click('Decline');
+  await act(async () =>
+    renderer.root
+      .findByType('dialog')
+      .findAllByType('button')
+      .find((item) => item.children.join('') === 'Decline')!
+      .props.onClick(),
+  );
+  const declined = pending(`/api/events/${id}/hosting`, 'DELETE');
+  await reply(declined, { ok: true });
+  await reply(pending(`/api/events/${id}`), {
+    event: view({ viewer: { ...invited, hostInvited: false } }),
+  });
+  expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
+  expect(visibleText()).not.toContain('invited you to co-host');
+});
+
 it('asks invited members to accept hosting', async () => {
   await mount(createElement(EventPage, { id, linkProfiles: true }));
   await reply(pending(`/api/events/${id}`), {
@@ -1556,20 +1591,23 @@ it('asks invited members to accept hosting', async () => {
         isHost: false,
         isCreator: false,
         hostInvited: true,
+        hostInvitedBy: 'Alice Avery',
         response: null,
       },
     }),
   });
-  expect(visibleText()).toContain('You’ve been asked to host this event.');
+  expect(visibleText()).toMatch(
+    /Alice Avery\s+invited you to co-host\. Co-hosts are shown to everyone with the link\./,
+  );
   expect(
     renderer.root.findAllByProps({ 'aria-label': 'Share event link' }),
   ).toHaveLength(0);
-  await click('Become a host');
+  await click('Accept co-host invitation');
   const accepted = pending(`/api/events/${id}/hosting`);
   expect(accepted.options?.method).toBe('POST');
   await reply(accepted, { ok: true });
   await reply(pending(`/api/events/${id}`), { event: view({ viewer: host }) });
-  expect(visibleText()).not.toContain('asked to host');
+  expect(visibleText()).not.toContain('invited you to co-host');
   expect(button('Share event link')).toBeDefined();
 });
 
