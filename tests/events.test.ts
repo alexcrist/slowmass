@@ -1722,8 +1722,8 @@ it('sends retry-safe update blasts to all participants, enforcing host access', 
     ).status,
   ).toBe(409);
   // One email per recipient per blast, including the sender's copy, despite
-  // the concurrent retry; cancellation is not emailed by default.
-  await expect.poll(() => sent.length, { timeout: 5000 }).toBe(9);
+  // the concurrent retry, and cancellation is emailed by default.
+  await expect.poll(() => sent.length, { timeout: 5000 }).toBe(10);
   await expect.poll(queuedEmails, { timeout: 5000 }).toBe(0);
   const received = (body: string) =>
     sent
@@ -1745,6 +1745,13 @@ it('sends retry-safe update blasts to all participants, enforcing host access', 
     'alice@example.com',
     'david@example.com',
   ]);
+  // bob blocked the creator, so the send recheck drops his queued copy.
+  expect(
+    sent
+      .filter((email) => email.subject.includes('cancelled'))
+      .flatMap((email) => email.to)
+      .sort(),
+  ).toEqual(['david@example.com']);
   expect(sent.every((email) => email.bcc.length === 0)).toBe(true);
 });
 

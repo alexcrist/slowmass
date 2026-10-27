@@ -37,5 +37,6 @@
   "0036_auth_identity.sql": "manual",
   "0037_notification_preferences.sql": "automatic",
   "0038_hosting_activity.sql": "automatic",
-  "0039_post_alerts.sql": "automatic"
+  "0039_post_alerts.sql": "automatic",
+  "0040_cancellation_email.sql": "automatic"
 }

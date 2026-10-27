@@ -80,7 +80,7 @@ it('returns defaults that match earlier behavior and saves validated choices', a
     { category: 'event_response', push: true, email: false },
     { category: 'event_message', push: true, email: false },
     { category: 'update_blast', push: true, email: true },
-    { category: 'event_cancelled', push: true, email: false },
+    { category: 'event_cancelled', push: true, email: true },
     { category: 'host_invite', push: true, email: true },
     { category: 'host_accepted', push: true, email: false },
   ]);
