@@ -53,14 +53,7 @@ function Choices({ preferences }: { preferences: Preference[] }) {
   }
   return (
     <>
-      <table className="notification-choices">
-        <thead>
-          <tr>
-            <th scope="col">Notify me about</th>
-            <th scope="col">Push</th>
-            <th scope="col">Email</th>
-          </tr>
-        </thead>
+      <div className="notification-choices">
         {groups.map((group) => {
           const rows = notificationCategories.flatMap(
             ({ id, group: of, label }) => {
@@ -72,37 +65,41 @@ function Choices({ preferences }: { preferences: Preference[] }) {
           );
           if (!rows.length) return null;
           return (
-            <tbody key={group}>
-              <tr className="notification-group">
-                <th scope="rowgroup" colSpan={3}>
-                  {group}
-                </th>
-              </tr>
-              {rows.map(({ item, label }) => (
-                <tr key={item.category}>
-                  <th scope="row">{label}</th>
-                  {(['push', 'email'] as const).map((channel) => (
-                    <td key={channel}>
-                      <input
-                        type="checkbox"
-                        aria-label={`${channel === 'push' ? 'Push' : 'Email'}: ${label}`}
-                        checked={item[channel]}
-                        disabled={saving !== null}
-                        onChange={(event) =>
-                          void change({
-                            ...item,
-                            [channel]: event.target.checked,
-                          })
-                        }
-                      />
-                    </td>
-                  ))}
+            <table key={group}>
+              <thead>
+                <tr>
+                  <th scope="col">{group}</th>
+                  <th scope="col">Push</th>
+                  <th scope="col">Email</th>
                 </tr>
-              ))}
-            </tbody>
+              </thead>
+              <tbody>
+                {rows.map(({ item, label }) => (
+                  <tr key={item.category}>
+                    <th scope="row">{label}</th>
+                    {(['push', 'email'] as const).map((channel) => (
+                      <td key={channel}>
+                        <input
+                          type="checkbox"
+                          aria-label={`${channel === 'push' ? 'Push' : 'Email'}: ${label}`}
+                          checked={item[channel]}
+                          disabled={saving !== null}
+                          onChange={(event) =>
+                            void change({
+                              ...item,
+                              [channel]: event.target.checked,
+                            })
+                          }
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           );
         })}
-      </table>
+      </div>
       {saving && <p role="status">Saving…</p>}
       {error && <p role="alert">{error}</p>}
     </>

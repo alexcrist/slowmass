@@ -68,6 +68,14 @@ async function toggle(label: string) {
   );
 }
 
+function groupHeaders() {
+  return renderer.root
+    .findAllByType('thead')
+    .map((head) =>
+      head.findAllByType('th').map((node) => node.children.join('')),
+    );
+}
+
 it('shows device status and each category with its saved choices', async () => {
   await mount(createElement(NotificationSettings));
   expect(text()).toContain('Device push status');
@@ -81,11 +89,13 @@ it('shows device status and each category with its saved choices', async () => {
   // Categories the server didn't return (an older server) aren't shown.
   expect(text()).not.toContain('Comments on your photos');
   expect(text()).toContain('Notification types');
-  // Each group heads its categories, in Settings order.
-  const headings = renderer.root
-    .findAll((node) => node.type === 'th' && node.props.scope === 'rowgroup')
-    .map((node) => node.children.join(''));
-  expect(headings).toEqual(['People', 'Photos', 'Events']);
+  // Each group's table header names it, in Settings order, and labels the
+  // Push and Email columns.
+  expect(groupHeaders()).toEqual([
+    ['People', 'Push', 'Email'],
+    ['Photos', 'Push', 'Email'],
+    ['Events', 'Push', 'Email'],
+  ]);
   const rows = renderer.root
     .findAllByType('tbody')
     .map((group) =>
@@ -103,11 +113,7 @@ it('shows device status and each category with its saved choices', async () => {
 it('omits a group when the server returns none of its categories', async () => {
   await mount(createElement(NotificationSettings));
   await reply(0, { preferences: [defaults[0]] });
-  expect(
-    renderer.root
-      .findAll((node) => node.type === 'th' && node.props.scope === 'rowgroup')
-      .map((node) => node.children.join('')),
-  ).toEqual(['People']);
+  expect(groupHeaders().map(([group]) => group)).toEqual(['People']);
 });
 
 it('saves one choice at a time and keeps the saved state when a save fails', async () => {

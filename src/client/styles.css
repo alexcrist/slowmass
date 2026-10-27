@@ -988,34 +988,46 @@ summary.settings-row::after {
   margin: 8px 0 4px;
   font-size: 18px;
 }
-/* One row per category, aligned like settings rows, with fixed checkbox
-   columns so Push and Email line up under their headers on narrow phones. */
+/* One bordered card per group (People, Photos, Events). Each card's header
+   band names the group and labels the Push and Email columns, so the labels
+   stay next to the rows they describe on long phone screens. */
 .notification-choices {
-  width: 100%;
+  display: grid;
+  gap: 20px;
   margin-top: 12px;
-  border-collapse: collapse;
+}
+.notification-choices table {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
 }
 .notification-choices th,
 .notification-choices td {
   padding: 0;
-  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--line);
   text-align: left;
 }
 .notification-choices thead th {
-  padding-bottom: 8px;
+  padding-block: 10px;
+  border-top: 0;
+  background: var(--hover);
   color: var(--muted);
   font-size: 14px;
   font-weight: 600;
 }
+.notification-choices thead th:first-child {
+  color: var(--ink);
+  font-size: 16px;
+}
 .notification-choices tbody th {
-  padding: 14px 8px 14px 0;
+  padding: 12px 8px 12px 0;
   font-weight: 400;
 }
-/* Group names (People, Photos, Events) head each set of category rows. */
-.notification-choices .notification-group th {
-  padding: 20px 0 6px;
-  font-size: 16px;
-  font-weight: 600;
+.notification-choices :is(th, td):first-child {
+  padding-left: 16px;
 }
 .notification-choices :is(thead th, td):not(:first-child) {
   width: 64px;
