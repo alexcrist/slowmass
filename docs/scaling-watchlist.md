@@ -25,3 +25,22 @@ GROUP BY r.recipient_id ORDER BY hidden DESC LIMIT 20;
 Act when some members have hundreds, or when D1 rows read by the unread-count route climb faster than active members.
 
 **Fix.** Add a migration with two triggers: creating a block marks unread receipts between the two members as read, and disabling a membership marks that member's receipts to others as read. Unblocking or re-enabling would then not restore old items as unread, which is acceptable. Do not touch receipts hidden only because a profile photo is missing; those become visible once the photo is added.
+
+## New-photo alert fan-out
+
+Recorded October 27, 2026, when new-photo alerts shipped.
+
+**Cause.** Publishing a photo writes an activity source, receipt and queued push or email for every accepted follower who opted in, in the publication's transaction. These rows are never read in Activity, so they stay unread until the 15-minute cron deletes them two days later. Meanwhile the badge count seeks them among the member's unread receipts and skips them.
+
+**Cost.** Rows written per publication grow with opted-in followers; badge reads grow with how many photos opted-in members' follows post in two days. Both are near zero while the category is off by default.
+
+**Signal.** Opted-in members and live post alerts:
+
+```sql
+SELECT COUNT(*) FROM notification_preference WHERE category='post' AND (push=1 OR email=1);
+SELECT COUNT(*) FROM activity_source WHERE kind='post';
+```
+
+Act when live post alerts exceed what one cleanup run per 15 minutes removes (1,000), or when publication rows written climb faster than posts.
+
+**Fix.** Mark a post alert's receipt read once its last queued delivery finishes, which also takes it out of the badge's unread seek, and raise the cleanup batch.

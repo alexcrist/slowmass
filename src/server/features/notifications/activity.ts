@@ -57,7 +57,10 @@ const visibleSource = `
      AND EXISTS(SELECT 1 FROM follow f WHERE f.follower_id=e.actor_id AND f.target_id=e.recipient_id AND f.status='accepted')
      AND EXISTS(SELECT 1 FROM avatar WHERE user_id=e.actor_id)
      AND EXISTS(SELECT 1 FROM avatar WHERE user_id=e.recipient_id))
-   OR EXISTS(SELECT 1 FROM post p WHERE p.id=e.post_id AND p.user_id=e.recipient_id AND p.state='published'))`;
+   OR (e.kind='post'
+     AND EXISTS(SELECT 1 FROM follow f WHERE f.follower_id=e.recipient_id AND f.target_id=e.actor_id AND f.status='accepted')
+     AND EXISTS(SELECT 1 FROM post p WHERE p.id=e.post_id AND p.user_id=e.actor_id AND p.state='published'))
+   OR (e.kind!='post' AND EXISTS(SELECT 1 FROM post p WHERE p.id=e.post_id AND p.user_id=e.recipient_id AND p.state='published')))`;
 const eligible = `${visibleSource}
  AND (e.kind!='likes' OR e.actor_id=(${latestLike}))`;
 export type Notification = {
@@ -71,7 +74,9 @@ export type Notification = {
     | 'event_response'
     | 'event_message'
     | 'host_invite'
-    | 'host_accepted';
+    | 'host_accepted'
+    // A followed member's new photo, delivered by push and email only.
+    | 'post';
   postId: string | null;
   eventId: string | null;
   eventTitle: string | null;
@@ -123,13 +128,15 @@ export type ActivityKinds = {
   hosting: boolean;
 };
 const allKinds: ActivityKinds = { joined: true, events: true, hosting: true };
+// Post alerts are never listed or counted, whatever the client asks for.
 function kindFilter(kinds: ActivityKinds) {
   const hidden = [
+    "'post'",
     ...(kinds.joined ? [] : ["'joined'"]),
     ...(kinds.events ? [] : ["'event_response'", "'event_message'"]),
     ...(kinds.hosting ? [] : ["'host_invite'", "'host_accepted'"]),
   ];
-  return hidden.length ? `e.kind NOT IN (${hidden.join(',')})` : '1';
+  return `e.kind NOT IN (${hidden.join(',')})`;
 }
 export async function notificationStart(
   db: D1Database,
@@ -322,7 +329,8 @@ export async function describeNotification(
     (SELECT handle FROM profile WHERE user_id=e.actor_id) AS handle,
     (SELECT display_name FROM profile WHERE user_id=e.actor_id) AS displayName,
     CASE WHEN e.kind='comment' THEN (SELECT body FROM comment WHERE id=substr(e.event_key,9))
-      WHEN e.kind='event_message' THEN (SELECT body FROM event_message WHERE id=substr(e.event_key,15)) END AS body,
+      WHEN e.kind='event_message' THEN (SELECT body FROM event_message WHERE id=substr(e.event_key,15))
+      WHEN e.kind='post' THEN (SELECT NULLIF(caption,'') FROM post WHERE id=e.post_id) END AS body,
     CASE WHEN e.kind='likes' THEN (SELECT COUNT(*) FROM activity_source n WHERE n.recipient_id=e.recipient_id AND n.event_key=e.event_key AND ${visibleActor('n')}) ELSE 1 END AS count,
     EXISTS(SELECT 1 FROM activity_read_state r WHERE r.revision=? AND r.recipient_id=e.recipient_id
       AND r.event_key=e.event_key AND r.is_read=0) AS unread,
@@ -348,4 +356,16 @@ export async function describeNotification(
         email: Boolean(row.email),
       }
     : null;
+}
+
+// Post alerts exist only to deliver push and email, whose queues drop rows
+// after a day, so they are deleted after two, cascading their receipts.
+export async function cleanupPostAlerts(db: D1Database) {
+  await db
+    .prepare(
+      `DELETE FROM activity_source WHERE rowid IN(SELECT rowid FROM activity_source
+      WHERE kind='post' AND created_at<? ORDER BY created_at LIMIT 1000)`,
+    )
+    .bind(Date.now() - 2 * 86_400_000)
+    .run();
 }

@@ -36,5 +36,6 @@
   "0035_event_host_members.sql": "automatic",
   "0036_auth_identity.sql": "manual",
   "0037_notification_preferences.sql": "automatic",
-  "0038_hosting_activity.sql": "automatic"
+  "0038_hosting_activity.sql": "automatic",
+  "0039_post_alerts.sql": "automatic"
 }

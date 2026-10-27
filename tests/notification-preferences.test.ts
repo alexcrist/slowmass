@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
 import { cleanupAccounts } from '../src/server/features/account';
+import { cleanupPostAlerts } from '../src/server/features/notifications';
 import {
   seedProfilePhotos,
   testRuntime,
@@ -75,6 +76,7 @@ it('returns defaults that match earlier behavior and saves validated choices', a
     { category: 'joined', push: true, email: false },
     { category: 'likes', push: false, email: false },
     { category: 'comment', push: true, email: false },
+    { category: 'post', push: false, email: false },
     { category: 'event_response', push: true, email: false },
     { category: 'event_message', push: true, email: false },
     { category: 'update_blast', push: true, email: true },
@@ -116,7 +118,7 @@ it('returns defaults that match earlier behavior and saves validated choices', a
     email: false,
   });
   await runtime.db.prepare("DELETE FROM avatar WHERE user_id='bob'").run();
-  expect((await preferences('bob')).length).toBe(11);
+  expect((await preferences('bob')).length).toBe(12);
 });
 
 it('emails only unread activity, describes it, and unsubscribes one category by link', async () => {
@@ -257,6 +259,132 @@ it('queues push by preference and coalesces likes into one delayed alert', async
     row.key.startsWith('likes:'),
   );
   expect(likes).toEqual([first]);
+});
+
+it('alerts followers who ask about new photos, never through Activity', async () => {
+  await runtime.db.batch([
+    runtime.db.prepare(
+      "INSERT INTO follow(follower_id,target_id,status,created_at) VALUES('bob','alice','accepted',1),('carol','alice','accepted',1),('alice','bob','pending',1)",
+    ),
+    runtime.db.prepare(
+      "INSERT INTO push_subscription(id,user_id,session_id,endpoint,p256dh,auth,created_at) VALUES('device','carol','carol','https://fcm.googleapis.com/fcm/send/synthetic','key','auth',1)",
+    ),
+  ]);
+  const publish = async (id: string, caption = '') => {
+    await runtime.db
+      .prepare(
+        "INSERT INTO post(id,user_id,caption,alt_text,created_at,state) VALUES(?,?,?,'',1,'processing')",
+      )
+      .bind(id, id === 'theirs' ? 'bob' : 'alice', caption)
+      .run();
+    await runtime.db
+      .prepare(
+        "UPDATE post SET state='published',object_key=?,width=1,height=1,published_at=? WHERE id=?",
+      )
+      .bind(`posts/${id}`, Date.now(), id)
+      .run();
+  };
+  const alerts = async () =>
+    (
+      await runtime.db
+        .prepare(
+          "SELECT recipient_id AS recipient,event_key AS key FROM activity_source WHERE kind='post' ORDER BY recipient_id,event_key",
+        )
+        .all<{ recipient: string; key: string }>()
+    ).results;
+  // Off by default, so publishing writes nothing.
+  await publish('quiet');
+  expect(await alerts()).toEqual([]);
+  for (const [actor, push, email] of [
+    ['bob', false, true],
+    ['carol', true, false],
+    // A pending request is not a follow.
+    ['alice', true, true],
+  ] as const)
+    expect(
+      (
+        await runtime.request(actor, path, 'PUT', {
+          category: 'post',
+          push,
+          email,
+        })
+      ).status,
+    ).toBe(200);
+  await publish('fresh', 'Synthetic caption');
+  await publish('theirs');
+  expect(await alerts()).toEqual([
+    { recipient: 'bob', key: 'post:fresh' },
+    { recipient: 'carol', key: 'post:fresh' },
+  ]);
+  expect(
+    (
+      await runtime.db
+        .prepare(
+          'SELECT subscription_id AS device,event_key AS key FROM push_delivery',
+        )
+        .all()
+    ).results,
+  ).toEqual([{ device: 'device', key: 'post:fresh' }]);
+  // Activity neither lists, counts nor focuses them, even for new clients:
+  // bob's badge counts only alice's follow request.
+  const query = '?includeJoined=1&includeEvents=1&includeHosting=1';
+  const page = (await (
+    await runtime.request('bob', `/api/notifications${query}`)
+  ).json()) as { items: { key: string }[] };
+  expect(page.items.some((item) => item.key.startsWith('post:'))).toBe(false);
+  expect(
+    await (
+      await runtime.request('bob', `/api/notifications/unread-count${query}`)
+    ).json(),
+  ).toEqual({ count: 1 });
+  expect(
+    (
+      await runtime.request(
+        'bob',
+        `/api/notifications${query}&focus=post:fresh`,
+      )
+    ).status,
+  ).toBe(400);
+  await due();
+  await cron();
+  expect(sent).toHaveLength(1);
+  expect(sent[0]).toMatchObject({
+    to: ['bob@example.com'],
+    subject: 'alice posted a photo.',
+  });
+  expect(sent[0].text).toContain('Synthetic caption');
+  expect(sent[0].text).toContain('http://localhost:8787/#post/fresh');
+  expect(sent[0].text).toContain(
+    'Stop emails about new photos from people you follow',
+  );
+  // Unfollowing or deletion before delivery suppresses a queued alert.
+  await publish('later');
+  await publish('gone');
+  await runtime.db.batch([
+    runtime.db.prepare("DELETE FROM follow WHERE follower_id='bob'"),
+    runtime.db.prepare("UPDATE post SET state='deleted' WHERE id='gone'"),
+  ]);
+  await due();
+  await cron();
+  expect(sent).toHaveLength(1);
+  // Expired alerts are deleted with their receipts and queued push.
+  await runtime.db
+    .prepare(
+      "UPDATE activity_source SET created_at=0 WHERE kind='post' AND event_key!='post:gone'",
+    )
+    .run();
+  await cleanupPostAlerts(runtime.db);
+  expect(await alerts()).toEqual([
+    { recipient: 'bob', key: 'post:gone' },
+    { recipient: 'carol', key: 'post:gone' },
+  ]);
+  expect(
+    await runtime.db
+      .prepare(
+        "SELECT COUNT(*) AS n FROM push_delivery WHERE event_key!='post:gone'",
+      )
+      .first('n'),
+  ).toBe(0);
 });
 
 it('does not alert or count the member who accepts a follow request', async () => {

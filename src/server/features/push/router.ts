@@ -122,7 +122,8 @@ export const deliverAfterMutation: MiddlewareHandler<{
     ((['POST', 'PUT', 'DELETE'].includes(c.req.method) &&
       (/^\/api\/(people|interactions)\//.test(path) ||
         path === '/api/avatar')) ||
-      (c.req.method === 'POST' && event)) &&
+      (c.req.method === 'POST' && event) ||
+      (c.req.method === 'PUT' && /^\/api\/posts\/[^/]+\/photo$/.test(path))) &&
     !path.endsWith('/like')
   )
     c.executionCtx.waitUntil(

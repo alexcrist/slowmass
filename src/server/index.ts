@@ -13,7 +13,10 @@ import { cleanupPosts, backfillThumbnail } from './features/posts';
 import { cleanupEmailBudgets } from './email';
 import { interactions } from './features/interactions/router';
 import { notifications, unsubscribe } from './features/notifications/router';
-import { dispatchEmailNotifications } from './features/notifications';
+import {
+  cleanupPostAlerts,
+  dispatchEmailNotifications,
+} from './features/notifications';
 import { people } from './features/people/router';
 import { push, deliverAfterMutation } from './features/push/router';
 import { dispatchPush } from './features/push';
@@ -132,5 +135,6 @@ export default {
     await cleanupInviteLinks(env.DB);
     await cleanupAuth(env.DB);
     await cleanupEmailBudgets(env.DB);
+    await cleanupPostAlerts(env.DB);
   },
 };

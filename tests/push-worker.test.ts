@@ -121,6 +121,33 @@ it.each(['comment:test', 'follower:bob', 'joined:bob', ...eventKeys])(
     );
   },
 );
+it('shows a new-photo alert under its own tag and opens the photo, not Activity', async () => {
+  const key = 'post:00000000-0000-4000-8000-000000000003';
+  // Post alerts never appear in Activity, so it cannot focus or acknowledge them.
+  expect(validNotificationKey(key)).toBe(false);
+  await emit('push', {
+    data: { json: () => ({ key, version: 4, subscriptionId: 'device' }) },
+  });
+  expect(showNotification).toHaveBeenCalledWith(
+    'slowmass',
+    expect.objectContaining({
+      tag: `slowmass:device:${key}`,
+      data: { key, version: 4 },
+    }),
+  );
+  await emit('notificationclick', {
+    notification: { data: { key }, close: vi.fn() },
+  });
+  expect(openWindow).toHaveBeenCalledWith(
+    'https://slowmass.com/#post/00000000-0000-4000-8000-000000000003',
+  );
+  await emit('notificationclick', {
+    notification: { data: { key: 'post:../../evil' }, close: vi.fn() },
+  });
+  expect(openWindow).toHaveBeenLastCalledWith(
+    'https://slowmass.com/#notifications',
+  );
+});
 it.each([
   'event_response:00000000-0000-4000-8000-000000000001',
   'event_response:00000000-0000-4000-8000-000000000001.bob/../../feed',

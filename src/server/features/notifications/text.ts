@@ -70,6 +70,11 @@ export function notificationText(item: Content): NotificationText {
           : `${handle} likes your photo.`,
       path: postPath,
     }),
+    post: () => ({
+      title: 'slowmass',
+      summary: `${handle} posted a photo.`,
+      path: postPath,
+    }),
     comment: () => ({
       title: 'slowmass',
       summary: `${handle} commented on your photo.`,
@@ -108,7 +113,9 @@ export function notificationText(item: Content): NotificationText {
   };
   return {
     ...sentences[item.category](),
-    quote: ['comment', 'event_message', 'update_blast'].includes(item.category)
+    quote: ['comment', 'post', 'event_message', 'update_blast'].includes(
+      item.category,
+    )
       ? item.body
       : null,
   };

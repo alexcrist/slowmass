@@ -7,6 +7,7 @@ export const notificationCategories = [
   { id: 'joined', group: 'People', label: 'People you invited joining' },
   { id: 'likes', group: 'Photos', label: 'Likes on your photos' },
   { id: 'comment', group: 'Photos', label: 'Comments on your photos' },
+  { id: 'post', group: 'Photos', label: 'New photos from people you follow' },
   { id: 'event_response', group: 'Events', label: 'RSVPs to events you host' },
   { id: 'event_message', group: 'Events', label: 'Event messages' },
   { id: 'update_blast', group: 'Events', label: 'Update blasts from hosts' },

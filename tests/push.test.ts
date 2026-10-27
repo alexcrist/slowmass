@@ -364,6 +364,61 @@ it('queues invitation follower alerts only after profile photo completion and ne
     .run();
   expect(await count('push_delivery')).toBe(0);
 });
+it('pushes a followed member’s new photo to followers who ask for it, until a block', async () => {
+  await enable('bob');
+  await acceptedFollow();
+  const publish = async (id: string) => {
+    await runtime.db
+      .prepare(
+        "INSERT INTO post(id,user_id,caption,alt_text,created_at,state) VALUES(?,'alice','Synthetic caption','',1,'processing')",
+      )
+      .bind(id)
+      .run();
+    await runtime.db
+      .prepare(
+        "UPDATE post SET state='published',object_key=?,width=1,height=1,published_at=? WHERE id=?",
+      )
+      .bind(`posts/${id}`, Date.now(), id)
+      .run();
+  };
+  await publish('unwanted');
+  expect(await count('push_delivery')).toBe(0);
+  expect(
+    (
+      await runtime.request('bob', '/api/notifications/preferences', 'PUT', {
+        category: 'post',
+        push: true,
+        email: false,
+      })
+    ).status,
+  ).toBe(200);
+  await publish('wanted');
+  await tick();
+  expect(sent).toHaveLength(1);
+  expect(
+    JSON.parse(
+      decrypt(sent[0].body, {
+        version: 'aes128gcm',
+        privateKey: browser,
+        authSecret: auth,
+      }).toString(),
+    ),
+  ).toMatchObject({
+    key: 'post:wanted',
+    title: 'slowmass',
+    body: 'alice posted a photo. “Synthetic caption”',
+  });
+  await publish('blocked');
+  await runtime.db
+    .prepare(
+      "INSERT INTO block(blocker_id,target_id,created_at) VALUES('alice','bob',1)",
+    )
+    .run();
+  await tick();
+  expect(sent).toHaveLength(1);
+  expect(await count('push_delivery')).toBe(0);
+});
+
 it('queues no likes by default, coalesces concurrent dispatchers, and alerts a re-sent request once an hour', async () => {
   await enable();
   await photo();

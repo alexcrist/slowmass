@@ -5,11 +5,12 @@ self.addEventListener('install', (event) =>
 self.addEventListener('activate', (event) =>
   event.waitUntil(self.clients.claim()),
 );
-// Match Activity identities, including each event answer and message.
+// Match Activity identities, including each event answer and message, and
+// new-photo alerts, which open the photo rather than Activity.
 function validNotificationKey(key) {
   return (
     typeof key === 'string' &&
-    /^(?:(?:request|follower|joined|likes|comment):[a-zA-Z0-9-]{1,64}|event_response:[a-f0-9-]{36}\.[a-zA-Z0-9-]{1,64}|event_message:[a-f0-9-]{36})$/.test(
+    /^(?:(?:request|follower|joined|likes|comment|post):[a-zA-Z0-9-]{1,64}|event_response:[a-f0-9-]{36}\.[a-zA-Z0-9-]{1,64}|event_message:[a-f0-9-]{36})$/.test(
       key,
     )
   );
@@ -68,9 +69,11 @@ function installedWindow(client) {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const key = event.notification.data?.key;
-  const path = validNotificationKey(key)
-    ? `/#notifications/${key}`
-    : '/#notifications';
+  const path = !validNotificationKey(key)
+    ? '/#notifications'
+    : key.startsWith('post:')
+      ? `/#post/${key.slice(5)}`
+      : `/#notifications/${key}`;
   const url = new URL(path, self.location.origin).href;
   event.waitUntil(
     (async () => {
