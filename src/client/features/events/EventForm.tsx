@@ -5,9 +5,9 @@ import {
   type FormEvent,
   type InputHTMLAttributes,
   type ReactNode,
-  type TextareaHTMLAttributes,
 } from 'react';
 import { api, jsonRequest } from '../../api';
+import { InlineField, oneLine } from '../../ui/InlineField';
 import {
   PhotoProgress,
   type PhotoProgressState,
@@ -78,7 +78,7 @@ function PickerField({
   ...input
 }: InputHTMLAttributes<HTMLInputElement> & { children: ReactNode }) {
   return (
-    <span className="event-picker event-editable">
+    <span className="event-picker editable">
       <span aria-hidden="true">{children}</span>
       <input
         {...input}
@@ -93,39 +93,6 @@ function PickerField({
     </span>
   );
 }
-
-// Text edited in place, in the type of the page text it previews. A hidden
-// copy sizes the field so it wraps and grows like that text.
-function InlineField({
-  multiline = false,
-  value,
-  placeholder,
-  ...field
-}: TextareaHTMLAttributes<HTMLTextAreaElement> & {
-  multiline?: boolean;
-  value: string;
-  placeholder: string;
-}) {
-  return (
-    <span className="event-field event-editable">
-      <span className="event-field-size" aria-hidden="true">
-        {(value || placeholder) + ' '}
-      </span>
-      <textarea
-        {...field}
-        rows={1}
-        value={value}
-        placeholder={placeholder}
-        onKeyDown={(key) => {
-          if (!multiline && key.key === 'Enter') key.preventDefault();
-        }}
-      />
-    </span>
-  );
-}
-
-// Title and location are single lines; pasted line breaks become spaces.
-const oneLine = (value: string) => value.replace(/\r?\n/g, ' ');
 
 function CoverIcon() {
   return (
@@ -425,11 +392,11 @@ export function EventForm({
               )}
             </label>
             {photoPreview && !busy && (
-              <span className="event-cover-actions">
+              <span className="photo-edit-actions">
                 {file && preview && (
                   <button
                     type="button"
-                    className="event-cover-action"
+                    className="photo-edit-action"
                     onClick={() => setEditing(source)}
                   >
                     Adjust crop
@@ -437,7 +404,7 @@ export function EventForm({
                 )}
                 <label
                   htmlFor="event-photo"
-                  className="event-cover-action"
+                  className="photo-edit-action"
                   aria-hidden="true"
                 >
                   Change cover
@@ -609,7 +576,7 @@ export function EventForm({
                   {error}
                 </p>
               )}
-              <div className="event-form-actions">
+              <div className="editor-actions">
                 <button type="button" disabled={busy} onClick={onCancel}>
                   Cancel
                 </button>

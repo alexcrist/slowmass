@@ -25,7 +25,11 @@ async function mount(kind: 'post' | 'event', saved = vi.fn()) {
   await act(async () => {
     renderer = create(
       kind === 'post'
-        ? createElement(Compose, { onPublished: saved })
+        ? createElement(Compose, {
+            handle: 'alice',
+            onPublished: saved,
+            onCancel: vi.fn(),
+          })
         : createElement(EventForm, {
             hosts: [],
             onSaved: saved,

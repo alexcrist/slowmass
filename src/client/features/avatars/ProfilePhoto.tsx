@@ -1,13 +1,7 @@
 import { useState } from 'react';
 import { ImageViewer } from '../../ui/ImageViewer';
 
-export function ProfilePhoto({
-  handle,
-  version,
-}: {
-  handle: string;
-  version?: number;
-}) {
+export function ProfilePhoto({ handle }: { handle: string }) {
   const [open, setOpen] = useState(false);
   const src = `/media/avatar/${encodeURIComponent(handle)}`;
   return (
@@ -20,18 +14,12 @@ export function ProfilePhoto({
         aria-expanded={open}
         onClick={() => setOpen(true)}
       >
-        <img
-          className="avatar"
-          src={version === undefined ? src : `${src}?v=${version}`}
-          alt=""
-          width={96}
-          height={96}
-        />
+        <img className="avatar" src={src} alt="" width={96} height={96} />
       </button>
       {open && (
         <ImageViewer
           title="Profile photo"
-          src={`${src}?size=large${version === undefined ? '' : `&v=${version}`}`}
+          src={`${src}?size=large`}
           alt={`${handle}'s profile photo`}
           width={1600}
           height={1600}

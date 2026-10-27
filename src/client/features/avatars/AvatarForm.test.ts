@@ -1,4 +1,3 @@
-import { mockUploads } from '../../../../tests/support/upload';
 import { act, createElement } from 'react';
 import { create, type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -12,7 +11,6 @@ afterEach(async () => {
 });
 
 async function setup() {
-  mockUploads((path, options) => fetch(path, options));
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   const image = { width: 1200, height: 800, close: vi.fn() };
   const context = { clearRect: vi.fn(), drawImage: vi.fn() };
@@ -43,8 +41,9 @@ async function setup() {
   await act(async () => {
     renderer = create(
       createElement(AvatarForm, {
-        handle: 'alice',
-        onChange: vi.fn(),
+        draft: null,
+        onSelect: vi.fn(),
+        disabled: false,
       }),
       {
         createNodeMock: (element) =>
@@ -118,12 +117,10 @@ it.each(['onPointerCancel', 'onLostPointerCapture'])(
   },
 );
 
-it('retains keyboard and slider controls and prevents crop changes during upload', async () => {
-  const { preview, event, rectangle, zoom } = await setup();
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(() => new Promise<Response>(() => {})),
-  );
+it('retains keyboard and slider controls and prevents crop changes while preparing', async () => {
+  const { preview, event, rectangle, zoom, canvas } = await setup();
+  // Encoding never finishes, so the dialog stays in its preparing state.
+  canvas.toBlob = () => {};
   await act(async () =>
     renderer!.root
       .findByProps({ id: 'avatar-zoom' })

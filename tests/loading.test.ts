@@ -2832,7 +2832,9 @@ it('resizes an original over 8 MB before posting and reuses the encoded photo on
     'createImageBitmap',
     vi.fn().mockResolvedValue({ width: 6000, height: 4000, close: vi.fn() }),
   );
-  await mount(createElement(Compose, { onPublished }));
+  await mount(
+    createElement(Compose, { handle: 'alice', onPublished, onCancel: vi.fn() }),
+  );
   expect(renderer.root.findAllByProps({ id: 'alt-text' })).toHaveLength(0);
   await act(async () => {
     renderer.root

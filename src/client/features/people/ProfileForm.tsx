@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api, jsonRequest } from '../../api';
-import { UsernameField } from './UsernameField';
 import { SetupSignOut } from './SetupSignOut';
 export type Profile = {
   handle: string;
@@ -8,23 +7,21 @@ export type Profile = {
   bio: string;
   hasAvatar: number;
 };
+// Names a new member, or renames one who hasn't finished setup. The username
+// stays generated until setup; the full profile is edited in ProfileEditor.
 export function ProfileForm({
   profile,
   onSave,
-  mode = 'profile',
   onSignOut,
   signingOut = false,
 }: {
   profile: Profile | null;
   onSave: (profile: Profile) => void;
-  // Name-only event joining keeps a generated username.
-  mode?: 'profile' | 'name';
   onSignOut?: () => void;
   signingOut?: boolean;
 }) {
-  const [handle, setHandle] = useState(profile?.handle ?? '');
   const [displayName, setDisplayName] = useState(profile?.displayName ?? '');
-  const [bio, setBio] = useState(profile?.bio ?? '');
+  const bio = profile?.bio ?? '';
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -42,10 +39,7 @@ export function ProfileForm({
     try {
       // Name-only saves keep the username, or let the server generate one.
       const result = await api<{ profile: Profile }>('/api/people/self', {
-        ...jsonRequest(
-          'PUT',
-          mode === 'name' ? { displayName, bio } : { handle, displayName, bio },
-        ),
+        ...jsonRequest('PUT', { displayName, bio }),
         signal: request.signal,
         timeoutMs: 30_000,
       });
@@ -64,7 +58,7 @@ export function ProfileForm({
       }
     }
   }
-  const joining = !profile && mode === 'name';
+  const joining = !profile;
   const nameInput = (
     <input
       id="display-name"
@@ -78,21 +72,8 @@ export function ProfileForm({
   );
   return (
     <form onSubmit={(event) => void save(event)}>
-      {!profile && mode === 'profile' && (
-        <p className="status-copy">
-          Your bio is visible only to accepted followers.
-        </p>
-      )}
-      {mode !== 'name' && (
-        <UsernameField
-          value={handle}
-          onChange={setHandle}
-          disabled={disabled}
-          editing={Boolean(profile)}
-        />
-      )}
       <label className="field-label" htmlFor="display-name">
-        {mode === 'name' ? 'Your name' : 'Profile name'}
+        Your name
       </label>
       {joining ? (
         // Naming yourself while joining mirrors the email step before it.
@@ -121,30 +102,9 @@ export function ProfileForm({
       ) : (
         nameInput
       )}
-      {mode === 'profile' && (
-        <>
-          <label className="field-label" htmlFor="bio">
-            Bio
-          </label>
-          <textarea
-            id="bio"
-            value={bio}
-            onChange={(event) => setBio(event.target.value)}
-            maxLength={500}
-            rows={4}
-            disabled={disabled}
-          />
-        </>
-      )}
       {!joining && (
         <button className="primary-button" disabled={disabled}>
-          {busy
-            ? 'Saving…'
-            : !profile
-              ? 'Continue'
-              : mode === 'name'
-                ? 'Save name'
-                : 'Save profile'}
+          {busy ? 'Saving…' : 'Save name'}
         </button>
       )}
       {onSignOut && (

@@ -2,8 +2,7 @@ import { createElement, act } from 'react';
 import { create, type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, expect, it, vi } from 'vitest';
 import { MemberApp } from '../src/client/features/people/MemberApp';
-import { AvatarForm } from '../src/client/features/avatars/AvatarForm';
-import { ProfileForm } from '../src/client/features/people/ProfileForm';
+import { ProfileEditor } from '../src/client/features/people/ProfileEditor';
 import { PostList } from '../src/client/features/posts/Posts';
 import { InstallApp } from '../src/client/features/install/InstallApp';
 import { currentRoute, useRoute } from '../src/client/navigation';
@@ -124,8 +123,7 @@ it('unmounts edit forms across repeated feed/profile/settings navigation without
       }),
     );
   });
-  expect(renderer!.root.findAllByType(AvatarForm)).toHaveLength(1);
-  expect(renderer!.root.findAllByType(ProfileForm)).toHaveLength(1);
+  expect(renderer!.root.findAllByType(ProfileEditor)).toHaveLength(1);
   async function go(hash: string) {
     await act(async () => {
       location.hash = hash;
@@ -134,19 +132,17 @@ it('unmounts edit forms across repeated feed/profile/settings navigation without
   }
   for (let i = 0; i < 3; i++) {
     await go('#feed');
-    expect(renderer!.root.findAllByType(AvatarForm)).toHaveLength(0);
-    expect(renderer!.root.findAllByType(ProfileForm)).toHaveLength(0);
+    expect(renderer!.root.findAllByType(ProfileEditor)).toHaveLength(0);
     expect(renderer!.root.findAllByType(PostList)).toHaveLength(1);
     expect(renderer!.root.findAllByType(InstallApp)).toHaveLength(0);
     await go('#profile/alice');
     expect(renderer!.root.findAllByType(PostList)[0].props.grid).toBe(true);
-    expect(renderer!.root.findAllByType(AvatarForm)).toHaveLength(0);
+    expect(renderer!.root.findAllByType(ProfileEditor)).toHaveLength(0);
     await go('#settings');
     expect(renderer!.root.findAllByType(InstallApp)).toHaveLength(1);
     expect(renderer!.root.findAllByType(PostList)).toHaveLength(0);
     await go('#edit');
-    expect(renderer!.root.findAllByType(AvatarForm)).toHaveLength(1);
-    expect(renderer!.root.findAllByType(ProfileForm)).toHaveLength(1);
+    expect(renderer!.root.findAllByType(ProfileEditor)).toHaveLength(1);
   }
   expect(
     errors.mock.calls.some((call) => String(call[0]).includes('same key')),

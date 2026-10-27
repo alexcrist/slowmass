@@ -2,12 +2,10 @@ export function UsernameField({
   value,
   onChange,
   disabled,
-  editing = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   disabled: boolean;
-  editing?: boolean;
 }) {
   return (
     <>
@@ -29,8 +27,6 @@ export function UsernameField({
       />
       <p id="handle-help" className="field-help">
         3–30 letters, numbers, or underscores.
-        {editing &&
-          ' Changing it releases your old username and changes your profile link.'}
       </p>
     </>
   );

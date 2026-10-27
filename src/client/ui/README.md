@@ -25,3 +25,5 @@ On opening, measured placement prefers below the trigger, flips above when neede
 `LockIcon` marks the RSVP-gated guest list. It is decorative; adjacent text explains the restriction. Navigation destinations have no lock badges.
 
 `ScreenBoundary` contains member-screen suspension and load/render failures while keeping navigation available. Loading is announced; failure offers an explicit reload with a warning about unsaved changes. It never reloads automatically. Route remounts reset the boundary, but failed module imports can require a fresh document.
+
+`InlineField` is the in-place text field for editors that look like the page they edit (events, Edit profile, New post). It sets a borderless textarea in the surrounding type, sized by an aria-hidden copy so it wraps and grows like the text it previews; single-line fields block Enter, and `oneLine` turns pasted line breaks into spaces. The shared `.editable` outline is a dashed ring in `--editable-line` (muted gray outside themed events), ink on hover, and a solid ring on focus; `.editor-actions` is the closing Cancel/Save row and `.photo-edit-actions` the pills over a chosen photo.

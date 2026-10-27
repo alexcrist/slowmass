@@ -4,10 +4,40 @@ import {
   PhotoProgress,
   type PhotoProgressState,
 } from '../../images/PhotoProgress';
+import { InlineField } from '../../ui/InlineField';
 import { PostCropEditor } from './PostCropEditor';
 import { fullPhoto, type Rectangle } from './crop';
 
-export function Compose({ onPublished }: { onPublished: () => void }) {
+function PhotoIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <circle cx="9" cy="10" r="2" />
+      <path d="m21 16-5-5-11 9" />
+    </svg>
+  );
+}
+
+// A post, edited in place: selecting the photo area chooses and crops the
+// photo, and the caption is typed where it will appear. The author header
+// isn't a link, so a click can't drop the draft.
+export function Compose({
+  handle,
+  onPublished,
+  onCancel,
+}: {
+  handle: string;
+  onPublished: () => void;
+  onCancel: () => void;
+}) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState('');
   const [source, setSource] = useState<{ file: File; crop: Rectangle } | null>(
@@ -116,80 +146,119 @@ export function Compose({ onPublished }: { onPublished: () => void }) {
         : 'Cancellation could not be confirmed. Check your profile before trying again.',
     );
   }
+  const locked = busy || submitted !== null;
   return (
     <>
-      <form className="post-compose" onSubmit={(event) => void publish(event)}>
-        <label htmlFor="post-file" className="field-label">
-          Photo
-        </label>
-        <input
-          id="post-file"
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          disabled={busy || submitted !== null}
-          onChange={(event) => {
-            const selected = event.target.files?.[0];
-            event.target.value = '';
-            if (selected) setEditing({ file: selected, crop: fullPhoto });
-          }}
-        />
-        <p className="field-help">
-          One still JPEG, PNG, or WebP. Up to 32 MB and 40 megapixels. Photos
-          are resized automatically before upload.
-        </p>
-        {file && preview && (
-          <>
+      <form
+        className="post post-compose"
+        onSubmit={(event) => void publish(event)}
+      >
+        <header>
+          <span className="person-link">
             <img
-              className="photo-preview"
-              src={preview}
-              alt="Selected photo preview"
+              src={`/media/avatar/${encodeURIComponent(handle)}`}
+              width={36}
+              height={36}
+              alt=""
             />
-            <button
-              type="button"
-              className="text-button"
-              disabled={busy || submitted !== null}
-              onClick={() => setEditing(source)}
-            >
-              Adjust crop
+            <strong>{handle}</strong>
+          </span>
+        </header>
+        <div className="compose-photo">
+          <input
+            id="post-file"
+            className="visually-hidden"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            aria-label={preview ? 'Change photo' : 'Add photo'}
+            aria-describedby="post-file-help"
+            disabled={locked}
+            onChange={(event) => {
+              const selected = event.target.files?.[0];
+              event.target.value = '';
+              if (selected) setEditing({ file: selected, crop: fullPhoto });
+            }}
+          />
+          <label htmlFor="post-file" className="compose-photo-choose">
+            {file && preview ? (
+              <img
+                className="post-photo"
+                src={preview}
+                alt="Selected photo preview"
+              />
+            ) : (
+              <span className="compose-photo-empty">
+                <PhotoIcon />
+                <strong>Add photo</strong>
+                <span id="post-file-help">
+                  One still JPEG, PNG, or WebP. Up to 32 MB and 40 megapixels.
+                </span>
+              </span>
+            )}
+          </label>
+          {file && preview && !locked && (
+            <span className="photo-edit-actions">
+              <button
+                type="button"
+                className="photo-edit-action"
+                onClick={() => setEditing(source)}
+              >
+                Adjust crop
+              </button>
+              <label
+                htmlFor="post-file"
+                className="photo-edit-action"
+                aria-hidden="true"
+              >
+                Change photo
+              </label>
+            </span>
+          )}
+        </div>
+        <div className="post-body">
+          <p className="post-caption">
+            <InlineField
+              id="caption"
+              aria-label="Caption"
+              placeholder="Add a caption"
+              multiline
+              maxLength={2000}
+              value={caption}
+              disabled={locked}
+              onChange={(event) => setCaption(event.target.value)}
+            />
+          </p>
+          {busy && <PhotoProgress progress={progress} />}
+          {!busy && submitted && (
+            <p className="field-help">
+              Retry to check this upload. Cancel it before changing the photo or
+              caption.
+            </p>
+          )}
+          {error && (
+            <p role="alert" className="error-message">
+              {error}
+            </p>
+          )}
+          <div className="editor-actions">
+            {locked ? (
+              <button
+                type="button"
+                disabled={cancelling}
+                onClick={() => void cancel()}
+              >
+                Cancel upload
+              </button>
+            ) : (
+              <button type="button" onClick={onCancel}>
+                Cancel
+              </button>
+            )}
+            <button className="primary-button" disabled={busy || !file}>
+              {busy ? 'Saving…' : submitted ? 'Retry upload' : 'Publish photo'}
             </button>
-          </>
-        )}
-        <label htmlFor="caption" className="field-label">
-          Caption
-        </label>
-        <textarea
-          id="caption"
-          rows={3}
-          maxLength={2000}
-          value={caption}
-          disabled={busy || submitted !== null}
-          onChange={(event) => setCaption(event.target.value)}
-        />
-        {busy && <PhotoProgress progress={progress} />}
-        {!busy && submitted && (
-          <p className="field-help">
-            Retry to check this upload. Cancel it before changing the photo or
-            caption.
-          </p>
-        )}
-        <button className="primary-button" disabled={busy || !file}>
-          {busy ? 'Saving…' : submitted ? 'Retry upload' : 'Publish photo'}
-        </button>
-        {(busy || submitted) && (
-          <button
-            type="button"
-            className="text-button"
-            disabled={cancelling}
-            onClick={() => void cancel()}
-          >
-            Cancel upload
-          </button>
-        )}
-        {error && (
-          <p role="alert" className="error-message">
-            {error}
-          </p>
-        )}
+          </div>
+        </div>
       </form>
       {editing && (
         <PostCropEditor

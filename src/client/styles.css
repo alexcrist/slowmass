@@ -795,16 +795,13 @@ a.notification-person:hover {
   /* The 24px icons are centered inside 44px controls. */
   margin-top: -10px;
 }
-.post-photo,
-.photo-preview {
+.post-photo {
   display: block;
   width: 100%;
   height: auto;
   max-height: 200cqw;
   object-fit: contain;
   background: var(--paper);
-}
-.post-photo {
   border: 1px solid var(--line);
   border-radius: 3px;
 }
@@ -819,9 +816,6 @@ a.notification-person:hover {
   border-radius: 3px;
   background: transparent;
   cursor: zoom-in;
-}
-.photo-preview {
-  margin-bottom: 20px;
 }
 @media (max-width: 899px) {
   .masthead {
@@ -1636,6 +1630,9 @@ img.composer-avatar {
   .profile-header {
     padding: 16px;
   }
+  .profile-editor-footer {
+    padding-inline: 16px;
+  }
 }
 @media (min-width: 900px) {
   .member-shell {
@@ -2378,41 +2375,42 @@ a.profile-tab {
 .event-host-pending > .event-list-meta {
   display: block;
 }
-/* The editor is the event page with each part editable in place. Editable
-   parts keep the page's background and get a dashed outline in the palette's
-   control tone instead of form chrome; the offset pads it past the text
-   without moving it. Hover darkens the dashes to ink and focus makes them a
-   solid ink ring. */
-.event-editable {
+/* Editors are their page with each part editable in place: the event page,
+   the profile header, and a post. Editable parts keep the page's background
+   and get a dashed outline in the palette's control tone instead of form
+   chrome; the offset pads it past the text without moving it. Hover darkens
+   the dashes to ink and focus makes them a solid ink ring. */
+.editable {
   border-radius: 3px;
   outline: 1.5px dashed var(--editable-line, var(--control-line));
   outline-offset: 5px;
 }
-/* Original's control tone is too faint against white for a broken line. */
+/* The default control tone is too faint against white for a broken line. */
+:root:not([data-event-appearance]),
 :root[data-event-appearance='original'] {
   --editable-line: var(--muted);
 }
-.event-editable:hover {
+.editable:hover {
   outline-color: var(--ink);
 }
-.event-editable:focus-visible,
-.event-editable:has(:focus-visible) {
+.editable:focus-visible,
+.editable:has(:focus-visible) {
   outline: 2px solid var(--ink);
   outline-offset: 5px;
 }
 /* Outlines reach 6.5px past each part, so the title takes the same 16px gap
    as the rows below it; the page's 8px would let the outlines meet. */
-.event-title-row:has(.event-editable) {
+.event-title-row:has(.editable) {
   margin-bottom: 16px;
 }
 /* The hidden copy grows the field with wrapping, like the comment composer. */
-.event-field {
+.inline-field {
   display: grid;
   flex: 1;
   min-width: 0;
 }
-.event-field-size,
-.event-field textarea {
+.inline-field-size,
+.inline-field textarea {
   grid-area: 1 / 1;
   min-width: 0;
   min-height: 0;
@@ -2424,12 +2422,12 @@ a.profile-tab {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.event-field-size {
+.inline-field-size {
   visibility: hidden;
   overflow: hidden;
 }
-.event-field textarea,
-.event-field textarea:disabled {
+.inline-field textarea,
+.inline-field textarea:disabled {
   height: 100%;
   overflow: hidden;
   resize: none;
@@ -2437,7 +2435,7 @@ a.profile-tab {
   background: transparent;
   color: inherit;
 }
-.event-field textarea:focus-visible {
+.inline-field textarea:focus-visible {
   outline: none;
 }
 .event-placeholder {
@@ -2526,7 +2524,7 @@ a.profile-tab {
 .event-cover-choose:hover .event-cover-empty {
   color: var(--ink);
 }
-.event-cover-actions {
+.photo-edit-actions {
   position: absolute;
   right: 12px;
   bottom: 12px;
@@ -2534,7 +2532,7 @@ a.profile-tab {
   gap: 8px;
   pointer-events: none;
 }
-.event-cover-action {
+.photo-edit-action {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
@@ -2548,19 +2546,102 @@ a.profile-tab {
   cursor: pointer;
   pointer-events: auto;
 }
-.event-cover-action:hover {
+.photo-edit-action:hover {
   background: var(--hover);
 }
-.event-form-actions {
+.editor-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
   margin-top: 8px;
 }
-.event-form-actions > button {
+.editor-actions > button {
   width: 100%;
   min-height: 48px;
   margin: 0;
+}
+/* Edit profile is the profile header edited in place. Outlines reach 6.5px
+   past each part, so the stacked fields take 16px gaps instead of 6px. */
+.profile-photo-editor {
+  display: flex;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+.profile-photo-editor > label {
+  display: flex;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.profile-photo-editor:has(input:disabled) > label {
+  cursor: default;
+}
+.profile-editor-names {
+  flex: 1;
+  display: grid;
+  gap: 16px;
+}
+.profile-editor .profile-identity h2,
+.profile-editor .profile-identity p {
+  margin: 0;
+}
+.profile-editor .bio {
+  margin: 24px 0 0;
+}
+.profile-editor-footer {
+  padding-top: 12px;
+}
+/* New post is a post edited in place; the empty photo area matches the event
+   cover placeholder, with the editable dashes around it. */
+.compose-photo {
+  position: relative;
+}
+.compose-photo:has(input:focus-visible) {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.compose-photo-choose {
+  display: block;
+  cursor: pointer;
+}
+.compose-photo:has(input:disabled) .compose-photo-choose {
+  cursor: default;
+}
+.compose-photo-empty {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 4px;
+  aspect-ratio: 4 / 3;
+  padding: 16px;
+  border: 1.5px dashed var(--editable-line, var(--control-line));
+  border-radius: 3px;
+  background: var(--hover);
+  color: var(--muted);
+  font-size: 15px;
+  text-align: center;
+}
+.compose-photo-empty strong {
+  color: var(--ink);
+  font-size: 17px;
+}
+.compose-photo-empty svg {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 4px;
+}
+.compose-photo-choose:hover .compose-photo-empty {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.post-compose {
+  border-bottom: 0;
+}
+.post-compose .post-caption {
+  margin: 8px 0 0;
+}
+.post-compose .editor-actions {
+  margin-top: 0;
 }
 /* Phones inset event content past the side accents, and the cover sits
    centered, narrower than the text, capped so tall covers stay in view. */

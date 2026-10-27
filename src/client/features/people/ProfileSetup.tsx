@@ -4,7 +4,7 @@ import {
   PhotoProgress,
   type PhotoProgressState,
 } from '../../images/PhotoProgress';
-import { AvatarForm, type PreparedAvatar } from '../avatars';
+import { AvatarForm, uploadAvatar, type PreparedAvatar } from '../avatars';
 import type { Profile } from './ProfileForm';
 import { UsernameField } from './UsernameField';
 import { SetupSignOut } from './SetupSignOut';
@@ -66,22 +66,7 @@ export function ProfileSetup({
       });
       if (request.signal.aborted) return;
       setProgress({ phase: 'uploading' });
-      await api('/api/avatar', {
-        method: 'PUT',
-        headers: {
-          'Idempotency-Key': photo.id,
-          'Content-Type': photo.blob.type,
-        },
-        body: photo.blob,
-        signal: request.signal,
-        onUploadProgress: (percent) => {
-          if (!request.signal.aborted)
-            setProgress({
-              phase: percent === 100 ? 'processing' : 'uploading',
-              percent,
-            });
-        },
-      });
+      await uploadAvatar(photo, request.signal, setProgress);
       if (!request.signal.aborted)
         onFinish({ ...result.profile, hasAvatar: 1 });
     } catch (failure) {

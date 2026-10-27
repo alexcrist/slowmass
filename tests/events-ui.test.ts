@@ -141,9 +141,12 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
-async function mount(element: ReactElement) {
+async function mount(
+  element: ReactElement,
+  options?: Parameters<typeof create>[1],
+) {
   await act(async () => {
-    renderer = create(element);
+    renderer = create(element, options);
   });
   if (!vi.isFakeTimers()) await act(async () => vi.dynamicImportSettled());
 }
@@ -703,8 +706,28 @@ it('opens profile previews from event avatars and gates following for viewers wi
   ).toBe(false);
 });
 
-it('lets event-only members browse, paginate, search, and open profiles from Find', async () => {
+it('lets event-only members browse, scroll, search, and open profiles from Find', async () => {
   location.hash = '#people';
+  const observers: { callback: IntersectionObserverCallback }[] = [];
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      constructor(public callback: IntersectionObserverCallback) {
+        observers.push(this);
+      }
+      observe = vi.fn();
+      disconnect = vi.fn();
+    },
+  );
+  const reachEnd = () =>
+    act(async () =>
+      observers
+        .at(-1)!
+        .callback(
+          [{ isIntersecting: true }] as IntersectionObserverEntry[],
+          {} as IntersectionObserver,
+        ),
+    );
   await mount(
     createElement(MemberApp, {
       initialProfile: {
@@ -716,6 +739,7 @@ it('lets event-only members browse, paginate, search, and open profiles from Fin
       onSignOut: vi.fn(),
       signingOut: false,
     }),
+    { createNodeMock: () => ({}) },
   );
   expect(
     renderer.root.findByProps({ 'aria-label': 'Find' }).props[
@@ -727,12 +751,20 @@ it('lets event-only members browse, paginate, search, and open profiles from Fin
   const seed = new URL(first.path, location.origin).searchParams.get('seed');
   const cursor = `0:${'a'.repeat(32)}`;
   await reply(first, { items: [{ handle: 'alice' }], next: cursor });
-  await click('Next');
+  await reachEnd();
   const second = pending('/api/people/discover');
   const params = new URL(second.path, location.origin).searchParams;
   expect(params.get('seed')).toBe(seed);
   expect(params.get('after')).toBe(cursor);
   await reply(second, { items: [{ handle: 'bob' }], next: null });
+  const handles = () =>
+    renderer.root
+      .findByProps({ className: 'people-list' })
+      .findAllByType('a')
+      .map((item) => item.props.href);
+  expect(handles()).toEqual(['#profile/alice', '#profile/bob']);
+  // The last page has no cursor, so nothing watches for more.
+  expect(observers).toHaveLength(1);
   vi.useFakeTimers();
   try {
     await type('find-person', 'alc');

@@ -13,10 +13,10 @@ import {
   useNotificationCount,
 } from '../notifications';
 import { Compose, PostDetail, PostList } from '../posts';
-import { AvatarForm } from '../avatars';
 import { InstallApp, InstallProvider } from '../install';
 import { InviteLinkDialog } from '../invite-links';
 import { ProfileForm, type Profile } from './ProfileForm';
+import { ProfileEditor } from './ProfileEditor';
 import { ProfilePage } from './ProfilePage';
 import { ProfileSetup } from './ProfileSetup';
 import { Discover } from './Discover';
@@ -121,8 +121,8 @@ function MemberPages({
       href: `#${route}`,
       label: `Back to ${(titles[route.split('/')[0]] || 'Feed').toLowerCase()}`,
     });
-    // Event pages, including creating and editing one, have no back control:
-    // Events is always in the navigation, and the editors end with Cancel.
+    // Editors (events, Edit profile, New post) have no back control: they
+    // end with Cancel, and Events is always in the navigation.
     if (eventOnly) {
       if (needsPhoto) return null;
       if (page === 'edit' || page === 'notification-settings')
@@ -132,7 +132,7 @@ function MemberPages({
     }
     if (page === 'settings' || page === 'following' || page === 'followers')
       return { href: profileRoute, label: 'Back to profile' };
-    if (['edit', 'blocked', 'notification-settings'].includes(page))
+    if (['blocked', 'notification-settings'].includes(page))
       return { href: '#settings', label: 'Back to settings' };
     if (
       page === 'post' ||
@@ -210,7 +210,7 @@ function MemberPages({
           <Notifications onChange={notifications.refresh} focus={handle} />
         );
       case 'edit':
-        return <ProfileForm profile={profile} onSave={saved} mode="name" />;
+        return <ProfileForm profile={profile} onSave={saved} />;
       case 'notification-settings':
         return <NotificationSettings />;
       case 'settings':
@@ -256,7 +256,7 @@ function MemberPages({
             <ProfileForm
               profile={null}
               onSave={saved}
-              mode="name"
+
               onSignOut={onSignOut}
               signingOut={signingOut}
             />
@@ -270,7 +270,7 @@ function MemberPages({
           <ProfileForm
             profile={null}
             onSave={saved}
-            mode="name"
+
             onSignOut={onSignOut}
             signingOut={signingOut}
           />
@@ -290,7 +290,11 @@ function MemberPages({
       case 'compose':
         return (
           <Compose
+            handle={profile.handle}
             onPublished={() => {
+              location.hash = profileRoute;
+            }}
+            onCancel={() => {
               location.hash = profileRoute;
             }}
           />
@@ -346,10 +350,14 @@ function MemberPages({
         );
       case 'edit':
         return (
-          <>
-            <AvatarForm handle={profile.handle} onChange={photoSaved} />
-            <ProfileForm profile={profile} onSave={saved} />
-          </>
+          <ProfileEditor
+            profile={profile}
+            onSaved={saved}
+            onPhotoSaved={photoSaved}
+            onCancel={() => {
+              location.hash = '#settings';
+            }}
+          />
         );
       case 'following':
       case 'followers':
@@ -418,7 +426,7 @@ function MemberPages({
         <section
           key={active ? `${pageKey}:${pageVersion}` : 'onboarding'}
           data-page={active ? page : 'onboarding'}
-          className={`member-content ${joining ? 'event-join' : !active || needsPhoto ? 'onboarding' : ['feed', 'profile', 'post', 'event', 'new-event'].includes(page) ? 'photo-screen' : ''}${eventOnly ? ' event-only' : ''}`}
+          className={`member-content ${joining ? 'event-join' : !active || needsPhoto ? 'onboarding' : ['feed', 'profile', 'post', 'event', 'new-event'].includes(page) || (!eventOnly && ['compose', 'edit'].includes(page)) ? 'photo-screen' : ''}${eventOnly ? ' event-only' : ''}`}
           aria-labelledby={joining ? undefined : 'screen-title'}
         >
           {active && back && <BackControl {...back} />}
