@@ -35,7 +35,20 @@ it('leaves unmatched and spaced markers as text', () => {
   expect(parseDescription('**open')).toEqual(['**open']);
   expect(parseDescription('**a*')).toEqual(['*', em('a')]);
   expect(parseDescription('****')).toEqual(['****']);
-  expect(parseDescription('~single~')).toEqual(['~single~']);
+  expect(parseDescription('~~~three~~~')).toEqual(['~~~three~~~']);
+  expect(parseDescription('~~ spaced~~')).toEqual(['~~ spaced~~']);
+});
+
+it('strikes through with one or two tildes', () => {
+  expect(parseDescription('~one~ ~~two~~')).toEqual([
+    del('one'),
+    ' ',
+    del('two'),
+  ]);
+  expect(parseDescription('~a~~b~')).toEqual([del('a~~b')]);
+  expect(parseDescription('~~a~b~~')).toEqual([del('a~b')]);
+  expect(parseDescription('~~mixed~')).toEqual(['~~mixed~']);
+  expect(parseDescription('x~y~z')).toEqual(['x', del('y'), 'z']);
 });
 
 it('keeps underscores inside words', () => {

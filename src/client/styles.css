@@ -2184,17 +2184,7 @@ a.profile-tab {
 }
 .event-guest-row > li {
   display: grid;
-  justify-items: center;
-  align-content: start;
-  gap: 6px;
   width: 52px;
-  font-size: 13px;
-}
-.event-guest-row > li > span[aria-hidden] {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .event-guest-more {
   width: 52px;

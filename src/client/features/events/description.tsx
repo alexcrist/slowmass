@@ -1,17 +1,18 @@
 import { Fragment, type ReactNode } from 'react';
 
 // Event descriptions support a small inline Markdown subset: **bold** or
-// __bold__, *italic* or _italic_, and ~~strikethrough~~. A backslash escapes a
-// marker. Markers pair within one line, a run can't open before or close after
-// a space, and underscores inside words (snake_case) stay literal. Anything
-// else is plain text; output is React text nodes, never HTML.
+// __bold__, *italic* or _italic_, and ~strikethrough~ or ~~strikethrough~~,
+// following GitHub's rules. A backslash escapes a marker. Markers pair within
+// one line, a run can't open before or close after a space, underscores inside
+// words (snake_case) stay literal, and a tilde run closes only on a run of the
+// same length (three or more tildes never strike). Anything else is plain
+// text; output is React text nodes, never HTML.
 export type Inline =
   string | { tag: 'strong' | 'em' | 'del'; children: Inline[] };
 
 const markers = [
   { marker: '**', tag: 'strong' },
   { marker: '__', tag: 'strong' },
-  { marker: '~~', tag: 'del' },
   { marker: '*', tag: 'em' },
   { marker: '_', tag: 'em' },
 ] as const;
@@ -48,6 +49,28 @@ function closer(text: string, marker: string, start: number) {
   return -1;
 }
 
+const run = (text: string, at: number) => {
+  let end = at;
+  while (text[end] === text[at]) end++;
+  return end - at;
+};
+
+// The start of a tilde run exactly `length` long that closes, or -1.
+function tildeCloser(text: string, length: number, start: number) {
+  for (let at = start; at < text.length; at++) {
+    if (text[at] === '\n') return -1;
+    if (text[at] === '\\') {
+      at++;
+      continue;
+    }
+    if (text[at] !== '~') continue;
+    const found = run(text, at);
+    if (found === length && at > start && !space(text[at - 1])) return at;
+    at += found - 1;
+  }
+  return -1;
+}
+
 export function parseDescription(text: string): Inline[] {
   const out: Inline[] = [];
   let plain = '';
@@ -57,6 +80,27 @@ export function parseDescription(text: string): Inline[] {
     if (char === '\\' && escapable.has(text.charAt(at + 1))) {
       plain += text.charAt(at + 1);
       at += 2;
+      continue;
+    }
+    if (char === '~') {
+      const length = run(text, at);
+      const start = at + length;
+      const end =
+        length <= 2 && !space(text[start])
+          ? tildeCloser(text, length, start)
+          : -1;
+      if (end !== -1) {
+        if (plain) out.push(plain);
+        plain = '';
+        out.push({
+          tag: 'del',
+          children: parseDescription(text.slice(start, end)),
+        });
+        at = end + length;
+      } else {
+        plain += text.slice(at, start);
+        at = start;
+      }
       continue;
     }
     const match = markers.find(({ marker }) => text.startsWith(marker, at));

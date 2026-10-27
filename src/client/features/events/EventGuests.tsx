@@ -33,11 +33,6 @@ export function guestPhoto(guest: Guest) {
 // The page shows a row of guests; View all opens every answer's full list.
 const rowSize = 5;
 
-// Captions fit about seven characters, so they show the first name.
-function firstName(name: string) {
-  return name.trim().split(/\s+/)[0];
-}
-
 export function EventGuests({
   id,
   headingId,
@@ -124,7 +119,6 @@ function GuestRow({
             src={guestPhoto(guest)}
             size={52}
           />
-          <span aria-hidden="true">{firstName(guest.displayName)}</span>
           <span className="visually-hidden">{guest.displayName}</span>
         </li>
       ))}
