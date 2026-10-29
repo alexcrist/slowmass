@@ -56,7 +56,7 @@ export function useEventAppearance(appearance?: EventAppearance) {
     root.setAttribute('data-event-font', fontPairing);
     for (const [key, value] of Object.entries(properties))
       root.style.setProperty(key, value);
-    themeColor?.setAttribute('content', palette.paper);
+    themeColor?.setAttribute('content', palette.nav);
     return () => {
       for (const { key, value, priority } of previous) {
         if (value) root.style.setProperty(key, value, priority);

@@ -124,7 +124,7 @@ it('applies heading fonts only during an event and restores root styles and brow
     palettes.wine.controlLine,
   );
   expect(root.style.getPropertyValue('color-scheme')).toBe('dark');
-  expect(themeColor.getAttribute('content')).toBe(palettes.wine.paper);
+  expect(themeColor.getAttribute('content')).toBe(palettes.wine.nav);
   await act(async () =>
     renderer?.update(
       createElement(Page, {
