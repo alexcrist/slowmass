@@ -38,5 +38,6 @@
   "0037_notification_preferences.sql": "automatic",
   "0038_hosting_activity.sql": "automatic",
   "0039_post_alerts.sql": "automatic",
-  "0040_cancellation_email.sql": "automatic"
+  "0040_cancellation_email.sql": "automatic",
+  "0041_comment_activity.sql": "automatic"
 }

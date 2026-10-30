@@ -32,10 +32,27 @@ const hostInvitation = `EXISTS(SELECT 1 FROM event ev WHERE ev.id=substr(e.event
        WHERE i.event_id=ev.id AND i.user_id=e.recipient_id AND i.invited_by=e.actor_id AND i.link_id=ev.link_id)
      AND EXISTS(SELECT 1 FROM follow WHERE status='accepted'
        AND ((follower_id=e.actor_id AND target_id=e.recipient_id) OR (follower_id=e.recipient_id AND target_id=e.actor_id))))))`;
+// New kinds resolve through the source comment, keeping older Workers unaware.
+const sourceComment = `CASE e.kind WHEN 'thread_comment' THEN substr(e.event_key,16)
+ WHEN 'comment_like' THEN substr(e.event_key,14,36) END`;
+const sourcePost = `CASE WHEN e.kind IN ('thread_comment','comment_like')
+ THEN (SELECT post_id FROM comment WHERE id=${sourceComment}) ELSE e.post_id END`;
+const commentActivity = `EXISTS(SELECT 1 FROM comment c JOIN post p ON p.id=c.post_id
+ JOIN membership owner ON owner.user_id=p.user_id AND owner.status='active'
+ WHERE c.id=${sourceComment} AND c.deleted_at IS NULL AND p.state='published'
+ AND EXISTS(SELECT 1 FROM avatar WHERE user_id=e.recipient_id)
+ AND (p.user_id=e.recipient_id OR EXISTS(SELECT 1 FROM follow
+   WHERE follower_id=e.recipient_id AND target_id=p.user_id AND status='accepted'))
+ AND NOT EXISTS(SELECT 1 FROM block WHERE (blocker_id=e.recipient_id AND target_id=p.user_id)
+   OR (blocker_id=p.user_id AND target_id=e.recipient_id))
+ AND ((e.kind='thread_comment' AND c.user_id=e.actor_id)
+   OR (e.kind='comment_like' AND c.user_id=e.recipient_id AND EXISTS(SELECT 1 FROM comment_like
+     WHERE comment_id=c.id AND user_id=e.actor_id))))`;
 const visibleSource = `
  EXISTS(SELECT 1 FROM membership v WHERE v.user_id=e.recipient_id AND v.status='active')
  AND ${visibleActor('e')}
  AND (e.kind='request'
+   OR (e.kind IN ('thread_comment','comment_like') AND ${commentActivity})
    OR (e.kind='event_response' AND EXISTS(SELECT 1 FROM event ev
      JOIN event_host h ON h.event_id=ev.id AND h.user_id=e.recipient_id
      JOIN event_response r ON r.event_id=ev.id AND r.user_id=e.actor_id
@@ -60,7 +77,7 @@ const visibleSource = `
    OR (e.kind='post'
      AND EXISTS(SELECT 1 FROM follow f WHERE f.follower_id=e.recipient_id AND f.target_id=e.actor_id AND f.status='accepted')
      AND EXISTS(SELECT 1 FROM post p WHERE p.id=e.post_id AND p.user_id=e.actor_id AND p.state='published'))
-   OR (e.kind!='post' AND EXISTS(SELECT 1 FROM post p WHERE p.id=e.post_id AND p.user_id=e.recipient_id AND p.state='published')))`;
+   OR (e.kind IN ('likes','comment') AND EXISTS(SELECT 1 FROM post p WHERE p.id=e.post_id AND p.user_id=e.recipient_id AND p.state='published')))`;
 const eligible = `${visibleSource}
  AND (e.kind!='likes' OR e.actor_id=(${latestLike}))`;
 export type Notification = {
@@ -71,6 +88,8 @@ export type Notification = {
     | 'joined'
     | 'likes'
     | 'comment'
+    | 'thread_comment'
+    | 'comment_like'
     | 'event_response'
     | 'event_message'
     | 'host_invite'
@@ -117,7 +136,7 @@ export function parsePage(
   }
 }
 export function validNotificationKey(key: string) {
-  return /^(?:(?:request|follower|joined|likes|comment):[a-zA-Z0-9-]{1,64}|event_response:[a-f0-9-]{36}\.[a-zA-Z0-9-]{1,64}|event_message:[a-f0-9-]{36}|host_invite:[a-f0-9-]{36}|host_accepted:[a-f0-9-]{36}\.[a-zA-Z0-9-]{1,64})$/.test(
+  return /^(?:(?:request|follower|joined|likes|comment|thread_comment):[a-zA-Z0-9-]{1,64}|comment_like:[a-f0-9-]{36}\.[a-zA-Z0-9-]{1,64}|event_response:[a-f0-9-]{36}\.[a-zA-Z0-9-]{1,64}|event_message:[a-f0-9-]{36}|host_invite:[a-f0-9-]{36}|host_accepted:[a-f0-9-]{36}\.[a-zA-Z0-9-]{1,64})$/.test(
     key,
   );
 }
@@ -126,12 +145,19 @@ export type ActivityKinds = {
   joined: boolean;
   events: boolean;
   hosting: boolean;
+  comments?: boolean;
 };
-const allKinds: ActivityKinds = { joined: true, events: true, hosting: true };
+const allKinds: ActivityKinds = {
+  joined: true,
+  events: true,
+  hosting: true,
+  comments: true,
+};
 // Post alerts are never listed or counted, whatever the client asks for.
 function kindFilter(kinds: ActivityKinds) {
   const hidden = [
     "'post'",
+    ...(kinds.comments ? [] : ["'thread_comment'", "'comment_like'"]),
     ...(kinds.joined ? [] : ["'joined'"]),
     ...(kinds.events ? [] : ["'event_response'", "'event_message'"]),
     ...(kinds.hosting ? [] : ["'host_invite'", "'host_accepted'"]),
@@ -169,14 +195,15 @@ export async function notificationPage(
     WHERE e.recipient_id=? AND ${kindFilter(kinds)} AND ${filter === 'requests' ? "e.kind='request' AND" : ''}
     (e.created_at,e.event_key)<(?,?) AND ${eligible}
     ORDER BY e.created_at DESC,e.event_key DESC LIMIT 21
-  ) SELECT e.event_key AS key,e.kind,e.post_id AS postId,${eventId} AS eventId,
+  ) SELECT e.event_key AS key,e.kind,${sourcePost} AS postId,${eventId} AS eventId,
     (SELECT title FROM event WHERE id=${eventId}) AS eventTitle,
     CASE WHEN e.kind='event_response' THEN (SELECT status FROM event_response WHERE event_id=${eventId} AND user_id=e.actor_id) END AS response,
     CASE WHEN e.kind='event_message' THEN (SELECT kind FROM event_message WHERE id=substr(e.event_key,15)) END AS messageKind,
     (e.kind='host_invite' AND EXISTS(SELECT 1 FROM event_host WHERE event_id=${eventId} AND user_id=e.recipient_id)) AS hosting,
     CASE WHEN e.kind!='likes' THEN (SELECT handle FROM profile WHERE user_id=e.actor_id) END AS handle,
     CASE WHEN e.kind IN ('event_response','event_message','host_invite','host_accepted') THEN (SELECT display_name FROM profile WHERE user_id=e.actor_id) END AS displayName,
-    CASE WHEN e.kind='comment' THEN (SELECT body FROM comment WHERE id=substr(e.event_key,9))
+    CASE WHEN e.kind IN ('thread_comment','comment_like') THEN (SELECT body FROM comment WHERE id=${sourceComment})
+      WHEN e.kind='comment' THEN (SELECT body FROM comment WHERE id=substr(e.event_key,9))
       WHEN e.kind='event_message' THEN (SELECT body FROM event_message WHERE id=substr(e.event_key,15)) END AS body,
     CASE WHEN e.kind='likes' THEN (SELECT COUNT(*) FROM activity_source n WHERE n.recipient_id=e.recipient_id AND n.event_key=e.event_key AND ${visibleActor('n')}) ELSE 1 END AS count,
     e.created_at AS createdAt,
@@ -323,12 +350,13 @@ export async function describeNotification(
 ): Promise<DescribedNotification | null> {
   const row = await db
     .prepare(
-      `SELECT e.event_key AS key,e.kind,c.id AS category,e.post_id AS postId,${eventId} AS eventId,
+      `SELECT e.event_key AS key,e.kind,c.id AS category,${sourcePost} AS postId,${eventId} AS eventId,
     (SELECT title FROM event WHERE id=${eventId}) AS eventTitle,
     CASE WHEN e.kind='event_response' THEN (SELECT status FROM event_response WHERE event_id=${eventId} AND user_id=e.actor_id) END AS response,
     (SELECT handle FROM profile WHERE user_id=e.actor_id) AS handle,
     (SELECT display_name FROM profile WHERE user_id=e.actor_id) AS displayName,
-    CASE WHEN e.kind='comment' THEN (SELECT body FROM comment WHERE id=substr(e.event_key,9))
+    CASE WHEN e.kind IN ('thread_comment','comment_like') THEN (SELECT body FROM comment WHERE id=${sourceComment})
+      WHEN e.kind='comment' THEN (SELECT body FROM comment WHERE id=substr(e.event_key,9))
       WHEN e.kind='event_message' THEN (SELECT body FROM event_message WHERE id=substr(e.event_key,15))
       WHEN e.kind='post' THEN (SELECT NULLIF(caption,'') FROM post WHERE id=e.post_id) END AS body,
     CASE WHEN e.kind='likes' THEN (SELECT COUNT(*) FROM activity_source n WHERE n.recipient_id=e.recipient_id AND n.event_key=e.event_key AND ${visibleActor('n')}) ELSE 1 END AS count,

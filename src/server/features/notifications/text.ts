@@ -80,6 +80,16 @@ export function notificationText(item: Content): NotificationText {
       summary: `${handle} commented on your photo.`,
       path: postPath,
     }),
+    thread_comment: () => ({
+      title: 'slowmass',
+      summary: `${handle} also commented on a photo you commented on.`,
+      path: postPath,
+    }),
+    comment_like: () => ({
+      title: 'slowmass',
+      summary: `${handle} likes your comment.`,
+      path: postPath,
+    }),
     event_response: () => ({
       title: event,
       summary: `${name} ${answers[item.response ?? 'going']} ${event}.`,
@@ -113,9 +123,14 @@ export function notificationText(item: Content): NotificationText {
   };
   return {
     ...sentences[item.category](),
-    quote: ['comment', 'post', 'event_message', 'update_blast'].includes(
-      item.category,
-    )
+    quote: [
+      'comment',
+      'thread_comment',
+      'comment_like',
+      'post',
+      'event_message',
+      'update_blast',
+    ].includes(item.category)
       ? item.body
       : null,
   };

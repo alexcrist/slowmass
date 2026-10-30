@@ -10,7 +10,7 @@ self.addEventListener('activate', (event) =>
 function validNotificationKey(key) {
   return (
     typeof key === 'string' &&
-    /^(?:(?:request|follower|joined|likes|comment|post):[a-zA-Z0-9-]{1,64}|event_response:[a-f0-9-]{36}\.[a-zA-Z0-9-]{1,64}|event_message:[a-f0-9-]{36})$/.test(
+    /^(?:(?:request|follower|joined|likes|comment|post|thread_comment):[a-zA-Z0-9-]{1,64}|comment_like:[a-f0-9-]{36}\.[a-zA-Z0-9-]{1,64}|event_response:[a-f0-9-]{36}\.[a-zA-Z0-9-]{1,64}|event_message:[a-f0-9-]{36})$/.test(
       key,
     )
   );

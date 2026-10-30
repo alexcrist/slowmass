@@ -16,7 +16,12 @@ type Item = {
   | { kind: 'follower'; handle: string; canFollowBack: boolean }
   | { kind: 'joined'; handle: string }
   | { kind: 'likes'; postId: string; count: number; more: boolean }
-  | { kind: 'comment'; postId: string; handle: string; body: string }
+  | {
+      kind: 'comment' | 'thread_comment' | 'comment_like';
+      postId: string;
+      handle: string;
+      body: string;
+    }
   | {
       kind: 'event_response';
       eventId: string;
@@ -93,7 +98,7 @@ export function Notifications({
     reload,
     refresh,
   } = useApiResource<Page>(
-    `/api/notifications?cursor=${encodeURIComponent(cursor)}${focus ? `&focus=${encodeURIComponent(focus)}` : ''}&includeJoined=1&includeEvents=1&includeHosting=1`,
+    `/api/notifications?cursor=${encodeURIComponent(cursor)}${focus ? `&focus=${encodeURIComponent(focus)}` : ''}&includeJoined=1&includeEvents=1&includeHosting=1&includeComments=1`,
   );
   const { list, readError } = useReadActivity(page?.items, onChange);
   async function act(handle: string, action: 'accept' | 'deny' | 'request') {
@@ -359,7 +364,12 @@ export function Notifications({
                   ) : (
                     <>
                       <p data-notification-key={item.key}>
-                        {item.handle} commented on your photo.
+                        {item.handle}{' '}
+                        {item.kind === 'comment_like'
+                          ? 'likes your comment.'
+                          : item.kind === 'thread_comment'
+                            ? 'also commented on a photo you commented on.'
+                            : 'commented on your photo.'}
                       </p>
                       <p className="bio">{item.body}</p>
                     </>

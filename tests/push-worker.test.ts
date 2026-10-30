@@ -91,36 +91,38 @@ it.each([{}, { title: 7, body: '   ' }, null])(
     );
   },
 );
-it.each(['comment:test', 'follower:bob', 'joined:bob', ...eventKeys])(
-  'opens %s in Activity and never accepts an external target',
-  async (key) => {
-    const focus = vi.fn(async () => {});
-    const navigate = vi.fn(async () => ({ focus }));
-    matchAll.mockResolvedValue([
-      { url: 'https://slowmass.com/#feed', navigate },
-    ]);
-    const close = vi.fn();
-    await emit('notificationclick', {
-      notification: {
-        data: { key, url: 'https://evil.test' },
-        close,
-      },
-    });
-    expect(close).toHaveBeenCalledOnce();
-    expect(navigate).toHaveBeenCalledWith(
-      `https://slowmass.com/#notifications/${key}`,
-    );
-    expect(focus).toHaveBeenCalledOnce();
-    expect(openWindow).not.toHaveBeenCalled();
-    matchAll.mockResolvedValue([]);
-    await emit('notificationclick', {
-      notification: { data: { key: 'https://evil.test' }, close },
-    });
-    expect(openWindow).toHaveBeenCalledWith(
-      'https://slowmass.com/#notifications',
-    );
-  },
-);
+it.each([
+  'comment:test',
+  'thread_comment:00000000-0000-4000-8000-000000000003',
+  'comment_like:00000000-0000-4000-8000-000000000003.bob',
+  'follower:bob',
+  'joined:bob',
+  ...eventKeys,
+])('opens %s in Activity and never accepts an external target', async (key) => {
+  const focus = vi.fn(async () => {});
+  const navigate = vi.fn(async () => ({ focus }));
+  matchAll.mockResolvedValue([{ url: 'https://slowmass.com/#feed', navigate }]);
+  const close = vi.fn();
+  await emit('notificationclick', {
+    notification: {
+      data: { key, url: 'https://evil.test' },
+      close,
+    },
+  });
+  expect(close).toHaveBeenCalledOnce();
+  expect(navigate).toHaveBeenCalledWith(
+    `https://slowmass.com/#notifications/${key}`,
+  );
+  expect(focus).toHaveBeenCalledOnce();
+  expect(openWindow).not.toHaveBeenCalled();
+  matchAll.mockResolvedValue([]);
+  await emit('notificationclick', {
+    notification: { data: { key: 'https://evil.test' }, close },
+  });
+  expect(openWindow).toHaveBeenCalledWith(
+    'https://slowmass.com/#notifications',
+  );
+});
 it('shows a new-photo alert under its own tag and opens the photo, not Activity', async () => {
   const key = 'post:00000000-0000-4000-8000-000000000003';
   // Post alerts never appear in Activity, so it cannot focus or acknowledge them.

@@ -54,6 +54,7 @@ Exit: upload through the API, reload, and see exactly one published post. A foll
 
 - [x] Implement idempotent likes/unlikes, bounded flat comments, comment deletion, and batched counts.
 - [x] Implement in-app follow-request actions, grouped like notifications, comment notifications, and pagination.
+- [x] Add prior-thread-participant and comment-like Activity, separate push/email choices (push on, email off), retry-safe sources and current-access delivery checks; bounded fan-out and migration compatibility have local Worker/API coverage.
 - [x] Ensure notifications and source mutations cannot diverge silently; derive activity from transactionally indexed current source tables.
 - [x] Recheck visibility when rendering notifications and navigating to their targets; clean up or hide obsolete events.
 

@@ -76,6 +76,8 @@ it('returns defaults that match earlier behavior and saves validated choices', a
     { category: 'joined', push: true, email: false },
     { category: 'likes', push: false, email: false },
     { category: 'comment', push: true, email: false },
+    { category: 'thread_comment', push: true, email: false },
+    { category: 'comment_like', push: true, email: false },
     { category: 'post', push: false, email: false },
     { category: 'event_response', push: true, email: false },
     { category: 'event_message', push: true, email: false },
@@ -118,7 +120,7 @@ it('returns defaults that match earlier behavior and saves validated choices', a
     email: false,
   });
   await runtime.db.prepare("DELETE FROM avatar WHERE user_id='bob'").run();
-  expect((await preferences('bob')).length).toBe(12);
+  expect((await preferences('bob')).length).toBe(14);
 });
 
 it('emails only unread activity, describes it, and unsubscribes one category by link', async () => {

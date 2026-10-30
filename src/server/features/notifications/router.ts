@@ -31,6 +31,7 @@ function kinds(c: { req: { query: (name: string) => string | undefined } }) {
     joined: c.req.query('includeJoined') === '1',
     events: c.req.query('includeEvents') === '1',
     hosting: c.req.query('includeHosting') === '1',
+    comments: c.req.query('includeComments') === '1',
   };
 }
 notifications.get('/', async (c) => {

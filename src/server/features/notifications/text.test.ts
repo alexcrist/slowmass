@@ -30,6 +30,16 @@ it('describes each category the way Activity does', () => {
       'alice joined slowmass through your invitation.',
       '#notifications/comment:c1',
     ],
+    [
+      { category: 'thread_comment', body: 'Hello' },
+      'alice also commented on a photo you commented on.',
+      '#post/p1',
+    ],
+    [
+      { category: 'comment_like', body: 'Hello' },
+      'alice likes your comment.',
+      '#post/p1',
+    ],
     [{ category: 'likes', count: 1 }, 'alice likes your photo.', '#post/p1'],
     [
       { category: 'likes', count: 2 },

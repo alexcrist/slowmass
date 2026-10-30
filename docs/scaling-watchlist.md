@@ -44,3 +44,5 @@ SELECT COUNT(*) FROM activity_source WHERE kind='post';
 Act when live post alerts exceed what one cleanup run per 15 minutes removes (1,000), or when publication rows written climb faster than posts.
 
 **Fix.** Mark a post alert's receipt read once its last queued delivery finishes, which also takes it out of the badge's unread seek, and raise the cleanup batch.
+
+Comment-participant activity (migration 0041) writes one source and receipt per eligible prior commenter, capped at the 500 most recent participants per new comment, plus their opted-in delivery rows. The partial participant index avoids deleted history, but selecting distinct participants still reads live comments on that post. Measure comment-insert rows read/written and CPU, and push queue age; sustained large threads need a measured participant-summary or batched fan-out design before raising the cap. Comment likes add one source/receipt per non-self like.

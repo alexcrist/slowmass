@@ -577,7 +577,7 @@ it('loads the feed after one bootstrap request without login, onboarding, or red
   expect(requests.map((request) => request.path)).toEqual([
     '/api/bootstrap',
     '/api/posts?',
-    '/api/notifications/unread-count?includeJoined=1&includeEvents=1&includeHosting=1',
+    '/api/notifications/unread-count?includeJoined=1&includeEvents=1&includeHosting=1&includeComments=1',
   ]);
   await reply(pending('/api/posts?'), { items: [], next: null });
   expect(visibleText()).toContain('No posts on this page.');
@@ -2098,7 +2098,7 @@ it('paginates one activity timeline and resolves inline requests without leaving
   await reply(pending('/api/people/bob/accept'), { ok: true });
   expect(location.hash).toBe('#notifications');
   expect(pending('/api/notifications?').path).toBe(
-    '/api/notifications?cursor=&includeJoined=1&includeEvents=1&includeHosting=1',
+    '/api/notifications?cursor=&includeJoined=1&includeEvents=1&includeHosting=1&includeComments=1',
   );
   await reply(pending('/api/notifications?'), { items: [], next: 'older' });
   await click('Older');
@@ -2109,7 +2109,7 @@ it('paginates one activity timeline and resolves inline requests without leaving
   expect(visibleText()).toContain('No activity on this page.');
   await click('Newer');
   expect(pending('/api/notifications?').path).toBe(
-    '/api/notifications?cursor=&includeJoined=1&includeEvents=1&includeHosting=1',
+    '/api/notifications?cursor=&includeJoined=1&includeEvents=1&includeHosting=1&includeComments=1',
   );
   expect(
     requests.some(
