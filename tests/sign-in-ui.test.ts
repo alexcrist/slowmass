@@ -47,6 +47,7 @@ beforeEach(() => {
   vi.stubGlobal('location', location);
   vi.stubGlobal('navigator', { standalone: false });
   vi.stubGlobal('window', {
+    scrollY: 0,
     location,
     history: { state: null, replaceState: vi.fn() },
     matchMedia: () => ({

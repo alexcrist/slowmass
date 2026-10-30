@@ -9,7 +9,11 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Welcome } from '../src/client/features/welcome/Welcome';
 import { MemberApp } from '../src/client/features/people/MemberApp';
-import { Discover } from '../src/client/features/people/Discover';
+import {
+  Discover,
+  DiscoverHistoryProvider,
+} from '../src/client/features/people/Discover';
+import { CommentHistoryProvider } from '../src/client/features/interactions';
 import { Connections } from '../src/client/features/people/Connections';
 import { ProfilePage } from '../src/client/features/people/ProfilePage';
 import { PostDetail, PostList } from '../src/client/features/posts/Posts';
@@ -68,6 +72,8 @@ beforeEach(() => {
     querySelector: vi.fn(() => null),
   });
   vi.stubGlobal('window', {
+    scrollY: 0,
+    history: { scrollRestoration: 'auto', state: null, replaceState: vi.fn() },
     addEventListener: events.addEventListener.bind(events),
     removeEventListener: events.removeEventListener.bind(events),
     dispatchEvent: events.dispatchEvent.bind(events),
@@ -3186,3 +3192,80 @@ it.each([
     expect(permission).not.toHaveBeenCalled();
   },
 );
+
+it('rebuilds Find from fresh reads with its previous shuffle and loaded depth', async () => {
+  let intersect: (entries: { isIntersecting: boolean }[]) => void = () => {};
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      constructor(callback: typeof intersect) {
+        intersect = callback;
+      }
+      observe = vi.fn();
+      disconnect = vi.fn();
+    },
+  );
+  const tree = (show: boolean) =>
+    createElement(DiscoverHistoryProvider, {
+      children: show ? createElement(Discover) : null,
+    });
+  await act(async () => {
+    renderer = create(tree(true), { createNodeMock: () => ({}) });
+  });
+  const first = pending('/api/people/discover?');
+  await reply(first, { items: [{ handle: 'alice' }], next: 'second' });
+  await act(async () => intersect([{ isIntersecting: true }]));
+  const second = pending('/api/people/discover?');
+  expect(second.path).toContain('after=second');
+  await reply(second, { items: [{ handle: 'bob' }], next: null });
+  expect(visibleText()).toContain('bob');
+  await act(async () => renderer.update(tree(false)));
+  await act(async () => renderer.update(tree(true)));
+  expect(visibleText()).not.toContain('alice');
+  const restored = pending('/api/people/discover?');
+  expect(restored.path).toBe(first.path);
+  // A removed/blocked member from the earlier response is never restored.
+  await reply(restored, { items: [{ handle: 'carol' }], next: 'new-second' });
+  const restoredSecond = pending('/api/people/discover?');
+  expect(restoredSecond.path).toContain('after=new-second');
+  await reply(restoredSecond, { items: [{ handle: 'dave' }], next: null });
+  expect(visibleText()).toContain('carol');
+  expect(visibleText()).toContain('dave');
+  expect(visibleText()).not.toContain('alice');
+  expect(visibleText()).not.toContain('bob');
+});
+
+it('remembers open comments and their page without restoring old comment content', async () => {
+  const tree = (show: boolean) =>
+    createElement(CommentHistoryProvider, {
+      children: show
+        ? createElement(Interactions, {
+            postId: 'one',
+            initial: { likeCount: 0, commentCount: 2, liked: 0 },
+          })
+        : null,
+    });
+  await mount(tree(true));
+  await click('Show comments');
+  await reply(pending('/api/interactions/one/comments?'), {
+    items: [],
+    next: 'older',
+  });
+  await click('Older comments');
+  await reply(pending('/api/interactions/one/comments?'), {
+    items: [],
+    next: null,
+  });
+  await act(async () => renderer.update(tree(false)));
+  await act(async () => renderer.update(tree(true)));
+  expect(pending('/api/interactions/one/comments?').path).toContain(
+    'after=older',
+  );
+  expect(visibleText()).toContain('Loading comments');
+  await reply(
+    pending('/api/interactions/one/comments?'),
+    { error: 'Post not available' },
+    404,
+  );
+  expect(visibleText()).toContain('Post not available');
+});

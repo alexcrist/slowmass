@@ -116,6 +116,8 @@ beforeEach(() => {
     ),
   });
   vi.stubGlobal('window', {
+    scrollY: 0,
+    history: { scrollRestoration: 'auto', state: null, replaceState: vi.fn() },
     addEventListener: events.addEventListener.bind(events),
     removeEventListener: events.removeEventListener.bind(events),
     dispatchEvent: events.dispatchEvent.bind(events),

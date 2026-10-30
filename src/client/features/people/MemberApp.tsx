@@ -19,7 +19,8 @@ import { ProfileForm, type Profile } from './ProfileForm';
 import { ProfileEditor } from './ProfileEditor';
 import { ProfilePage } from './ProfilePage';
 import { ProfileSetup } from './ProfileSetup';
-import { Discover } from './Discover';
+import { Discover, DiscoverHistoryProvider } from './Discover';
+import { CommentHistoryProvider } from '../interactions';
 import { Connections, type Kind } from './Connections';
 import { HeaderActions, MemberNavigation } from './MemberNavigation';
 import {
@@ -76,7 +77,7 @@ function MemberPages({
   onSignOut,
   signingOut,
 }: MemberProps) {
-  const { route, backRoute, eventRoute, navigate } = useRoute();
+  const { route, backRoute, eventRoute, navigate, resetScroll } = useRoute();
   const [page, handle, profileTab] = route.split('/');
   const pageKey =
     page === 'profile' ? route.split('/').slice(0, 2).join('/') : route;
@@ -397,7 +398,7 @@ function MemberPages({
   function reselect() {
     notifications.refresh();
     setPageVersion((version) => version + 1);
-    window.scrollTo(0, 0);
+    resetScroll();
   }
   return (
     <>
@@ -423,41 +424,45 @@ function MemberPages({
         />
       )}
       <PageHistoryProvider key={pageVersion}>
-        <section
-          key={active ? `${pageKey}:${pageVersion}` : 'onboarding'}
-          data-page={active ? page : 'onboarding'}
-          className={`member-content ${joining ? 'event-join' : !active || needsPhoto ? 'onboarding' : ['feed', 'profile', 'post', 'event', 'new-event'].includes(page) || (!eventOnly && ['compose', 'edit'].includes(page)) ? 'photo-screen' : ''}${eventOnly ? ' event-only' : ''}`}
-          aria-labelledby={joining ? undefined : 'screen-title'}
-        >
-          {active && back && <BackControl {...back} />}
-          {/* The event's title heads the join screen. */}
-          {!needsPhoto && !joining && (
-            <h1
-              id="screen-title"
-              ref={heading}
-              tabIndex={-1}
-              className={active ? 'visually-hidden' : undefined}
+        <DiscoverHistoryProvider>
+          <CommentHistoryProvider>
+            <section
+              key={active ? `${pageKey}:${pageVersion}` : 'onboarding'}
+              data-page={active ? page : 'onboarding'}
+              className={`member-content ${joining ? 'event-join' : !active || needsPhoto ? 'onboarding' : ['feed', 'profile', 'post', 'event', 'new-event'].includes(page) || (!eventOnly && ['compose', 'edit'].includes(page)) ? 'photo-screen' : ''}${eventOnly ? ' event-only' : ''}`}
+              aria-labelledby={joining ? undefined : 'screen-title'}
             >
-              {profile === null
-                ? 'What’s your name?'
-                : eventOnly && page === 'edit'
-                  ? 'Edit name'
-                  : titles[page] || 'slowmass'}
-            </h1>
-          )}
-          <ViewerProvider
-            value={
-              profile && {
-                displayName: profile.displayName,
-                avatar: profile.hasAvatar
-                  ? `/media/avatar/${encodeURIComponent(profile.handle)}?v=${avatarVersion}`
-                  : null,
-              }
-            }
-          >
-            <ScreenBoundary>{screen()}</ScreenBoundary>
-          </ViewerProvider>
-        </section>
+              {active && back && <BackControl {...back} />}
+              {/* The event's title heads the join screen. */}
+              {!needsPhoto && !joining && (
+                <h1
+                  id="screen-title"
+                  ref={heading}
+                  tabIndex={-1}
+                  className={active ? 'visually-hidden' : undefined}
+                >
+                  {profile === null
+                    ? 'What’s your name?'
+                    : eventOnly && page === 'edit'
+                      ? 'Edit name'
+                      : titles[page] || 'slowmass'}
+                </h1>
+              )}
+              <ViewerProvider
+                value={
+                  profile && {
+                    displayName: profile.displayName,
+                    avatar: profile.hasAvatar
+                      ? `/media/avatar/${encodeURIComponent(profile.handle)}?v=${avatarVersion}`
+                      : null,
+                  }
+                }
+              >
+                <ScreenBoundary>{screen()}</ScreenBoundary>
+              </ViewerProvider>
+            </section>
+          </CommentHistoryProvider>
+        </DiscoverHistoryProvider>
       </PageHistoryProvider>
     </>
   );

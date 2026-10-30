@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
 import { profileHref } from '../../navigation';
+import { usePageHistory } from '../../navigation/PageHistory';
 import { PersonLink } from '../../navigation/PersonLink';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
 export type Kind = 'following' | 'followers' | 'blocked';
@@ -9,7 +10,9 @@ type ConnectionsProps =
   | { kind: Kind; handle?: undefined }
   | { kind: 'following' | 'followers'; handle: string };
 export function Connections({ kind, handle }: ConnectionsProps) {
-  const [pages, setPages] = useState(['']);
+  const [pages, setPages] = usePageHistory(
+    `connections:${handle ?? 'self'}:${kind}`,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [confirming, setConfirming] = useState<string | null>(null);

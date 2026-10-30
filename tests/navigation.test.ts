@@ -44,6 +44,7 @@ it('opens event share paths and keeps hash navigation and Back/Forward on the ri
   vi.stubGlobal('location', address);
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   vi.stubGlobal('window', {
+    scrollY: 0,
     history: {
       state: null,
       replaceState: (_state: unknown, _unused: string, path: string) => {
@@ -93,6 +94,8 @@ it('unmounts edit forms across repeated feed/profile/settings navigation without
   vi.stubGlobal('location', location);
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   vi.stubGlobal('window', {
+    scrollY: 0,
+    history: { scrollRestoration: 'auto', state: null, replaceState: vi.fn() },
     addEventListener: events.addEventListener.bind(events),
     removeEventListener: events.removeEventListener.bind(events),
     scrollTo: vi.fn(),
@@ -147,4 +150,62 @@ it('unmounts edit forms across repeated feed/profile/settings navigation without
   expect(
     errors.mock.calls.some((call) => String(call[0]).includes('same key')),
   ).toBe(false);
+});
+
+it('restores route offsets on Back/Forward and app links, ignores duplicate events, and resets on reselection', async () => {
+  const address = new URL('https://slowmass.com/#feed');
+  const events = new EventTarget();
+  const disconnect = vi.fn();
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe = vi.fn();
+      disconnect = disconnect;
+    },
+  );
+  vi.stubGlobal('document', { body: {} });
+  vi.stubGlobal('location', address);
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  const win = {
+    scrollY: 0,
+    history: { scrollRestoration: 'auto' },
+    addEventListener: events.addEventListener.bind(events),
+    removeEventListener: events.removeEventListener.bind(events),
+    scrollTo: vi.fn(({ top }: { top: number }) => {
+      win.scrollY = top;
+    }),
+  };
+  vi.stubGlobal('window', win);
+  function Route() {
+    const { route, resetScroll } = useRoute();
+    return createElement('button', { onClick: resetScroll }, route);
+  }
+  await act(async () => {
+    renderer = create(createElement(Route));
+  });
+  expect(win.history.scrollRestoration).toBe('manual');
+  async function go(hash: string, traversal = false) {
+    await act(async () => {
+      address.hash = hash;
+      if (traversal) events.dispatchEvent(new Event('popstate'));
+      events.dispatchEvent(new Event('hashchange'));
+    });
+  }
+  win.scrollY = 1800;
+  await go('#post/one');
+  expect(win.scrollY).toBe(0);
+  win.scrollY = 450;
+  await go('#feed', true);
+  expect(win.scrollY).toBe(1800);
+  await go('#post/one', true);
+  expect(win.scrollY).toBe(450);
+  await go('#feed');
+  expect(win.scrollY).toBe(1800);
+  await act(async () => renderer!.root.findByType('button').props.onClick());
+  expect(win.scrollY).toBe(0);
+  await go('#post/one');
+  expect(win.scrollY).toBe(0);
+  await act(async () => renderer!.unmount());
+  renderer = undefined;
+  expect(win.history.scrollRestoration).toBe('auto');
 });

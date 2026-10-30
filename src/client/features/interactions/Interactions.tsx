@@ -7,6 +7,7 @@ import {
   type RefObject,
 } from 'react';
 import { revealCommentComposer } from './comment-scroll';
+import { useCommentHistory } from './CommentHistory';
 import { PersonLink } from '../../navigation/PersonLink';
 import { profileHref } from '../../navigation';
 import { api, jsonRequest } from '../../api';
@@ -40,10 +41,14 @@ export function Interactions({
   caption?: ReactNode;
 }) {
   const [counts, setCounts] = useState(initial),
-    [open, setOpen] = useState(commentsInitiallyOpen),
     [likesOpen, setLikesOpen] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
+  const [thread, rememberThread] = useCommentHistory(
+    postId,
+    commentsInitiallyOpen,
+  );
+  const open = thread.open;
   const commentButton = useRef<HTMLButtonElement>(null);
   const [revealOnOpen, setRevealOnOpen] = useState(false);
   const [source, setSource] = useState(initial);
@@ -101,7 +106,7 @@ export function Interactions({
           aria-expanded={open}
           onClick={() => {
             setRevealOnOpen(!open);
-            setOpen(!open);
+            rememberThread({ open: !open, pages: [''] });
           }}
         >
           <svg
@@ -130,6 +135,8 @@ export function Interactions({
           onChange={refresh}
           commentButton={commentButton}
           revealOnOpen={revealOnOpen}
+          history={thread.pages}
+          setHistory={(pages) => rememberThread({ ...thread, pages })}
         />
       )}
     </section>
@@ -140,14 +147,17 @@ function Comments({
   onChange,
   commentButton,
   revealOnOpen,
+  history,
+  setHistory,
 }: {
   postId: string;
   onChange: () => Promise<void>;
   commentButton: RefObject<HTMLButtonElement | null>;
   revealOnOpen: boolean;
+  history: string[];
+  setHistory: (pages: string[]) => void;
 }) {
-  const [history, setHistory] = useState(['']),
-    [body, setBody] = useState(''),
+  const [body, setBody] = useState(''),
     [id, setId] = useState(() => crypto.randomUUID()),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');

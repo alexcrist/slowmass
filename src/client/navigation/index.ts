@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
+import { restoreScroll } from './scroll-restoration';
 export function postHref(id: string) {
   return `#post/${encodeURIComponent(id)}`;
 }
@@ -23,9 +30,21 @@ export function normalizeEventPath() {
 }
 export function useRoute() {
   const [routes, setRoutes] = useState(() => [currentRoute()]);
+  const current = useRef(routes[routes.length - 1]);
+  const positions = useRef(new Map<string, number>());
+  const stopRestoring = useRef<(() => void) | undefined>(undefined);
   const change = useCallback(() => {
     normalizeEventPath();
     const next = currentRoute();
+    // Hash traversal can emit both popstate and hashchange. Save only once,
+    // before React unmounts the old page or the new page resets its scroll.
+    if (next === current.current) return;
+    stopRestoring.current?.();
+    positions.current.delete(current.current);
+    positions.current.set(current.current, window.scrollY);
+    if (positions.current.size > 50)
+      positions.current.delete(positions.current.keys().next().value!);
+    current.current = next;
     setRoutes((previous) => {
       const current = previous[previous.length - 1];
       if (next === current) return previous;
@@ -41,13 +60,20 @@ export function useRoute() {
         ? previous.slice(0, existing + 1)
         : [...previous.slice(-49), next];
     });
-    window.scrollTo(0, 0);
   }, []);
+  const route = routes[routes.length - 1];
+  useLayoutEffect(() => {
+    stopRestoring.current = restoreScroll(positions.current.get(route) ?? 0);
+    return () => stopRestoring.current?.();
+  }, [route]);
   useEffect(() => {
+    const previous = window.history.scrollRestoration;
+    window.history.scrollRestoration = 'manual';
     normalizeEventPath();
     window.addEventListener('hashchange', change);
     window.addEventListener('popstate', change);
     return () => {
+      window.history.scrollRestoration = previous;
       window.removeEventListener('hashchange', change);
       window.removeEventListener('popstate', change);
     };
@@ -59,7 +85,12 @@ export function useRoute() {
       // hashchange event could mount a profile under its released username.
       change();
     },
-    route: routes[routes.length - 1],
+    resetScroll() {
+      stopRestoring.current?.();
+      positions.current.clear();
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    },
+    route,
     backRoute: routes[routes.length - 2] ?? 'feed',
     eventRoute: [...routes]
       .reverse()
