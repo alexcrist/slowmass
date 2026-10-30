@@ -1,4 +1,12 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+  type RefObject,
+} from 'react';
+import { revealCommentComposer } from './comment-scroll';
 import { PersonLink } from '../../navigation/PersonLink';
 import { profileHref } from '../../navigation';
 import { api, jsonRequest } from '../../api';
@@ -36,6 +44,8 @@ export function Interactions({
     [likesOpen, setLikesOpen] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
+  const commentButton = useRef<HTMLButtonElement>(null);
+  const [revealOnOpen, setRevealOnOpen] = useState(false);
   const [source, setSource] = useState(initial);
   if (source !== initial) {
     setSource(initial);
@@ -85,10 +95,14 @@ export function Interactions({
           )}
         </div>
         <button
+          ref={commentButton}
           className="icon-button comment-toggle"
           aria-label={open ? 'Hide comments' : 'Show comments'}
           aria-expanded={open}
-          onClick={() => setOpen(!open)}
+          onClick={() => {
+            setRevealOnOpen(!open);
+            setOpen(!open);
+          }}
         >
           <svg
             viewBox="0 0 24 24"
@@ -110,16 +124,27 @@ export function Interactions({
         />
       )}
       {error && <p role="alert">{error}</p>}
-      {open && <Comments postId={postId} onChange={refresh} />}
+      {open && (
+        <Comments
+          postId={postId}
+          onChange={refresh}
+          commentButton={commentButton}
+          revealOnOpen={revealOnOpen}
+        />
+      )}
     </section>
   );
 }
 function Comments({
   postId,
   onChange,
+  commentButton,
+  revealOnOpen,
 }: {
   postId: string;
   onChange: () => Promise<void>;
+  commentButton: RefObject<HTMLButtonElement | null>;
+  revealOnOpen: boolean;
 }) {
   const [history, setHistory] = useState(['']),
     [body, setBody] = useState(''),
@@ -137,6 +162,17 @@ function Comments({
   } = useApiResource<Page>(
     `/api/interactions/${postId}/comments?after=${encodeURIComponent(after)}`,
   );
+  const comments = useRef<HTMLDivElement>(null);
+  const pendingReveal = useRef(revealOnOpen);
+  useLayoutEffect(() => {
+    // Measure the loaded thread once per button opening, never on paging,
+    // editing, or count refreshes. Initially expanded detail pages stay put.
+    if (loading || !pendingReveal.current) return;
+    pendingReveal.current = false;
+    const composer = comments.current?.querySelector('.composer');
+    if (composer && commentButton.current)
+      return revealCommentComposer(commentButton.current, composer);
+  }, [loading, commentButton]);
   // An empty first page needs no message: the composer takes the first
   // comment's place. A later page can empty out after deletions.
   const empty = !loading && page?.items.length === 0;
@@ -188,7 +224,7 @@ function Comments({
     }
   }
   return (
-    <div className="comments">
+    <div className="comments" ref={comments}>
       {loading && !page && <p role="status">Loading comments…</p>}
       {empty && after && <p>No comments on this page.</p>}
       <ul className="comment-list">
