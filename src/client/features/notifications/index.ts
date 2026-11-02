@@ -2,6 +2,11 @@ import { lazy } from 'react';
 
 export { useNotificationCount } from './useNotificationCount';
 export { observeReadActivity } from './visibility';
+export {
+  UnreadActivityProvider,
+  useOpenedActivity,
+  useSeenActivity,
+} from './seen';
 
 export const Notifications = lazy(() =>
   import('./Notifications').then((module) => ({

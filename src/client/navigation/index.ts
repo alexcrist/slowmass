@@ -9,6 +9,9 @@ import { restoreScroll } from './scroll-restoration';
 export function postHref(id: string) {
   return `#post/${encodeURIComponent(id)}`;
 }
+export function eventHref(id: string, view = '') {
+  return `#event/${encodeURIComponent(id)}${view ? `/${view}` : ''}`;
+}
 export function profileHref(handle: string, tab = 'posts') {
   return `#profile/${encodeURIComponent(handle)}${tab === 'following' || tab === 'followers' ? `/${tab}` : ''}`;
 }

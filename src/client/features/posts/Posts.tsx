@@ -3,6 +3,7 @@ import { PersonLink } from '../../navigation/PersonLink';
 import { postHref, profileHref } from '../../navigation';
 import { usePageHistory } from '../../navigation/PageHistory';
 import { Interactions } from '../interactions';
+import { useSeenActivity } from '../notifications';
 import { useApiResource } from '../../api/useApiResource';
 import { RelativeTime } from '../../ui/RelativeTime';
 import { PostActions } from './PostActions';
@@ -211,8 +212,11 @@ function PostCard({
     setCaption(post.caption);
   }
   const paragraphs = captionParagraphs(caption);
+  // Seeing the photo reads its new-photo alert.
+  const seen = useSeenActivity<HTMLImageElement>({ keys: [`post:${post.id}`] });
   const photo = (
     <img
+      ref={seen}
       className="post-photo"
       src={post.mediaUrl}
       alt={post.altText || `Photo by ${post.handle}`}

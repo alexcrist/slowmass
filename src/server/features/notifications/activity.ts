@@ -135,8 +135,9 @@ export function parsePage(
     throw new Error('Invalid page.');
   }
 }
+// Post alerts never appear in Activity, but seeing the photo acknowledges them.
 export function validNotificationKey(key: string) {
-  return /^(?:(?:request|follower|joined|likes|comment|thread_comment):[a-zA-Z0-9-]{1,64}|comment_like:[a-f0-9-]{36}\.[a-zA-Z0-9-]{1,64}|event_response:[a-f0-9-]{36}\.[a-zA-Z0-9-]{1,64}|event_message:[a-f0-9-]{36}|host_invite:[a-f0-9-]{36}|host_accepted:[a-f0-9-]{36}\.[a-zA-Z0-9-]{1,64})$/.test(
+  return /^(?:(?:request|follower|joined|likes|comment|thread_comment|post):[a-zA-Z0-9-]{1,64}|comment_like:[a-f0-9-]{36}\.[a-zA-Z0-9-]{1,64}|event_response:[a-f0-9-]{36}\.[a-zA-Z0-9-]{1,64}|event_message:[a-f0-9-]{36}|host_invite:[a-f0-9-]{36}|host_accepted:[a-f0-9-]{36}\.[a-zA-Z0-9-]{1,64})$/.test(
     key,
   );
 }
@@ -253,9 +254,12 @@ export async function unreadCount(
 }
 
 // What is still unread, so a device can close OS alerts for anything read
-// since, on any device. Each key reports its oldest unread version: an alert
-// below it has been read. Post alerts are included, though never counted.
-// Bounded like the badge; an incomplete list proves nothing about absent keys.
+// since, on any device, and acknowledge activity seen outside Activity. Each
+// key reports its oldest unread version (an alert below it has been read) and
+// its newest (what seeing it acknowledges). Follower and joined keys name the
+// person by handle, since a profile page knows only that. Post alerts are
+// included, though never counted. Bounded like the badge; an incomplete list
+// proves nothing about absent keys.
 const UNREAD_LIMIT = 100;
 export async function unreadKeys(
   db: D1Database,
@@ -264,13 +268,20 @@ export async function unreadKeys(
 ) {
   const rows = await db
     .prepare(
-      `SELECT r.event_key AS key,MIN(r.revision) AS since FROM activity_read_state r
+      `SELECT r.event_key AS key,MIN(r.revision) AS since,MAX(r.revision) AS version,
+      CASE WHEN e.kind IN ('follower','joined') THEN (SELECT handle FROM profile WHERE user_id=e.actor_id) END AS handle
+    FROM activity_read_state r
     JOIN activity_source e USING(recipient_id,event_key,actor_id)
     WHERE r.recipient_id=? AND r.is_read=0 AND ${kindFilter(kinds, true)} AND ${visibleSource}
     GROUP BY r.event_key LIMIT ${UNREAD_LIMIT + 1}`,
     )
     .bind(actor)
-    .all<{ key: string; since: number }>();
+    .all<{
+      key: string;
+      since: number;
+      version: number;
+      handle: string | null;
+    }>();
   return {
     unread: rows.results.slice(0, UNREAD_LIMIT),
     complete: rows.results.length <= UNREAD_LIMIT,

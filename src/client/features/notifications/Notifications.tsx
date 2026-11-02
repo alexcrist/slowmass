@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
-import { postHref, profileHref } from '../../navigation';
-import { eventHref } from '../events';
+import { eventHref, postHref, profileHref } from '../../navigation';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
 import { usePageHistory } from '../../navigation/PageHistory';
 import { useReadActivity } from './useReadActivity';

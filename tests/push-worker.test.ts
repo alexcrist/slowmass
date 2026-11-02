@@ -150,8 +150,8 @@ it.each([
 );
 it('shows a new-photo alert under its own tag and opens the photo, not Activity', async () => {
   const key = 'post:00000000-0000-4000-8000-000000000003';
-  // Post alerts never appear in Activity, so it cannot focus or acknowledge them.
-  expect(validNotificationKey(key)).toBe(false);
+  // Post alerts never appear in Activity, but seeing the photo acknowledges them.
+  expect(validNotificationKey(key)).toBe(true);
   await emit('push', {
     data: { json: () => ({ key, version: 4, subscriptionId: 'device' }) },
   });

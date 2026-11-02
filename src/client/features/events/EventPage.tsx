@@ -13,7 +13,8 @@ import { MailIcon } from '../../ui/MailIcon';
 import { LockIcon } from '../../ui/LockIcon';
 import { EventLog } from './EventLog';
 import { EventJoin } from './EventJoin';
-import { eventHref } from './navigation';
+import { eventHref } from '../../navigation';
+import { useOpenedActivity } from '../notifications';
 import type { Answer, EventView } from './types';
 
 const linkToken = /^[a-zA-Z0-9]{48}$/;
@@ -123,6 +124,18 @@ export function EventPage({
   const [updateBlastsSent, setUpdateBlastsSent] = useState(0);
   const event = data?.event;
   useEventAppearance(event?.appearance);
+  // Opening the event shows its answers and co-host invitations.
+  useOpenedActivity(
+    event
+      ? {
+          keys: [`host_invite:${event.id}`],
+          prefixes: [
+            `event_response:${event.id}.`,
+            `host_accepted:${event.id}.`,
+          ],
+        }
+      : null,
+  );
   const url = event?.url;
   // Show the shareable URL in the address bar, so copying it works too.
   useEffect(() => {

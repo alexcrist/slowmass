@@ -2,14 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../../api';
 import { closeReadPushNotifications, onPushReceived } from '../push';
 
-type Unread = {
-  count: number;
-  unread: { key: string; since: number }[];
-  complete: boolean;
-};
+import type { UnreadItem } from './seen';
+
+type Unread = { count: number; unread: UnreadItem[]; complete: boolean };
+const none: UnreadItem[] = [];
 
 export function useNotificationCount(enabled: boolean) {
   const [count, setCount] = useState<number | null>(null);
+  const [unread, setUnread] = useState(none);
   const [revision, setRevision] = useState(0);
   const lastSuccess = useRef<number | null>(null);
   const active = useRef<AbortController | null>(null);
@@ -32,12 +32,18 @@ export function useNotificationCount(enabled: boolean) {
           lastSuccess.current = Date.now();
           setCount(data.count);
           // Alerts for anything read since, here or elsewhere, leave the tray.
-          if (Array.isArray(data.unread))
+          if (Array.isArray(data.unread)) {
+            // Unchanged polls keep the same list, so content doesn't rerender.
+            const next = data.unread;
+            setUnread((current) =>
+              JSON.stringify(current) === JSON.stringify(next) ? current : next,
+            );
             void closeReadPushNotifications(
               data.unread,
               data.complete === true,
               requestedAt,
             ).catch(() => {});
+          }
         }
       })
       // Keep the last confirmed count on temporary failure, never assume zero.
@@ -84,5 +90,9 @@ export function useNotificationCount(enabled: boolean) {
     };
   }, [enabled, refresh]);
 
-  return { count: enabled ? count : null, refresh };
+  return {
+    count: enabled ? count : null,
+    unread: enabled ? unread : none,
+    refresh,
+  };
 }

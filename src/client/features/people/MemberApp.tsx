@@ -3,13 +3,14 @@ import { createPortal } from 'react-dom';
 import { useApiResource } from '../../api/useApiResource';
 import { ScreenBoundary } from '../../ui/ScreenBoundary';
 import { ViewerProvider } from '../../ui/Viewer';
-import { profileHref, useRoute } from '../../navigation';
+import { eventHref, profileHref, useRoute } from '../../navigation';
 import { BackControl } from '../../navigation/BackControl';
 import { PageHistoryProvider } from '../../navigation/PageHistory';
 import { DeleteAccount } from '../account';
 import {
   NotificationSettings,
   Notifications,
+  UnreadActivityProvider,
   useNotificationCount,
 } from '../notifications';
 import { Compose, PostDetail, PostList } from '../posts';
@@ -23,13 +24,7 @@ import { Discover, DiscoverHistoryProvider } from './Discover';
 import { CommentHistoryProvider } from '../interactions';
 import { Connections, type Kind } from './Connections';
 import { HeaderActions, MemberNavigation } from './MemberNavigation';
-import {
-  EditEvent,
-  EventForm,
-  EventRoute,
-  EventsPage,
-  eventHref,
-} from '../events';
+import { EditEvent, EventForm, EventRoute, EventsPage } from '../events';
 import { DeviceSetupItem, useDeviceSetup } from '../device-setup';
 import { SettingsRowIcon } from '../../ui/SettingsRowIcon';
 
@@ -426,47 +421,52 @@ function MemberPages({
           onReselect={reselect}
         />
       )}
-      <PageHistoryProvider key={pageVersion}>
-        <DiscoverHistoryProvider>
-          <CommentHistoryProvider>
-            <section
-              key={active ? `${pageKey}:${pageVersion}` : 'onboarding'}
-              data-page={active ? page : 'onboarding'}
-              className={`member-content ${joining ? 'event-join' : !active || needsPhoto ? 'onboarding' : ['feed', 'profile', 'post', 'event', 'new-event'].includes(page) || (!eventOnly && ['compose', 'edit'].includes(page)) ? 'photo-screen' : ''}${eventOnly ? ' event-only' : ''}`}
-              aria-labelledby={joining ? undefined : 'screen-title'}
-            >
-              {active && back && <BackControl {...back} />}
-              {/* The event's title heads the join screen. */}
-              {!needsPhoto && !joining && (
-                <h1
-                  id="screen-title"
-                  ref={heading}
-                  tabIndex={-1}
-                  className={active ? 'visually-hidden' : undefined}
-                >
-                  {profile === null
-                    ? 'What’s your name?'
-                    : eventOnly && page === 'edit'
-                      ? 'Edit name'
-                      : titles[page] || 'slowmass'}
-                </h1>
-              )}
-              <ViewerProvider
-                value={
-                  profile && {
-                    displayName: profile.displayName,
-                    avatar: profile.hasAvatar
-                      ? `/media/avatar/${encodeURIComponent(profile.handle)}?v=${avatarVersion}`
-                      : null,
-                  }
-                }
+      <UnreadActivityProvider
+        unread={notifications.unread}
+        onChange={notifications.refresh}
+      >
+        <PageHistoryProvider key={pageVersion}>
+          <DiscoverHistoryProvider>
+            <CommentHistoryProvider>
+              <section
+                key={active ? `${pageKey}:${pageVersion}` : 'onboarding'}
+                data-page={active ? page : 'onboarding'}
+                className={`member-content ${joining ? 'event-join' : !active || needsPhoto ? 'onboarding' : ['feed', 'profile', 'post', 'event', 'new-event'].includes(page) || (!eventOnly && ['compose', 'edit'].includes(page)) ? 'photo-screen' : ''}${eventOnly ? ' event-only' : ''}`}
+                aria-labelledby={joining ? undefined : 'screen-title'}
               >
-                <ScreenBoundary>{screen()}</ScreenBoundary>
-              </ViewerProvider>
-            </section>
-          </CommentHistoryProvider>
-        </DiscoverHistoryProvider>
-      </PageHistoryProvider>
+                {active && back && <BackControl {...back} />}
+                {/* The event's title heads the join screen. */}
+                {!needsPhoto && !joining && (
+                  <h1
+                    id="screen-title"
+                    ref={heading}
+                    tabIndex={-1}
+                    className={active ? 'visually-hidden' : undefined}
+                  >
+                    {profile === null
+                      ? 'What’s your name?'
+                      : eventOnly && page === 'edit'
+                        ? 'Edit name'
+                        : titles[page] || 'slowmass'}
+                  </h1>
+                )}
+                <ViewerProvider
+                  value={
+                    profile && {
+                      displayName: profile.displayName,
+                      avatar: profile.hasAvatar
+                        ? `/media/avatar/${encodeURIComponent(profile.handle)}?v=${avatarVersion}`
+                        : null,
+                    }
+                  }
+                >
+                  <ScreenBoundary>{screen()}</ScreenBoundary>
+                </ViewerProvider>
+              </section>
+            </CommentHistoryProvider>
+          </DiscoverHistoryProvider>
+        </PageHistoryProvider>
+      </UnreadActivityProvider>
     </>
   );
 }

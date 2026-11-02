@@ -27,3 +27,5 @@ Cropping prepares the photo in memory without saving or granting access. Finish 
 Mobile Activity and Settings stay in the header. Event pages, including Create and Edit event, have no back control, since Events is always in the navigation. Settings offers Set up profile, Edit name (only the name field; the username and bio are saved unchanged), installation, notifications, sign out, and account deletion.
 
 Find retains its input, shuffle seed, and loaded page count across navigation within the member session. Returning rebuilds those pages sequentially from current authorized responses before continuing normal infinite scrolling. Errors stop rebuilding at the failed page and expose Retry; changing the search starts a new sequence. This preserves the list needed by shared scroll restoration without caching member rows. Reselecting a refreshable main destination resets this metadata with other remembered page state.
+
+Opening a profile reads that person's follower or joined notification through the [notifications](../notifications/README.md) feature.

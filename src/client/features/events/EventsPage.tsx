@@ -1,4 +1,4 @@
-import { eventHref } from './navigation';
+import { eventHref } from '../../navigation';
 import { useApiResource } from '../../api/useApiResource';
 import { usePageHistory } from '../../navigation/PageHistory';
 import {

@@ -371,6 +371,31 @@ it('alerts followers who ask about new photos, never through Activity', async ()
   expect(sent[0].text).toContain(
     'Stop emails about new photos from people you follow',
   );
+  // Seeing the photo first acknowledges its alert, so it is never emailed.
+  await publish('seen');
+  const unreadList = async () =>
+    (
+      (await (
+        await runtime.request(
+          'bob',
+          `/api/notifications/unread-count${query}&includeUnread=1`,
+        )
+      ).json()) as { unread: { key: string; version: number }[] }
+    ).unread;
+  const seen = (await unreadList()).find((item) => item.key === 'post:seen')!;
+  expect(
+    (
+      await runtime.request('bob', '/api/notifications/read', 'POST', {
+        items: [seen],
+      })
+    ).status,
+  ).toBe(200);
+  expect((await unreadList()).some((item) => item.key === 'post:seen')).toBe(
+    false,
+  );
+  await due();
+  await cron();
+  expect(sent).toHaveLength(1);
   // Unfollowing or deletion before delivery suppresses a queued alert.
   await publish('later');
   await publish('gone');

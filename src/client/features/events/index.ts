@@ -1,5 +1,4 @@
 import { lazy } from 'react';
-export { eventHref } from './navigation';
 export const EventsPage = lazy(() =>
   import('./EventsPage').then((module) => ({ default: module.EventsPage })),
 );

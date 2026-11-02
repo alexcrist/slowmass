@@ -471,3 +471,25 @@ it('rejects invalid dismissal input and does not change hidden activity', async 
     .run();
   expect((await page()).items[0].canFollowBack).toBe(true);
 });
+it('names a new follower by handle in the unread list, so their profile can read it', async () => {
+  await runtime.db
+    .prepare("INSERT INTO follow VALUES('bob','alice','accepted',1)")
+    .run();
+  const list = async () =>
+    (await (
+      await runtime.request(
+        'alice',
+        '/api/notifications/unread-count?includeUnread=1',
+      )
+    ).json()) as {
+      count: number;
+      unread: { key: string; handle: string | null; version: number }[];
+    };
+  const before = await list();
+  expect(before).toMatchObject({
+    count: 1,
+    unread: [{ key: 'follower:bob', handle: 'bob' }],
+  });
+  await acknowledge('alice', before.unread as unknown as Notification[]);
+  expect(await list()).toMatchObject({ count: 0, unread: [] });
+});

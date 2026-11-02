@@ -10,6 +10,7 @@ import { revealCommentComposer } from './comment-scroll';
 import { useCommentHistory } from './CommentHistory';
 import { PersonLink } from '../../navigation/PersonLink';
 import { profileHref } from '../../navigation';
+import { useSeenActivity } from '../notifications';
 import { api, jsonRequest } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
 import { Dialog } from '../../ui/Dialog';
@@ -50,6 +51,12 @@ export function Interactions({
   );
   const open = thread.open;
   const commentButton = useRef<HTMLButtonElement>(null);
+  // The post page's like count reads like notifications for this photo.
+  const seenLikes = useSeenActivity<HTMLDivElement>(
+    commentsInitiallyOpen
+      ? { keys: [`likes:${postId}`], prefixes: [`likes:${postId}-`] }
+      : null,
+  );
   const [revealOnOpen, setRevealOnOpen] = useState(false);
   const [source, setSource] = useState(initial);
   if (source !== initial) {
@@ -77,7 +84,7 @@ export function Interactions({
   return (
     <section aria-label="Likes and comments">
       <div className="post-interactions">
-        <div className="reaction-pair">
+        <div className="reaction-pair" ref={seenLikes}>
           <button
             className="icon-button"
             disabled={busy}
@@ -346,6 +353,12 @@ function CommentRow({
   const [liking, setLiking] = useState(false);
   const [likesOpen, setLikesOpen] = useState(false);
   const [error, setError] = useState('');
+  // Seeing a comment reads its notifications: the comment itself, the
+  // follow-up in a thread, and likes on it.
+  const seen = useSeenActivity<HTMLParagraphElement>({
+    keys: [`comment:${comment.id}`, `thread_comment:${comment.id}`],
+    prefixes: [`comment_like:${comment.id}.`],
+  });
   const [source, setSource] = useState(comment);
   if (source !== comment) {
     setSource(comment);
@@ -386,7 +399,7 @@ function CommentRow({
         />
       </a>
       <div className="comment-content">
-        <p className="comment-text">
+        <p className="comment-text" ref={seen}>
           <a href={profileHref(comment.handle)}>
             <strong>{comment.handle}</strong>
           </a>{' '}

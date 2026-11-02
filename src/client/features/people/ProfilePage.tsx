@@ -10,6 +10,7 @@ import { SettingsIcon } from '../../navigation/SettingsIcon';
 import { OverflowMenu } from '../../ui/OverflowMenu';
 import { MailIcon } from '../../ui/MailIcon';
 import { InviteLinkDialog } from '../invite-links';
+import { useOpenedActivity } from '../notifications';
 type VisibleProfile = {
   handle: string;
   displayName: string;
@@ -41,6 +42,8 @@ export function ProfilePage({
     `/api/people/${encodeURIComponent(handle)}`,
   );
   const profile = data?.profile;
+  // Opening someone's profile reads that they followed you or joined.
+  useOpenedActivity(profile ? { handle: profile.handle } : null);
   async function act(action: string) {
     if (busy || loading) return;
     setBusy(true);

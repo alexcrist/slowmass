@@ -103,6 +103,8 @@ Rule: **`high` for activity a person directed at the recipient that they would w
 
 High priority is safe here because every push shows a notification. Android may deprioritize apps that send high priority without displaying one, so a silent or data-only push must never use `high`. Volume stays low because the hourly cooldown, like delay, and grouping limit alerts. When adding a category, ask whether a delay of minutes to hours would make the alert less useful. If it would and a specific person caused it, use `high`. If it reports aggregate engagement, or could fan out widely from one action, use `normal`. `low` and `very-low` (wait for power or Wi-Fi) aren't used; all alerts are opt-in, so none is that deferrable.
 
+Read means seen anywhere: an Activity row, or the content a notification is about (see the client notifications README for what counts). Everything downstream of read state, including suppressing queued alerts, closing tray alerts, and the badge, depends on that, so new notification kinds should say where they count as seen.
+
 Every alert has a 24-hour TTL, matching the delivery queue's lifetime. The server never sends an alert for activity already read, and an alert can't be recalled once a push service accepts it, so the client closes alerts read since (on any device) whenever the app is open. Don't shorten the TTL to avoid stale alerts; fix how reads are recorded instead.
 
 ## Optional device setup

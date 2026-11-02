@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { api, jsonRequest } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
 import { usePageHistory } from '../../navigation/PageHistory';
@@ -8,6 +14,7 @@ import { RelativeTime } from '../../ui/RelativeTime';
 import { PersonPhoto } from './EventSummary';
 import { GuestName, guestPhoto } from './EventGuests';
 import { answerEmoji, type Answer } from './types';
+import { useSeenActivity } from '../notifications';
 
 type Entry = {
   key: string;
@@ -31,6 +38,20 @@ function entryText(entry: Entry) {
         : ' can’t go ';
   if (entry.kind === 'cancelled') return ' cancelled the event.';
   return ' ';
+}
+
+// Seeing a message (or a cancellation) reads its notification.
+function EntryText({ entry, children }: { entry: Entry; children: ReactNode }) {
+  const seen = useSeenActivity<HTMLParagraphElement>(
+    entry.kind !== 'response' && entry.id
+      ? { keys: [`event_message:${entry.id}`] }
+      : null,
+  );
+  return (
+    <p className="comment-text" ref={seen}>
+      {children}
+    </p>
+  );
 }
 
 // Answers and messages, newest first, with a composer below for hosts and
@@ -130,14 +151,14 @@ export function EventLog({
               size={32}
             />
             <div>
-              <p className="comment-text">
+              <EntryText entry={entry}>
                 <GuestName guest={entry} linkProfiles={linkProfiles} />
                 {entryText(entry)}
                 {entry.status && (
                   <span aria-hidden="true">{answerEmoji[entry.status]}</span>
                 )}
                 {entry.kind === 'message' && entry.body}
-              </p>
+              </EntryText>
               <div className="comment-meta">
                 <RelativeTime timestamp={entry.createdAt} />
                 {entry.canDelete && (
