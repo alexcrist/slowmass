@@ -93,6 +93,15 @@ Production fetch handlers use a Washington-region placement hint to reduce round
 - [R2 pricing](https://developers.cloudflare.com/r2/pricing/)
 - [Images pricing](https://developers.cloudflare.com/images/pricing/) and [private byte processing binding](https://developers.cloudflare.com/images/optimization/binding/)
 - [Better Auth database support](https://better-auth.com/docs/adapters/other-relational-databases)
+- [RFC 8030 push message urgency](https://www.rfc-editor.org/rfc/rfc8030#section-5.3), [FCM message priority](https://firebase.google.com/docs/cloud-messaging/android-message-priority), and [Apple web push](https://developer.apple.com/documentation/usernotifications/sending-web-push-notifications-in-web-apps-and-browsers)
+
+## Push urgency
+
+Each Web Push request carries an RFC 8030 `Urgency` header, which push services use to decide whether to wake a sleeping device. In practice only `high` reliably arrives on an idle phone: FCM maps anything below `high` to normal priority, which Android may hold in Doze until the device wakes. Apple treats lower urgency as "deliver when power allows" (Apple doesn't document the exact mapping). Delivered late, an alert seems to arrive only when the member opens the app. RFC 8030's own example puts chat at `normal`, but platform behavior has moved past that, so don't follow the RFC's table literally.
+
+Rule: **`high` for activity a person directed at the recipient that they would want to see now; `normal` for passive, aggregate, or bulk updates.** High covers follow requests, new followers, invitees joining, comments and thread replies, event messages, update blasts, cancellations, and co-host invitations and acceptances. Normal covers grouped photo likes, comment likes, new photos from followed members, and RSVPs, which can arrive by the hundred for a large event. The mapping lives in `src/server/features/push/delivery.ts` and is typed over every notification category, so a new category fails type checking until it picks a level.
+
+High priority is safe here because every push shows a notification. Android may deprioritize apps that send high priority without displaying one, so a silent or data-only push must never use `high`. Volume stays low because the hourly cooldown, like delay, and grouping limit alerts. When adding a category, ask whether a delay of minutes to hours would make the alert less useful. If it would and a specific person caused it, use `high`. If it reports aggregate engagement, or could fan out widely from one action, use `normal`. `low` and `very-low` (wait for power or Wi-Fi) aren't used; all alerts are opt-in, so none is that deferrable.
 
 ## Optional device setup
 

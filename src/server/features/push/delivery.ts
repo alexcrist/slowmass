@@ -1,4 +1,5 @@
 import { buildPushPayload } from '@block65/webcrypto-web-push';
+import type { NotificationCategory } from '../../../shared/notification-categories';
 import { authDate } from '../../auth';
 import type { Env } from '../../env';
 import {
@@ -22,6 +23,26 @@ type Target = {
   endpoint: string;
   p256dh: string;
   auth: string;
+};
+
+// Push services hold `normal` alerts on an idle phone, so anything a person
+// directed at the recipient is `high`; passive or bulk updates stay `normal`.
+// Every new category must choose; see docs/architecture.md#push-urgency.
+const urgency: Record<NotificationCategory, 'normal' | 'high'> = {
+  request: 'high',
+  follower: 'high',
+  joined: 'high',
+  likes: 'normal',
+  comment: 'high',
+  thread_comment: 'high',
+  comment_like: 'normal',
+  post: 'normal',
+  event_response: 'normal',
+  event_message: 'high',
+  update_blast: 'high',
+  event_cancelled: 'high',
+  host_invite: 'high',
+  host_accepted: 'high',
 };
 
 async function finish(db: D1Database, item: Delivery) {
@@ -105,7 +126,7 @@ async function send(env: Env, item: Delivery) {
           title: text.title,
           body: pushBody(text),
         },
-        options: { ttl: 3600, urgency: 'normal', topic },
+        options: { ttl: 3600, urgency: urgency[described.category], topic },
       },
       {
         endpoint: subscription.endpoint,

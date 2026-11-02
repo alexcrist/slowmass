@@ -408,6 +408,8 @@ it('pushes a followed member’s new photo to followers who ask for it, until a 
     title: 'slowmass',
     body: 'alice posted a photo. “Synthetic caption”',
   });
+  // Passive updates may wait for the phone to wake.
+  expect(sent[0].headers.get('urgency')).toBe('normal');
   await publish('blocked');
   await runtime.db
     .prepare(
@@ -471,6 +473,8 @@ it('queues no likes by default, coalesces concurrent dispatchers, and alerts a r
   await tick();
   expect(sent).toHaveLength(2);
   expect(sent[0].headers.get('topic')).toBe(sent[1].headers.get('topic'));
+  // A person's direct action wakes an idle phone.
+  expect(sent[1].headers.get('urgency')).toBe('high');
   await runtime.db
     .prepare("INSERT INTO post_like VALUES('photo','david',3000)")
     .run();
