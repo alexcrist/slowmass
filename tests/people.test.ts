@@ -127,8 +127,9 @@ it('keeps event-only discovery and profile reads private, filtered, and rate lim
     'bob',
     'carol',
   ]);
+  // The legacy automatic follow stays hidden until the viewer has a photo.
   expect((await browse('&q=alc')).items).toEqual([
-    { handle: 'alice', displayName: 'alice' },
+    { handle: 'alice', displayName: 'alice', relationship: 'none' },
   ]);
   await action('bob', 'david', 'block');
   expect((await runtime.request('david', '/api/people/bob')).status).toBe(404);
@@ -764,6 +765,26 @@ it('discovers active unblocked members with partial name matching and bounded pa
   await runtime.db
     .prepare("UPDATE membership SET status='active' WHERE user_id='carol'")
     .run();
+});
+it('shows the viewer’s current follow state in discovery', async () => {
+  const url = '/api/people/discover?seed=' + '3'.repeat(32);
+  const states = async (actor: string) =>
+    Object.fromEntries(
+      (
+        (await (await runtime.request(actor, url)).json()) as {
+          items: { handle: string; relationship: string }[];
+        }
+      ).items.map((person) => [person.handle, person.relationship]),
+    );
+  expect((await action('alice', 'bob', 'request')).status).toBe(200);
+  expect((await action('alice', 'carol', 'request')).status).toBe(200);
+  expect((await action('carol', 'alice', 'accept')).status).toBe(200);
+  expect(await states('alice')).toEqual({ bob: 'pending', carol: 'accepted' });
+  // Direction matters: the target sees no relationship of their own.
+  expect(await states('bob')).toEqual({ alice: 'none', carol: 'none' });
+  expect((await action('alice', 'bob', 'cancel')).status).toBe(200);
+  expect((await action('alice', 'carol', 'unfollow')).status).toBe(200);
+  expect(await states('alice')).toEqual({ bob: 'none', carol: 'none' });
 });
 it('preserves shuffled discovery order across pages without duplicate people and limits searches', async () => {
   for (let i = 0; i < 24; i++) {

@@ -43,6 +43,8 @@ The static document shows “Starting Slowmass…” with an independent reload 
 
 Verification uses static checks and API/integration tests only. Browser testing, screenshot inspection, and visual regression testing are prohibited by the user.
 
+Find rows link the whole row to the profile. People you follow or have requested show a 14px status label at the row's right edge: Following in semibold ink with a check on a light gray pill, Requested in muted text with a clock inside a gray outline. The label is part of the link, not a button.
+
 Post likes and comments form a compact left-aligned row, with 24px icons, 14px semibold counts, a 7.2px icon-to-count gap and 19.2px between groups. Groups flow with their contents instead of occupying fixed columns. Keep icons left aligned inside their controls, including when counts are absent; keep the separate like-count target at least 24px wide and all controls at least 44px tall.
 
 At every width, post headers and everything below the photo sit 16px inside the photo’s edges, so the photo is wider than the content above and below it; phones show it edge to edge. Post cards share a 16px vertical gap between the header avatar and photo, photo and action icons, and action icons and caption line box. The caption follows the action icons and reads like a comment: the author’s bold username linked to their profile, then the caption, in 16px comment type. Single line breaks stay; blank lines become paragraphs separated by a half-line (12px) gap, and leading or trailing blank lines are dropped. Account for the invisible space inside touch targets rather than adding it to the gap.

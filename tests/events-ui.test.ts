@@ -752,19 +752,31 @@ it('lets event-only members browse, scroll, search, and open profiles from Find'
   const first = pending('/api/people/discover');
   const seed = new URL(first.path, location.origin).searchParams.get('seed');
   const cursor = `0:${'a'.repeat(32)}`;
-  await reply(first, { items: [{ handle: 'alice' }], next: cursor });
+  await reply(first, {
+    items: [{ handle: 'alice', relationship: 'accepted' }],
+    next: cursor,
+  });
   await reachEnd();
   const second = pending('/api/people/discover');
   const params = new URL(second.path, location.origin).searchParams;
   expect(params.get('seed')).toBe(seed);
   expect(params.get('after')).toBe(cursor);
-  await reply(second, { items: [{ handle: 'bob' }], next: null });
+  await reply(second, {
+    items: [{ handle: 'bob', relationship: 'pending' }],
+    next: null,
+  });
+  const list = () =>
+    renderer.root.findByProps({ className: 'people-list discover-list' });
   const handles = () =>
-    renderer.root
-      .findByProps({ className: 'people-list' })
+    list()
       .findAllByType('a')
       .map((item) => item.props.href);
   expect(handles()).toEqual(['#profile/alice', '#profile/bob']);
+  expect(
+    list()
+      .findAll((node) => String(node.props.className).startsWith('follow-'))
+      .map((node) => node.children.at(-1)),
+  ).toEqual(['Following', 'Requested']);
   // The last page has no cursor, so nothing watches for more.
   expect(observers).toHaveLength(1);
   vi.useFakeTimers();
@@ -778,7 +790,10 @@ it('lets event-only members browse, scroll, search, and open profiles from Find'
   expect(new URL(search.path, location.origin).searchParams.get('q')).toBe(
     'alc',
   );
-  await reply(search, { items: [{ handle: 'alice' }], next: null });
+  await reply(search, {
+    items: [{ handle: 'alice', relationship: 'none' }],
+    next: null,
+  });
   const link = renderer.root
     .findAllByType('a')
     .find((item) => item.props.href === '#profile/alice')!;

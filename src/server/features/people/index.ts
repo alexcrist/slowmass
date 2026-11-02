@@ -319,7 +319,7 @@ export async function discoverPeople(
   const rows = await db
     .prepare(
       `WITH candidates AS (
-    SELECT * FROM (SELECT p.handle,p.display_name AS displayName,p.discovery_key AS key,
+    SELECT * FROM (SELECT p.user_id,p.handle,p.display_name AS displayName,p.discovery_key AS key,
       0 AS phase
       FROM profile p JOIN avatar a ON a.user_id=p.user_id JOIN membership m ON m.user_id=p.user_id AND m.status='active'
       WHERE ?=0 AND p.discovery_key>=? AND p.discovery_key>? AND p.user_id!=?
@@ -327,14 +327,19 @@ export async function discoverPeople(
       AND NOT EXISTS(SELECT 1 FROM block WHERE (blocker_id=? AND target_id=p.user_id) OR (blocker_id=p.user_id AND target_id=?))
       ORDER BY p.discovery_key LIMIT 21)
     UNION ALL
-    SELECT * FROM (SELECT p.handle,p.display_name AS displayName,p.discovery_key AS key,
+    SELECT * FROM (SELECT p.user_id,p.handle,p.display_name AS displayName,p.discovery_key AS key,
       1 AS phase
       FROM profile p JOIN avatar a ON a.user_id=p.user_id JOIN membership m ON m.user_id=p.user_id AND m.status='active'
       WHERE p.discovery_key<? AND p.discovery_key>? AND p.user_id!=?
       AND (?='' OR p.handle LIKE ? ESCAPE '\\' OR lower(p.display_name) LIKE ? ESCAPE '\\')
       AND NOT EXISTS(SELECT 1 FROM block WHERE (blocker_id=? AND target_id=p.user_id) OR (blocker_id=p.user_id AND target_id=?))
       ORDER BY p.discovery_key LIMIT 21)
-    ) SELECT * FROM candidates ORDER BY phase,key LIMIT 21`,
+    ), page AS (SELECT * FROM candidates ORDER BY phase,key LIMIT 21)
+    SELECT page.handle,page.displayName,page.key,page.phase,
+      COALESCE(f.status,'none') AS relationship
+    FROM page LEFT JOIN follow f ON f.follower_id=? AND f.target_id=page.user_id
+      AND EXISTS(SELECT 1 FROM avatar WHERE user_id=f.follower_id)
+    ORDER BY page.phase,page.key`,
     )
     .bind(
       phase,
@@ -354,19 +359,22 @@ export async function discoverPeople(
       pattern,
       actor,
       actor,
+      actor,
     )
     .all<{
       handle: string;
       displayName: string;
       key: string;
       phase: number;
+      relationship: 'none' | 'pending' | 'accepted';
     }>();
   const items = rows.results.slice(0, 20);
   const tail = items.at(-1);
   return {
-    items: items.map(({ handle, displayName }) => ({
+    items: items.map(({ handle, displayName, relationship }) => ({
       handle,
       displayName,
+      relationship,
     })),
     next: rows.results.length > 20 && tail ? `${tail.phase}:${tail.key}` : null,
   };

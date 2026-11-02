@@ -7,8 +7,9 @@ import {
 } from 'react';
 import { useApiResource } from '../../api/useApiResource';
 import { PersonLink } from '../../navigation/PersonLink';
+type Relationship = 'none' | 'pending' | 'accepted';
 type Page = {
-  items: { handle: string }[];
+  items: { handle: string; relationship: Relationship }[];
   next: string | null;
 };
 type FindHistory = {
@@ -127,10 +128,12 @@ function Directory({ query }: { query: string }) {
   const people = [...earlier, ...(data?.items ?? [])];
   return (
     <>
-      <ul className="people-list">
+      <ul className="people-list discover-list">
         {people.map((person) => (
           <li key={person.handle}>
-            <PersonLink {...person} />
+            <PersonLink handle={person.handle}>
+              <FollowStatus relationship={person.relationship} />
+            </PersonLink>
           </li>
         ))}
       </ul>
@@ -144,5 +147,36 @@ function Directory({ query }: { query: string }) {
       )}
       {data && people.length === 0 && <p>No people found.</p>}
     </>
+  );
+}
+
+// A label, not a control: following and requests stay on the profile page.
+function FollowStatus({ relationship }: { relationship: Relationship }) {
+  if (relationship === 'none') return null;
+  const following = relationship === 'accepted';
+  return (
+    <span className={`follow-status${following ? ' following' : ''}`}>
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={following ? 2.4 : 2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        {following ? (
+          <path d="m5 12 5 5 9-10" />
+        ) : (
+          <>
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7v5l3 2" />
+          </>
+        )}
+      </svg>
+      {following ? 'Following' : 'Requested'}
+    </span>
   );
 }

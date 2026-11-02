@@ -690,6 +690,29 @@ a.notification-person:hover {
 .notification-content > p {
   margin: 0 0 8px;
 }
+/* The whole row opens the profile; the status sits at its right edge. */
+.discover-list .person-link {
+  display: flex;
+}
+.follow-status {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 3px 10px 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.follow-status.following {
+  border-color: var(--hover);
+  background: var(--hover);
+  color: var(--ink);
+  font-weight: 600;
+}
 .people-list .actions {
   margin-top: 12px;
 }

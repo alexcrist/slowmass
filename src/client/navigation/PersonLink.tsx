@@ -1,5 +1,12 @@
+import type { ReactNode } from 'react';
 import { profileHref } from './index';
-export function PersonLink({ handle }: { handle: string }) {
+export function PersonLink({
+  handle,
+  children,
+}: {
+  handle: string;
+  children?: ReactNode;
+}) {
   return (
     <a className="person-link" href={profileHref(handle)}>
       <img
@@ -9,6 +16,7 @@ export function PersonLink({ handle }: { handle: string }) {
         alt=""
       />
       <strong>{handle}</strong>
+      {children}
     </a>
   );
 }
