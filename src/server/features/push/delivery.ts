@@ -127,7 +127,13 @@ async function send(env: Env, item: Delivery) {
           body: pushBody(text),
           path: text.path,
         },
-        options: { ttl: 3600, urgency: urgency[described.category], topic },
+        // A day matches the queue lifetime. A phone that was off still hears
+        // about unseen activity; opening the app closes alerts read since.
+        options: {
+          ttl: 86_400,
+          urgency: urgency[described.category],
+          topic,
+        },
       },
       {
         endpoint: subscription.endpoint,

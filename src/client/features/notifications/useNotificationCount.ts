@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../../api';
+import { closeReadPushNotifications, onPushReceived } from '../push';
+
+type Unread = {
+  count: number;
+  unread: { key: string; since: number }[];
+  complete: boolean;
+};
 
 export function useNotificationCount(enabled: boolean) {
   const [count, setCount] = useState<number | null>(null);
@@ -13,8 +20,9 @@ export function useNotificationCount(enabled: boolean) {
     const controller = new AbortController();
     active.current = controller;
     const timeout = setTimeout(() => controller.abort(), 15_000);
-    api<{ count: number }>(
-      '/api/notifications/unread-count?includeJoined=1&includeEvents=1&includeHosting=1&includeComments=1',
+    const requestedAt = Date.now();
+    api<Unread>(
+      '/api/notifications/unread-count?includeJoined=1&includeEvents=1&includeHosting=1&includeComments=1&includeUnread=1',
       {
         signal: controller.signal,
       },
@@ -23,6 +31,13 @@ export function useNotificationCount(enabled: boolean) {
         if (!controller.signal.aborted) {
           lastSuccess.current = Date.now();
           setCount(data.count);
+          // Alerts for anything read since, here or elsewhere, leave the tray.
+          if (Array.isArray(data.unread))
+            void closeReadPushNotifications(
+              data.unread,
+              data.complete === true,
+              requestedAt,
+            ).catch(() => {});
         }
       })
       // Keep the last confirmed count on temporary failure, never assume zero.
@@ -37,6 +52,12 @@ export function useNotificationCount(enabled: boolean) {
       if (active.current === controller) active.current = null;
     };
   }, [enabled, revision]);
+
+  // A newly shown alert means the count changed.
+  useEffect(
+    () => (enabled ? onPushReceived(refresh) : undefined),
+    [enabled, refresh],
+  );
 
   useEffect(() => {
     if (!enabled) return;

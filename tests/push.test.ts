@@ -476,8 +476,10 @@ it('queues no likes by default, coalesces concurrent dispatchers, and alerts a r
   await tick();
   expect(sent).toHaveLength(2);
   expect(sent[0].headers.get('topic')).toBe(sent[1].headers.get('topic'));
-  // A person's direct action wakes an idle phone.
+  // A person's direct action wakes an idle phone, and waits up to a day for one
+  // that is off.
   expect(sent[1].headers.get('urgency')).toBe('high');
+  expect(sent[1].headers.get('ttl')).toBe('86400');
   await runtime.db
     .prepare("INSERT INTO post_like VALUES('photo','david',3000)")
     .run();

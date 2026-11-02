@@ -577,7 +577,7 @@ it('loads the feed after one bootstrap request without login, onboarding, or red
   expect(requests.map((request) => request.path)).toEqual([
     '/api/bootstrap',
     '/api/posts?',
-    '/api/notifications/unread-count?includeJoined=1&includeEvents=1&includeHosting=1&includeComments=1',
+    '/api/notifications/unread-count?includeJoined=1&includeEvents=1&includeHosting=1&includeComments=1&includeUnread=1',
   ]);
   await reply(pending('/api/posts?'), { items: [], next: null });
   expect(visibleText()).toContain('No posts on this page.');

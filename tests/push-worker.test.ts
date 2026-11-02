@@ -1,7 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { dismissPushNotifications } from '../src/client/features/push/browser';
+import {
+  closeReadPushNotifications,
+  dismissPushNotifications,
+  onPushReceived,
+} from '../src/client/features/push/browser';
 import { validNotificationKey } from '../src/server/features/notifications';
 const eventKeys = [
   'event_response:00000000-0000-4000-8000-000000000001.bob',
@@ -64,7 +68,7 @@ it.each(['request:bob', 'follower:bob', 'joined:bob', ...eventKeys])(
       expect.objectContaining({
         body: 'Alice posted in Dinner.',
         tag: `slowmass:device:${key}`,
-        data: { key, version: 9, path: '' },
+        data: { key, version: 9, path: '', shownAt: expect.any(Number) },
         renotify: false,
       }),
     );
@@ -155,7 +159,7 @@ it('shows a new-photo alert under its own tag and opens the photo, not Activity'
     'slowmass',
     expect.objectContaining({
       tag: `slowmass:device:${key}`,
-      data: { key, version: 4, path: '' },
+      data: { key, version: 4, path: '', shownAt: expect.any(Number) },
     }),
   );
   await emit('notificationclick', {
@@ -181,7 +185,9 @@ it.each([
   await emit('push', { data: { json: () => ({ key, version: 1 }) } });
   expect(showNotification).toHaveBeenCalledWith(
     'slowmass',
-    expect.objectContaining({ data: { key: '', version: 1, path: '' } }),
+    expect.objectContaining({
+      data: { key: '', version: 1, path: '', shownAt: expect.any(Number) },
+    }),
   );
   await emit('notificationclick', {
     notification: { data: { key }, close: vi.fn() },
@@ -227,7 +233,9 @@ it('still displays safe generic text if a provider delivers an empty or malforme
   expect(showNotification).toHaveBeenCalledTimes(2);
   expect(showNotification).toHaveBeenCalledWith(
     'slowmass',
-    expect.objectContaining({ data: { key: '', version: 0, path: '' } }),
+    expect.objectContaining({
+      data: { key: '', version: 0, path: '', shownAt: expect.any(Number) },
+    }),
   );
 });
 
@@ -284,4 +292,87 @@ it('bounds a window probe ignored by an older client', async () => {
   } finally {
     vi.useRealTimers();
   }
+});
+
+it('announces each shown alert to open same-origin windows without details', async () => {
+  const app = { url: 'https://slowmass.com/#feed', postMessage: vi.fn() };
+  const other = { url: 'https://elsewhere.test/', postMessage: vi.fn() };
+  matchAll.mockResolvedValue([app, other]);
+  await emit('push', {
+    data: { json: () => ({ key: 'comment:test', version: 1, body: 'Secret' }) },
+  });
+  expect(app.postMessage).toHaveBeenCalledWith({
+    type: 'slowmass:push-received',
+  });
+  expect(other.postMessage).not.toHaveBeenCalled();
+  // A failed announcement never hides the alert.
+  matchAll.mockRejectedValue(new Error('Unavailable'));
+  await emit('push', {
+    data: { json: () => ({ key: 'comment:test', version: 2 }) },
+  });
+  expect(showNotification).toHaveBeenCalledTimes(2);
+});
+it('closes alerts read anywhere, keeping unread, newer, unidentified and just-shown alerts', async () => {
+  const alert = (data: unknown) => ({ data, close: vi.fn() });
+  const read = alert({ key: 'comment:a', version: 3, shownAt: 1 });
+  const unread = alert({ key: 'comment:b', version: 5, shownAt: 1 });
+  const olderVersion = alert({ key: 'likes:p', version: 2, shownAt: 1 });
+  const newerVersion = alert({ key: 'likes:p', version: 4, shownAt: 1 });
+  const legacy = alert({ key: 'follower:bob', version: 1 });
+  const generic = alert({ key: '', version: 0, shownAt: 1 });
+  const fresh = alert({ key: 'comment:c', version: 1, shownAt: 100 });
+  const notifications = [
+    read,
+    unread,
+    olderVersion,
+    newerVersion,
+    legacy,
+    generic,
+    fresh,
+  ];
+  vi.stubGlobal('navigator', {
+    serviceWorker: {
+      getRegistration: async () => ({
+        getNotifications: async () => notifications,
+      }),
+    },
+  });
+  const list = [
+    { key: 'comment:b', since: 5 },
+    { key: 'likes:p', since: 4 },
+  ];
+  await closeReadPushNotifications(list, true, 100);
+  expect(read.close).toHaveBeenCalledOnce();
+  expect(unread.close).not.toHaveBeenCalled();
+  expect(olderVersion.close).toHaveBeenCalledOnce();
+  expect(newerVersion.close).not.toHaveBeenCalled();
+  expect(legacy.close).toHaveBeenCalledOnce();
+  expect(generic.close).not.toHaveBeenCalled();
+  // Shown after the list was requested: the list cannot know about it yet.
+  expect(fresh.close).not.toHaveBeenCalled();
+  // A truncated list proves nothing about absent keys.
+  for (const item of notifications) item.close.mockClear();
+  await closeReadPushNotifications(list, false, 100);
+  expect(read.close).not.toHaveBeenCalled();
+  expect(legacy.close).not.toHaveBeenCalled();
+  expect(olderVersion.close).toHaveBeenCalledOnce();
+});
+it('lets the app react to announced alerts and stop listening', () => {
+  const target = new EventTarget();
+  vi.stubGlobal('navigator', {
+    serviceWorker: {
+      addEventListener: target.addEventListener.bind(target),
+      removeEventListener: target.removeEventListener.bind(target),
+    },
+  });
+  const listener = vi.fn();
+  const stop = onPushReceived(listener);
+  const message = (data: unknown) =>
+    target.dispatchEvent(Object.assign(new Event('message'), { data }));
+  message({ type: 'slowmass:window-mode' });
+  message({ type: 'slowmass:push-received' });
+  expect(listener).toHaveBeenCalledOnce();
+  stop();
+  message({ type: 'slowmass:push-received' });
+  expect(listener).toHaveBeenCalledOnce();
 });

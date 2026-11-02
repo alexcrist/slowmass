@@ -154,9 +154,9 @@ const allKinds: ActivityKinds = {
   comments: true,
 };
 // Post alerts are never listed or counted, whatever the client asks for.
-function kindFilter(kinds: ActivityKinds) {
+function kindFilter(kinds: ActivityKinds, posts = false) {
   const hidden = [
-    "'post'",
+    ...(posts ? [] : ["'post'"]),
     ...(kinds.comments ? [] : ["'thread_comment'", "'comment_like'"]),
     ...(kinds.joined ? [] : ["'joined'"]),
     ...(kinds.events ? [] : ["'event_response'", "'event_message'"]),
@@ -250,6 +250,31 @@ export async function unreadCount(
       .bind(actor)
       .first<number>('count')) ?? 0
   );
+}
+
+// What is still unread, so a device can close OS alerts for anything read
+// since, on any device. Each key reports its oldest unread version: an alert
+// below it has been read. Post alerts are included, though never counted.
+// Bounded like the badge; an incomplete list proves nothing about absent keys.
+const UNREAD_LIMIT = 100;
+export async function unreadKeys(
+  db: D1Database,
+  actor: string,
+  kinds = allKinds,
+) {
+  const rows = await db
+    .prepare(
+      `SELECT r.event_key AS key,MIN(r.revision) AS since FROM activity_read_state r
+    JOIN activity_source e USING(recipient_id,event_key,actor_id)
+    WHERE r.recipient_id=? AND r.is_read=0 AND ${kindFilter(kinds, true)} AND ${visibleSource}
+    GROUP BY r.event_key LIMIT ${UNREAD_LIMIT + 1}`,
+    )
+    .bind(actor)
+    .all<{ key: string; since: number }>();
+  return {
+    unread: rows.results.slice(0, UNREAD_LIMIT),
+    complete: rows.results.length <= UNREAD_LIMIT,
+  };
 }
 
 export type ReadReceipt = { key: string; version: number };

@@ -42,18 +42,34 @@ self.addEventListener('push', (event) => {
   const text = (value, limit) =>
     typeof value === 'string' && value.trim() ? value.slice(0, limit) : '';
   event.waitUntil(
-    self.registration.showNotification(text(data.title, 120) || 'slowmass', {
-      body:
-        text(data.body, 400) ||
-        'You have new activity. Open slowmass to see it.',
-      icon: '/icons/app-192.png',
-      badge: '/icons/notification-badge-96.png',
-      tag: `slowmass:${subscription}:${key}`,
-      data: { key, version, path: validPath(data.path) ? data.path : '' },
-      renotify: false,
-    }),
+    self.registration
+      .showNotification(text(data.title, 120) || 'slowmass', {
+        body:
+          text(data.body, 400) ||
+          'You have new activity. Open slowmass to see it.',
+        icon: '/icons/app-192.png',
+        badge: '/icons/notification-badge-96.png',
+        tag: `slowmass:${subscription}:${key}`,
+        data: {
+          key,
+          version,
+          path: validPath(data.path) ? data.path : '',
+          // Open windows close only alerts shown before their unread read.
+          shownAt: Date.now(),
+        },
+        renotify: false,
+      })
+      .then(() => announce().catch(() => {})),
   );
 });
+// Tell open windows an alert arrived so the badge, Activity and the tray
+// catch up at once. The message carries no activity details.
+async function announce() {
+  const windows = await self.clients.matchAll({ type: 'window' });
+  for (const client of windows)
+    if (new URL(client.url).origin === self.location.origin)
+      client.postMessage?.({ type: 'slowmass:push-received' });
+}
 // WindowClient does not expose display mode. Ask live pages with a short bound;
 // older bundles can ignore the probe without delaying notification navigation.
 function installedWindow(client) {

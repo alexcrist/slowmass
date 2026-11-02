@@ -8,7 +8,7 @@ Recorded October 24, 2026, from the notification audit.
 
 **Cause.** An unread Activity item stays unread after its author is hidden from the recipient: either one blocks the other, or the author's membership is disabled. Activity, the badge, push, and email recheck visibility on every read, so nothing leaks. But the hidden item can never be shown, so it can never be marked read.
 
-**Cost.** The badge count scans the recipient's unread receipts (partial index `activity_unread`) and checks visibility for each. Hidden receipts are skipped on every check, which happens on navigation, focus, reconnect, and once a minute while the app is visible. The cost grows with how many hidden unread items a member has accumulated. It is near zero unless someone who interacted heavily is blocked or disabled.
+**Cost.** The badge count scans the recipient's unread receipts (partial index `activity_unread`) and checks visibility for each; current clients also request the unread key list, a second scan of the same receipts in the same request. Hidden receipts are skipped on every check, which happens on navigation, focus, reconnect, and once a minute while the app is visible. The cost grows with how many hidden unread items a member has accumulated. It is near zero unless someone who interacted heavily is blocked or disabled.
 
 **Signal.** Count hidden unread receipts per recipient:
 

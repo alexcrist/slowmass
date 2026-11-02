@@ -9,6 +9,7 @@ import {
   validNotificationKey,
   parsePage,
   unreadCount,
+  unreadKeys,
   type ReadReceipt,
 } from './index';
 import {
@@ -48,11 +49,15 @@ notifications.get('/', async (c) => {
   );
 });
 
-notifications.get('/unread-count', async (c) =>
-  c.json({
-    count: await unreadCount(c.env.DB, c.get('userId'), kinds(c)),
-  }),
-);
+notifications.get('/unread-count', async (c) => {
+  const [count, unread] = await Promise.all([
+    unreadCount(c.env.DB, c.get('userId'), kinds(c)),
+    c.req.query('includeUnread') === '1'
+      ? unreadKeys(c.env.DB, c.get('userId'), kinds(c))
+      : null,
+  ]);
+  return c.json({ count, ...unread });
+});
 notifications.post('/read', bodyLimit({ maxSize: 6000 }), async (c) => {
   const body: unknown = await c.req.json().catch(() => null);
   if (

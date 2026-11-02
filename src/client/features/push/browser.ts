@@ -63,6 +63,49 @@ export async function dismissPushNotifications(
       notification.close();
   }
 }
+// Close this device's alerts for anything read since, on any device. Each
+// unread key reports its oldest unread version; an alert below it, or for a
+// key absent from a complete list, is read, removed or hidden. Only alerts
+// shown before the list was requested are judged, so a response that predates
+// new activity cannot close its alert. Alerts without an identity stay.
+export async function closeReadPushNotifications(
+  unread: { key: string; since: number }[],
+  complete: boolean,
+  requestedAt: number,
+) {
+  if (!('serviceWorker' in navigator)) return;
+  const registration = await navigator.serviceWorker.getRegistration('/');
+  if (!registration?.getNotifications) return;
+  const since = new Map(unread.map((item) => [item.key, item.since]));
+  for (const notification of await registration.getNotifications()) {
+    const { key, version, shownAt } = (notification.data ?? {}) as {
+      key?: unknown;
+      version?: unknown;
+      shownAt?: unknown;
+    };
+    if (
+      typeof key !== 'string' ||
+      !key ||
+      typeof version !== 'number' ||
+      (typeof shownAt === 'number' && shownAt >= requestedAt)
+    )
+      continue;
+    const oldest = since.get(key);
+    if (oldest === undefined ? complete : version < oldest)
+      notification.close();
+  }
+}
+// The service worker announces each alert it shows to open windows, so the
+// badge, Activity and the tray catch up without waiting for the next poll.
+export function onPushReceived(listener: () => void) {
+  const worker = 'serviceWorker' in navigator ? navigator.serviceWorker : null;
+  if (typeof worker?.addEventListener !== 'function') return () => {};
+  const received = (event: MessageEvent) => {
+    if (event.data?.type === 'slowmass:push-received') listener();
+  };
+  navigator.serviceWorker.addEventListener('message', received);
+  return () => navigator.serviceWorker.removeEventListener('message', received);
+}
 export async function clearLocalPush(expectedEndpoint?: string) {
   if (!('serviceWorker' in navigator)) return;
   const registration = await navigator.serviceWorker.getRegistration('/');

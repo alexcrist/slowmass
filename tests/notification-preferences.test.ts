@@ -339,6 +339,26 @@ it('alerts followers who ask about new photos, never through Activity', async ()
       await runtime.request('bob', `/api/notifications/unread-count${query}`)
     ).json(),
   ).toEqual({ count: 1 });
+  // The unread list lets a device close read alerts, so it names the post
+  // alert too, without counting it.
+  const listed = (await (
+    await runtime.request(
+      'bob',
+      `/api/notifications/unread-count${query}&includeUnread=1`,
+    )
+  ).json()) as {
+    count: number;
+    unread: { key: string; since: number }[];
+    complete: boolean;
+  };
+  expect(listed).toMatchObject({ count: 1, complete: true });
+  expect(listed.unread.map((item) => item.key).sort()).toEqual([
+    'post:fresh',
+    'request:alice',
+  ]);
+  expect(listed.unread.every((item) => Number.isSafeInteger(item.since))).toBe(
+    true,
+  );
   await due();
   await cron();
   expect(sent).toHaveLength(1);
