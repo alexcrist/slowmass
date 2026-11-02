@@ -327,7 +327,7 @@ it('alerts followers who ask about new photos, never through Activity', async ()
         .all()
     ).results,
   ).toEqual([{ device: 'device', key: 'post:fresh' }]);
-  // Activity neither lists, counts nor focuses them, even for new clients:
+  // Activity neither lists nor counts them, even for new clients:
   // bob's badge counts only alice's follow request.
   const query = '?includeJoined=1&includeEvents=1&includeHosting=1';
   const page = (await (
@@ -339,14 +339,6 @@ it('alerts followers who ask about new photos, never through Activity', async ()
       await runtime.request('bob', `/api/notifications/unread-count${query}`)
     ).json(),
   ).toEqual({ count: 1 });
-  expect(
-    (
-      await runtime.request(
-        'bob',
-        `/api/notifications${query}&focus=post:fresh`,
-      )
-    ).status,
-  ).toBe(400);
   await due();
   await cron();
   expect(sent).toHaveLength(1);

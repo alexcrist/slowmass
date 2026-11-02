@@ -164,23 +164,6 @@ function kindFilter(kinds: ActivityKinds) {
   ];
   return `e.kind NOT IN (${hidden.join(',')})`;
 }
-export async function notificationStart(
-  db: D1Database,
-  actor: string,
-  key: string,
-  kinds = allKinds,
-) {
-  const item = await db
-    .prepare(
-      `SELECT e.created_at AS time,e.event_key AS key FROM activity_source e
-    WHERE e.recipient_id=? AND e.event_key=? AND ${kindFilter(kinds)} AND ${eligible} LIMIT 1
-  `,
-    )
-    .bind(actor, key)
-    .first<{ time: number; key: string }>();
-  // The normal exclusive cursor then includes this exact item at the top.
-  return item ? { time: item.time, key: item.key + '\uffff' } : null;
-}
 export async function notificationPage(
   db: D1Database,
   actor: string,

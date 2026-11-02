@@ -6,7 +6,6 @@ import {
   markRead,
   dismissFollowBack,
   notificationPage,
-  notificationStart,
   validNotificationKey,
   parsePage,
   unreadCount,
@@ -44,29 +43,9 @@ notifications.get('/', async (c) => {
   } catch {
     return c.json({ error: 'Invalid page.' }, 400);
   }
-  const focus = c.req.query('focus');
-  if (focus && !validNotificationKey(focus))
-    return c.json({ error: 'Invalid notification.' }, 400);
-  let focusFound = true;
-  if (focus && !cursor) {
-    cursor = await notificationStart(
-      c.env.DB,
-      c.get('userId'),
-      focus,
-      kinds(c),
-    );
-    focusFound = cursor !== null;
-  }
-  return c.json({
-    ...(await notificationPage(
-      c.env.DB,
-      c.get('userId'),
-      cursor,
-      filter,
-      kinds(c),
-    )),
-    ...(focus ? { focusFound } : {}),
-  });
+  return c.json(
+    await notificationPage(c.env.DB, c.get('userId'), cursor, filter, kinds(c)),
+  );
 });
 
 notifications.get('/unread-count', async (c) =>

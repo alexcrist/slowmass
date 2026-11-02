@@ -18,17 +18,17 @@ it('describes each category the way Activity does', () => {
     [
       { category: 'request' },
       'alice requested to follow you.',
-      '#notifications/comment:c1',
+      '#notifications',
     ],
     [
       { category: 'follower' },
       'alice started following you.',
-      '#notifications/comment:c1',
+      '#profile/alice',
     ],
     [
       { category: 'joined' },
       'alice joined slowmass through your invitation.',
-      '#notifications/comment:c1',
+      '#profile/alice',
     ],
     [
       { category: 'thread_comment', body: 'Hello' },

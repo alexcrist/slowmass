@@ -64,7 +64,7 @@ it.each(['request:bob', 'follower:bob', 'joined:bob', ...eventKeys])(
       expect.objectContaining({
         body: 'Alice posted in Dinner.',
         tag: `slowmass:device:${key}`,
-        data: { key, version: 9 },
+        data: { key, version: 9, path: '' },
         renotify: false,
       }),
     );
@@ -92,37 +92,58 @@ it.each([{}, { title: 7, body: '   ' }, null])(
   },
 );
 it.each([
-  'comment:test',
-  'thread_comment:00000000-0000-4000-8000-000000000003',
-  'comment_like:00000000-0000-4000-8000-000000000003.bob',
-  'follower:bob',
-  'joined:bob',
-  ...eventKeys,
-])('opens %s in Activity and never accepts an external target', async (key) => {
-  const focus = vi.fn(async () => {});
-  const navigate = vi.fn(async () => ({ focus }));
-  matchAll.mockResolvedValue([{ url: 'https://slowmass.com/#feed', navigate }]);
-  const close = vi.fn();
-  await emit('notificationclick', {
-    notification: {
-      data: { key, url: 'https://evil.test' },
-      close,
-    },
-  });
-  expect(close).toHaveBeenCalledOnce();
-  expect(navigate).toHaveBeenCalledWith(
-    `https://slowmass.com/#notifications/${key}`,
-  );
-  expect(focus).toHaveBeenCalledOnce();
-  expect(openWindow).not.toHaveBeenCalled();
-  matchAll.mockResolvedValue([]);
-  await emit('notificationclick', {
-    notification: { data: { key: 'https://evil.test' }, close },
-  });
-  expect(openWindow).toHaveBeenCalledWith(
-    'https://slowmass.com/#notifications',
-  );
-});
+  [
+    '#post/00000000-0000-4000-8000-000000000003',
+    '#post/00000000-0000-4000-8000-000000000003',
+  ],
+  [
+    '#event/00000000-0000-4000-8000-000000000001',
+    '#event/00000000-0000-4000-8000-000000000001',
+  ],
+  ['#profile/bob_2', '#profile/bob_2'],
+  ['#notifications', '#notifications'],
+  ['https://evil.test', '#notifications'],
+  ['//evil.test/#post/x', '#notifications'],
+  ['#post/../../feed', '#notifications'],
+  ['#profile/Bob', '#notifications'],
+  ['#notifications/comment:test', '#notifications'],
+  [undefined, '#notifications'],
+])(
+  'opens destination %s as %s and never an external target',
+  async (path, expected) => {
+    await emit('push', {
+      data: {
+        json: () => ({
+          key: 'comment:test',
+          version: 1,
+          subscriptionId: 'device',
+          path,
+        }),
+      },
+    });
+    const { data } = showNotification.mock.calls[0][1] as {
+      data: { path: string };
+    };
+    expect(data.path).toBe(expected === path ? path : '');
+    const focus = vi.fn(async () => {});
+    const navigate = vi.fn(async () => ({ focus }));
+    matchAll.mockResolvedValue([
+      { url: 'https://slowmass.com/#feed', navigate },
+    ]);
+    const close = vi.fn();
+    // A stored path is revalidated on click, as an older worker may have kept it.
+    await emit('notificationclick', {
+      notification: {
+        data: { key: 'comment:test', path, url: 'https://evil.test' },
+        close,
+      },
+    });
+    expect(close).toHaveBeenCalledOnce();
+    expect(navigate).toHaveBeenCalledWith(`https://slowmass.com/${expected}`);
+    expect(focus).toHaveBeenCalledOnce();
+    expect(openWindow).not.toHaveBeenCalled();
+  },
+);
 it('shows a new-photo alert under its own tag and opens the photo, not Activity', async () => {
   const key = 'post:00000000-0000-4000-8000-000000000003';
   // Post alerts never appear in Activity, so it cannot focus or acknowledge them.
@@ -134,7 +155,7 @@ it('shows a new-photo alert under its own tag and opens the photo, not Activity'
     'slowmass',
     expect.objectContaining({
       tag: `slowmass:device:${key}`,
-      data: { key, version: 4 },
+      data: { key, version: 4, path: '' },
     }),
   );
   await emit('notificationclick', {
@@ -160,7 +181,7 @@ it.each([
   await emit('push', { data: { json: () => ({ key, version: 1 }) } });
   expect(showNotification).toHaveBeenCalledWith(
     'slowmass',
-    expect.objectContaining({ data: { key: '', version: 1 } }),
+    expect.objectContaining({ data: { key: '', version: 1, path: '' } }),
   );
   await emit('notificationclick', {
     notification: { data: { key }, close: vi.fn() },
@@ -206,7 +227,7 @@ it('still displays safe generic text if a provider delivers an empty or malforme
   expect(showNotification).toHaveBeenCalledTimes(2);
   expect(showNotification).toHaveBeenCalledWith(
     'slowmass',
-    expect.objectContaining({ data: { key: '', version: 0 } }),
+    expect.objectContaining({ data: { key: '', version: 0, path: '' } }),
   );
 });
 
@@ -229,12 +250,13 @@ it('prefers an installed window over a browser tab and falls back if it closes',
   };
   matchAll.mockResolvedValue([browser, installed]);
   const event = {
-    notification: { data: { key: 'comment:test' }, close: vi.fn() },
+    notification: {
+      data: { key: 'comment:test', path: '#post/p1' },
+      close: vi.fn(),
+    },
   };
   await emit('notificationclick', event);
-  expect(appNavigate).toHaveBeenCalledWith(
-    'https://slowmass.com/#notifications/comment:test',
-  );
+  expect(appNavigate).toHaveBeenCalledWith('https://slowmass.com/#post/p1');
   expect(appFocus).toHaveBeenCalledOnce();
   expect(browserNavigate).not.toHaveBeenCalled();
   appNavigate.mockRejectedValueOnce(new Error('Closed'));

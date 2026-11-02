@@ -151,16 +151,14 @@ it.each(['response', 'message', 'update-blast', 'cancel'])(
         'update-blast': 'Update from alice: Private dinner “Private message”',
         cancel: 'alice cancelled Private dinner.',
       }[kind],
+      // Tapping the alert opens the event itself.
+      path: `#event/${id}`,
     });
     expect(
       await (
-        await runtime.request(
-          recipient,
-          `/api/notifications?includeEvents=1&focus=${key}`,
-        )
+        await runtime.request(recipient, '/api/notifications?includeEvents=1')
       ).json(),
     ).toMatchObject({
-      focusFound: true,
       items: [
         expect.objectContaining({
           key,

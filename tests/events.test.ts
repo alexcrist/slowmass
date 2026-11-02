@@ -1587,7 +1587,7 @@ it('notifies hosts of answers and guests of host messages and cancellation, with
   expect(await activity('carol')).toEqual([]);
 });
 
-it('hides historical detail changes from the log, Activity, badge, focus and read receipts', async () => {
+it('hides historical detail changes from the log, Activity, badge and read receipts', async () => {
   const { id, token } = await event();
   await respond('bob', id, 'going', token);
   const messageId = crypto.randomUUID();
@@ -1606,14 +1606,6 @@ it('hides historical detail changes from the log, Activity, badge, focus and rea
     .first<number>('revision');
   expect(await activity('bob')).toEqual([]);
   expect(await unread('bob')).toBe(0);
-  expect(
-    await (
-      await runtime.request(
-        'bob',
-        `/api/notifications?includeEvents=1&focus=${key}`,
-      )
-    ).json(),
-  ).toMatchObject({ focusFound: false, items: [] });
   const log = (await (
     await runtime.request('bob', `/api/events/${id}/activity`)
   ).json()) as { items: { kind: string }[] };

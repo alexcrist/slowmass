@@ -73,7 +73,7 @@ async function count(actor = 'bob', suffix = query) {
   ).json()) as { count: number };
 }
 
-it('notifies prior commenters once, excludes self and owner duplicates, and supports focus/read/older clients', async () => {
+it('notifies prior commenters once, excludes self and owner duplicates, and supports read and older clients', async () => {
   await comment('bob');
   await comment('bob');
   expect((await page()).items).toHaveLength(0);
@@ -99,9 +99,6 @@ it('notifies prior commenters once, excludes self and owner duplicates, and supp
   expect((await page('bob', '')).items).toHaveLength(0);
   expect(await count('bob', '')).toEqual({ count: 0 });
   expect(await count()).toEqual({ count: 1 });
-  expect(
-    (await page('bob', `${query}&focus=thread_comment:${id}`)).items[0].key,
-  ).toBe(items[0].key);
   expect(
     (await runtime.request('bob', '/api/notifications/read', 'POST', { items }))
       .status,

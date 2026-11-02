@@ -15,6 +15,16 @@ function validNotificationKey(key) {
     )
   );
 }
+// The in-app destination the server chose: the item itself, or Activity for
+// follow requests. Only these same-origin hash routes are ever opened.
+function validPath(path) {
+  return (
+    typeof path === 'string' &&
+    /^#(?:notifications|(?:post|event)\/[a-zA-Z0-9-]{1,64}|profile\/[a-z0-9_]{3,30})$/.test(
+      path,
+    )
+  );
+}
 self.addEventListener('push', (event) => {
   let data = {};
   try {
@@ -39,7 +49,7 @@ self.addEventListener('push', (event) => {
       icon: '/icons/app-192.png',
       badge: '/icons/notification-badge-96.png',
       tag: `slowmass:${subscription}:${key}`,
-      data: { key, version },
+      data: { key, version, path: validPath(data.path) ? data.path : '' },
       renotify: false,
     }),
   );
@@ -68,12 +78,13 @@ function installedWindow(client) {
 }
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const key = event.notification.data?.key;
-  const path = !validNotificationKey(key)
-    ? '/#notifications'
-    : key.startsWith('post:')
+  const { key, path: target } = event.notification.data ?? {};
+  // Alerts from before destinations were sent open the photo or Activity.
+  const path = validPath(target)
+    ? `/${target}`
+    : validNotificationKey(key) && key.startsWith('post:')
       ? `/#post/${key.slice(5)}`
-      : `/#notifications/${key}`;
+      : '/#notifications';
   const url = new URL(path, self.location.origin).href;
   event.waitUntil(
     (async () => {

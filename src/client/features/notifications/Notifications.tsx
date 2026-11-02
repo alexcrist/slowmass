@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { api } from '../../api';
 import { useApiResource } from '../../api/useApiResource';
 import { postHref, profileHref } from '../../navigation';
@@ -76,17 +76,16 @@ function eventText(item: Item) {
 type Page = { items: Item[]; next: string | null };
 export function Notifications({
   onChange,
-  focus,
+  count,
   leading,
 }: {
   onChange?: () => void;
-  focus?: string;
+  // The shell's unread badge; a rise means newer activity exists.
+  count?: number | null;
   // A row rendered above the newest page, outside server pagination/read state.
   leading?: ReactNode;
 }) {
-  const [history, setHistory] = usePageHistory(
-    focus ? `notifications/${focus}` : 'notifications',
-  );
+  const [history, setHistory] = usePageHistory('notifications');
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
     [declining, setDeclining] = useState<HostInvite | null>(null);
@@ -98,8 +97,34 @@ export function Notifications({
     reload,
     refresh,
   } = useApiResource<Page>(
-    `/api/notifications?cursor=${encodeURIComponent(cursor)}${focus ? `&focus=${encodeURIComponent(focus)}` : ''}&includeJoined=1&includeEvents=1&includeHosting=1&includeComments=1`,
+    `/api/notifications?cursor=${encodeURIComponent(cursor)}&includeJoined=1&includeEvents=1&includeHosting=1&includeComments=1`,
   );
+  const newest = history.length === 1;
+  const [stale, setStale] = useState(false);
+  const latest = useRef({ refresh, newest, count });
+  useEffect(() => {
+    latest.current.refresh = refresh;
+    latest.current.newest = newest;
+  });
+  // Keep the newest page current without a manual refresh: reread it in place
+  // when the app returns to the foreground or the badge rises. Older pages
+  // offer a link instead of moving content under the reader.
+  useEffect(() => {
+    const previous = latest.current.count;
+    latest.current.count = count;
+    if (count == null || previous == null || count <= previous) return;
+    if (latest.current.newest) latest.current.refresh();
+    else setStale(true);
+  }, [count]);
+  useEffect(() => {
+    const returned = () => {
+      if (document.visibilityState === 'visible' && latest.current.newest)
+        latest.current.refresh();
+    };
+    document.addEventListener('visibilitychange', returned);
+    return () => document.removeEventListener('visibilitychange', returned);
+  }, []);
+  if (newest && stale) setStale(false);
   const { list, readError } = useReadActivity(page?.items, onChange);
   async function act(handle: string, action: 'accept' | 'deny' | 'request') {
     if (busy || loading) return;
@@ -187,7 +212,7 @@ export function Notifications({
       {loading && !page && <p role="status">Loading notifications…</p>}
       {!loading && page?.items.length === 0 && <p>No activity on this page.</p>}
       <ul className="notification-list" ref={list}>
-        {!focus && history.length === 1 && leading}
+        {newest && leading}
         {page?.items.map((item) => (
           <li key={item.key}>
             {item.kind === 'host_invite' ? (
@@ -410,7 +435,19 @@ export function Notifications({
           <button onClick={reload}>Retry</button>
         </div>
       )}
+      {stale && !newest && <p role="status">There’s new activity.</p>}
       <nav className="actions" aria-label="Notification pages">
+        {stale && !newest && (
+          <button
+            disabled={busy || loading}
+            onClick={() => {
+              setError('');
+              setHistory(['']);
+            }}
+          >
+            Latest
+          </button>
+        )}
         {history.length > 1 && (
           <button
             disabled={busy || loading}

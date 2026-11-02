@@ -261,6 +261,8 @@ it.each(['request', 'follower'])(
         kind === 'request'
           ? 'bob requested to follow you.'
           : 'bob started following you.',
+      // Requests need Activity's actions; a follower opens their profile.
+      path: kind === 'request' ? '#notifications' : '#profile/bob',
     });
     const token = sent[0].headers.get('authorization')!.match(/t=([^,]+)/)![1];
     const [header, payload, signature] = token.split('.');
@@ -405,6 +407,7 @@ it('pushes a followed member’s new photo to followers who ask for it, until a 
     ),
   ).toMatchObject({
     key: 'post:wanted',
+    path: '#post/wanted',
     title: 'slowmass',
     body: 'alice posted a photo. “Synthetic caption”',
   });
@@ -500,52 +503,6 @@ it('retries transient and ambiguous failures with a lease, honors Retry-After, a
   await tick();
   expect(await count('push_subscription')).toBe(0);
   expect(await count('push_delivery')).toBe(0);
-});
-it('seeks older push targets without marking them read and rechecks ownership and blocks', async () => {
-  await photo();
-  for (let i = 1; i <= 25; i++)
-    await runtime.db
-      .prepare(
-        "INSERT INTO comment(id,post_id,user_id,body,created_at) VALUES(?,'photo','bob','Synthetic',?)",
-      )
-      .bind(`comment-${i}`, i)
-      .run();
-  const page = (await (
-    await runtime.request('alice', '/api/notifications?focus=comment:comment-1')
-  ).json()) as {
-    focusFound: boolean;
-    items: { key: string; unread: boolean }[];
-  };
-  expect(page.focusFound).toBe(true);
-  expect(page.items[0]).toMatchObject({
-    key: 'comment:comment-1',
-    unread: true,
-  });
-  expect(
-    await (
-      await runtime.request(
-        'carol',
-        '/api/notifications?focus=comment:comment-1',
-      )
-    ).json(),
-  ).toMatchObject({ focusFound: false, items: [] });
-  await runtime.db.prepare("INSERT INTO block VALUES('bob','alice',1)").run();
-  expect(
-    await (
-      await runtime.request(
-        'alice',
-        '/api/notifications?focus=comment:comment-1',
-      )
-    ).json(),
-  ).toMatchObject({ focusFound: false, items: [] });
-  expect(
-    (
-      await runtime.request(
-        'alice',
-        '/api/notifications?focus=https://elsewhere.test',
-      )
-    ).status,
-  ).toBe(400);
 });
 it('recovers an expired claim, limits attempts, and never follows provider redirects', async () => {
   await enable();

@@ -36,7 +36,11 @@ export function notificationText(item: Content): NotificationText {
   const handle = item.handle ?? 'Someone';
   const name = item.displayName ?? handle;
   const event = item.eventTitle ?? 'an event';
-  const activity = `#notifications/${item.key}`;
+  // Each alert opens what it is about; requests need Activity's actions.
+  const activity = '#notifications';
+  const profilePath = item.handle
+    ? `#profile/${encodeURIComponent(item.handle)}`
+    : activity;
   const eventPath = item.eventId
     ? `#event/${encodeURIComponent(item.eventId)}`
     : activity;
@@ -55,12 +59,12 @@ export function notificationText(item: Content): NotificationText {
     follower: () => ({
       title: 'slowmass',
       summary: `${handle} started following you.`,
-      path: activity,
+      path: profilePath,
     }),
     joined: () => ({
       title: 'slowmass',
       summary: `${handle} joined slowmass through your invitation.`,
-      path: activity,
+      path: profilePath,
     }),
     likes: () => ({
       title: 'slowmass',

@@ -3269,3 +3269,45 @@ it('remembers open comments and their page without restoring old comment content
   );
   expect(visibleText()).toContain('Post not available');
 });
+
+it('rereads the newest Activity page on return and new activity, and links older pages to it', async () => {
+  const path =
+    '/api/notifications?cursor=&includeJoined=1&includeEvents=1&includeHosting=1&includeComments=1';
+  const unsettled = () =>
+    requests.filter((item) => item.path === path && !item.settled).length;
+  await mount(createElement(Notifications, { count: 1 }));
+  await reply(pending(path), { items: [], next: 'older' });
+  // Returning to the app rereads the newest page in place.
+  await act(async () => {
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  expect(unsettled()).toBe(1);
+  await reply(pending(path), { items: [], next: 'older' });
+  // Reads lowering the badge never refetch; a rise does.
+  await act(async () =>
+    renderer.update(createElement(Notifications, { count: 0 })),
+  );
+  expect(unsettled()).toBe(0);
+  await act(async () =>
+    renderer.update(createElement(Notifications, { count: 2 })),
+  );
+  expect(unsettled()).toBe(1);
+  await reply(pending(path), { items: [], next: 'older' });
+  // An older page stays put and offers the latest page instead.
+  await click('Older');
+  await reply(pending('/api/notifications?cursor=older'), {
+    items: [],
+    next: null,
+  });
+  await act(async () => {
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await act(async () =>
+    renderer.update(createElement(Notifications, { count: 3 })),
+  );
+  expect(unsettled()).toBe(0);
+  expect(visibleText()).toContain('There’s new activity.');
+  await click('Latest');
+  await reply(pending(path), { items: [], next: 'older' });
+  expect(visibleText()).not.toContain('There’s new activity.');
+});

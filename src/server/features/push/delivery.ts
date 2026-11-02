@@ -125,6 +125,7 @@ async function send(env: Env, item: Delivery) {
           subscriptionId: item.subscription_id,
           title: text.title,
           body: pushBody(text),
+          path: text.path,
         },
         options: { ttl: 3600, urgency: urgency[described.category], topic },
       },

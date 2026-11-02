@@ -208,7 +208,10 @@ function MemberPages({
         return eventPage();
       case 'notifications':
         return (
-          <Notifications onChange={notifications.refresh} focus={handle} />
+          <Notifications
+            onChange={notifications.refresh}
+            count={notifications.count}
+          />
         );
       case 'edit':
         return <ProfileForm profile={profile} onSave={saved} />;
@@ -345,7 +348,7 @@ function MemberPages({
         return (
           <Notifications
             onChange={notifications.refresh}
-            focus={handle}
+            count={notifications.count}
             leading={<DeviceSetupItem setup={deviceSetup} />}
           />
         );

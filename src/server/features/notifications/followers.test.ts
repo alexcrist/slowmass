@@ -37,7 +37,6 @@ async function page(actor = 'alice', query = '') {
   return response.json() as Promise<{
     items: Notification[];
     next: string | null;
-    focusFound?: boolean;
   }>;
 }
 async function accept() {
@@ -79,14 +78,7 @@ it('replaces the request with already-read follower activity for the accepter, a
       await runtime.request('alice', '/api/notifications/unread-count')
     ).json(),
   ).toEqual({ count: 0 });
-  expect(await page('alice', '?focus=follower:bob')).toMatchObject({
-    focusFound: true,
-    items: follower,
-  });
-  expect(await page('carol', '?focus=follower:bob')).toMatchObject({
-    focusFound: false,
-    items: [],
-  });
+  expect((await page('carol')).items).toEqual([]);
   await acknowledge('carol', follower);
   await acknowledge('alice', request);
   expect((await page()).items).toEqual(follower);
