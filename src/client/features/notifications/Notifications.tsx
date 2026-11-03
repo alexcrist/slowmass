@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { api } from '../../api';
-import { useApiResource } from '../../api/useApiResource';
 import { eventHref, postHref, profileHref } from '../../navigation';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
 import { usePageHistory } from '../../navigation/PageHistory';
@@ -73,6 +72,11 @@ function eventText(item: Item) {
     : `${item.displayName} posted in ${item.eventTitle}.`;
 }
 type Page = { items: Item[]; next: string | null };
+// Reload the first `depth` pages as one cursor chain, or append the page after
+// a cursor. Reloading the chain keeps loaded pages contiguous after mutations.
+type Load = { depth: number } | { after: string };
+const pagePath = (cursor: string) =>
+  `/api/notifications?cursor=${encodeURIComponent(cursor)}&includeJoined=1&includeEvents=1&includeHosting=1&includeComments=1`;
 export function Notifications({
   onChange,
   count,
@@ -84,47 +88,143 @@ export function Notifications({
   // A row rendered above the newest page, outside server pagination/read state.
   leading?: ReactNode;
 }) {
+  // Remember how many pages were loaded, never the responses themselves.
   const [history, setHistory] = usePageHistory('notifications');
   const [error, setError] = useState(''),
     [busy, setBusy] = useState(false),
-    [declining, setDeclining] = useState<HostInvite | null>(null);
-  const cursor = history[history.length - 1];
-  const {
-    data: page,
-    error: loadError,
-    loading,
-    reload,
-    refresh,
-  } = useApiResource<Page>(
-    `/api/notifications?cursor=${encodeURIComponent(cursor)}&includeJoined=1&includeEvents=1&includeHosting=1&includeComments=1`,
+    [declining, setDeclining] = useState<HostInvite | null>(null),
+    [sentinel, setSentinel] = useState<Element | null>(null);
+  const [request, setRequest] = useState<Load>(() => ({
+    depth: history.length,
+  }));
+  const [pages, setPages] = useState<Page[] | null>(null);
+  const [result, setResult] = useState<{ request: Load; error: string } | null>(
+    null,
   );
-  const newest = history.length === 1;
-  const [stale, setStale] = useState(false);
-  const latest = useRef({ refresh, newest, count });
+  const loading = result?.request !== request;
+  const loadError = loading ? '' : (result?.error ?? '');
   useEffect(() => {
-    latest.current.refresh = refresh;
+    const controller = new AbortController();
+    let timedOut = false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const read = async (cursor: string) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, 15_000);
+      return api<Page>(pagePath(cursor), { signal: controller.signal });
+    };
+    void (async () => {
+      try {
+        let loaded: Page[] | null = null;
+        let added: Page | null = null;
+        if ('after' in request) added = await read(request.after);
+        else {
+          loaded = [];
+          let cursor = '';
+          while (loaded.length < request.depth) {
+            const page = await read(cursor);
+            loaded.push(page);
+            if (!page.next) break;
+            cursor = page.next;
+          }
+        }
+        if (controller.signal.aborted) return;
+        setPages(
+          (current) =>
+            loaded ?? (current && added ? [...current, added] : current),
+        );
+        setResult({ request, error: '' });
+      } catch (e) {
+        if (controller.signal.aborted && !timedOut) return;
+        setResult({
+          request,
+          error: timedOut
+            ? 'This page took too long to load. Please try again.'
+            : e instanceof Error
+              ? e.message
+              : 'Could not load this page. Please try again.',
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
+    })();
+    return () => {
+      clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [request]);
+  // A revalidation can pull the next page's first row onto an earlier page;
+  // show each activity once.
+  const items = useMemo(() => {
+    const seen = new Set<string>();
+    return pages
+      ?.flatMap((page) => page.items)
+      .filter((item) => !seen.has(item.key) && Boolean(seen.add(item.key)));
+  }, [pages]);
+  const depth = pages?.length ?? history.length;
+  const newest = depth === 1;
+  const after = loading || loadError ? null : pages?.at(-1)?.next;
+  // Fetch the next page once the end of the list nears the viewport. A fresh
+  // observer per loaded page reports immediately, so short lists keep filling.
+  useEffect(() => {
+    if (!after || !sentinel || typeof IntersectionObserver === 'undefined')
+      return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        observer.disconnect();
+        setRequest({ after });
+      },
+      { rootMargin: '0px 0px 600px 0px' },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [after, sentinel]);
+  const [stale, setStale] = useState(false);
+  const latest = useRef({ newest, count, pages, setHistory });
+  useEffect(() => {
     latest.current.newest = newest;
+    latest.current.setHistory = setHistory;
   });
+  useEffect(() => {
+    if (!pages || latest.current.pages === pages) return;
+    latest.current.pages = pages;
+    latest.current.setHistory([
+      '',
+      ...pages.slice(0, -1).map((page) => page.next ?? ''),
+    ]);
+  }, [pages]);
   // Keep the newest page current without a manual refresh: reread it in place
-  // when the app returns to the foreground or the badge rises. Older pages
-  // offer a link instead of moving content under the reader.
+  // when the app returns to the foreground or the badge rises. Once older
+  // pages are loaded, offer Latest instead of moving content under the reader.
   useEffect(() => {
     const previous = latest.current.count;
     latest.current.count = count;
     if (count == null || previous == null || count <= previous) return;
-    if (latest.current.newest) latest.current.refresh();
+    if (latest.current.newest) setRequest({ depth: 1 });
     else setStale(true);
   }, [count]);
   useEffect(() => {
     const returned = () => {
       if (document.visibilityState === 'visible' && latest.current.newest)
-        latest.current.refresh();
+        setRequest({ depth: 1 });
     };
     document.addEventListener('visibilitychange', returned);
     return () => document.removeEventListener('visibilitychange', returned);
   }, []);
   if (newest && stale) setStale(false);
-  const { list, readError } = useReadActivity(page?.items, onChange);
+  const { list, readError } = useReadActivity(items, onChange);
+  // Apply a confirmed mutation, then revalidate every loaded page.
+  function refresh(update: (items: Item[]) => Item[]) {
+    setPages(
+      (current) =>
+        current?.map((page) => ({ ...page, items: update(page.items) })) ??
+        null,
+    );
+    setRequest({ depth });
+  }
   async function act(handle: string, action: 'accept' | 'deny' | 'request') {
     if (busy || loading) return;
     setBusy(true);
@@ -133,19 +233,17 @@ export function Notifications({
       await api(`/api/people/${encodeURIComponent(handle)}/${action}`, {
         method: 'POST',
       });
-      refresh((current) => ({
-        ...current,
-        items:
-          action === 'request'
-            ? current.items.map((item) =>
-                item.kind === 'follower' && item.handle === handle
-                  ? { ...item, canFollowBack: false }
-                  : item,
-              )
-            : current.items.filter(
-                (item) => item.kind !== 'request' || item.handle !== handle,
-              ),
-      }));
+      refresh((items) =>
+        action === 'request'
+          ? items.map((item) =>
+              item.kind === 'follower' && item.handle === handle
+                ? { ...item, canFollowBack: false }
+                : item,
+            )
+          : items.filter(
+              (item) => item.kind !== 'request' || item.handle !== handle,
+            ),
+      );
       onChange?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not update request.');
@@ -164,14 +262,13 @@ export function Notifications({
         method: accept ? 'POST' : 'DELETE',
       });
       setDeclining(null);
-      refresh((current) => ({
-        ...current,
-        items: accept
-          ? current.items.map((entry) =>
+      refresh((items) =>
+        accept
+          ? items.map((entry) =>
               entry.key === item.key ? { ...item, hosting: true } : entry,
             )
-          : current.items.filter((entry) => entry.key !== item.key),
-      }));
+          : items.filter((entry) => entry.key !== item.key),
+      );
       onChange?.();
     } catch (e) {
       setError(
@@ -190,14 +287,13 @@ export function Notifications({
         method: 'POST',
         body: JSON.stringify({ key: item.key, version: item.version }),
       });
-      refresh((current) => ({
-        ...current,
-        items: current.items.map((entry) =>
+      refresh((items) =>
+        items.map((entry) =>
           entry.kind === 'follower' && entry.key === item.key
             ? { ...entry, canFollowBack: false }
             : entry,
         ),
-      }));
+      );
     } catch (e) {
       setError(
         e instanceof Error ? e.message : 'Could not dismiss follow back.',
@@ -208,11 +304,27 @@ export function Notifications({
   }
   return (
     <>
-      {loading && !page && <p role="status">Loading notifications…</p>}
-      {!loading && page?.items.length === 0 && <p>No activity on this page.</p>}
+      {stale && !newest && (
+        <div className="actions">
+          <p role="status">There’s new activity.</p>
+          <button
+            disabled={busy}
+            onClick={() => {
+              setError('');
+              setStale(false);
+              setRequest({ depth: 1 });
+              window.scrollTo({ top: 0, behavior: 'instant' });
+            }}
+          >
+            Latest
+          </button>
+        </div>
+      )}
+      {!pages && loading && <p role="status">Loading notifications…</p>}
+      {!loading && items?.length === 0 && <p>No activity yet.</p>}
       <ul className="notification-list" ref={list}>
-        {newest && leading}
-        {page?.items.map((item) => (
+        {leading}
+        {items?.map((item) => (
           <li key={item.key}>
             {item.kind === 'host_invite' ? (
               <div className="notification-request">
@@ -428,48 +540,21 @@ export function Notifications({
         </ConfirmDialog>
       )}
       {readError && <p role="status">{readError}</p>}
+      <div ref={setSentinel} aria-hidden="true" />
+      {loading && 'after' in request && (
+        <p role="status">Loading older activity…</p>
+      )}
       {loadError && (
         <div>
           <p role="alert">{loadError}</p>
-          <button onClick={reload}>Retry</button>
+          <button onClick={() => setRequest({ ...request })}>Retry</button>
         </div>
       )}
-      {stale && !newest && <p role="status">There’s new activity.</p>}
-      <nav className="actions" aria-label="Notification pages">
-        {stale && !newest && (
-          <button
-            disabled={busy || loading}
-            onClick={() => {
-              setError('');
-              setHistory(['']);
-            }}
-          >
-            Latest
-          </button>
-        )}
-        {history.length > 1 && (
-          <button
-            disabled={busy || loading}
-            onClick={() => {
-              setError('');
-              setHistory(history.slice(0, -1));
-            }}
-          >
-            Newer
-          </button>
-        )}
-        {page?.next && (
-          <button
-            disabled={busy || loading}
-            onClick={() => {
-              setError('');
-              setHistory([...history, page.next!]);
-            }}
-          >
-            Older
-          </button>
-        )}
-      </nav>
+      {after && typeof IntersectionObserver === 'undefined' && (
+        <button disabled={busy} onClick={() => setRequest({ after })}>
+          Show older activity
+        </button>
+      )}
     </>
   );
 }

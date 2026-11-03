@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -467,20 +468,57 @@ function CommentRow({
     </li>
   );
 }
+type LikesPage = { items: { handle: string }[]; next: string | null };
 function Likes({ path, onClose }: { path: string; onClose: () => void }) {
-  const [history, setHistory] = useState(['']);
-  const after = history[history.length - 1];
-  const {
-    data: page,
-    error,
-    loading,
-    reload,
-  } = useApiResource<{
-    items: { handle: string }[];
-    next: string | null;
-  }>(`${path}?after=${encodeURIComponent(after)}`);
+  const [earlier, setEarlier] = useState<LikesPage['items']>([]),
+    [after, setAfter] = useState(''),
+    [sentinel, setSentinel] = useState<Element | null>(null);
+  const { data, error, loading, reload } = useApiResource<LikesPage>(
+    `${path}?after=${encodeURIComponent(after)}`,
+  );
+  // Fetch the next page once the end of the list nears the bottom of the
+  // dialog, which scrolls on its own. A fresh observer per loaded page reports
+  // immediately, so short lists keep filling.
+  const page = loading || error ? null : data;
+  const more = page?.next
+    ? () => {
+        setEarlier((items) => [...items, ...page.items]);
+        setAfter(page.next!);
+      }
+    : null;
+  const latestMore = useRef(more);
+  useEffect(() => {
+    latestMore.current = more;
+  });
+  useEffect(() => {
+    if (!page?.next || !sentinel || typeof IntersectionObserver === 'undefined')
+      return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        observer.disconnect();
+        latestMore.current?.();
+      },
+      { root: sentinel.closest('dialog'), rootMargin: '0px 0px 300px 0px' },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [page, sentinel]);
+  // A like added or removed between reads can shift a person across pages.
+  const seen = new Set<string>();
+  const people = [...earlier, ...(data?.items ?? [])].filter(
+    (person) => !seen.has(person.handle) && Boolean(seen.add(person.handle)),
+  );
   return (
     <Dialog title="Liked by" onClose={onClose}>
+      <ul className="people-list likers-list">
+        {people.map((person) => (
+          <li key={person.handle}>
+            <PersonLink {...person} />
+          </li>
+        ))}
+      </ul>
+      <div ref={setSentinel} aria-hidden="true" />
       {loading && <p role="status">Loading likes…</p>}
       {error && (
         <div>
@@ -488,36 +526,10 @@ function Likes({ path, onClose }: { path: string; onClose: () => void }) {
           <button onClick={reload}>Retry</button>
         </div>
       )}
-      <ul className="people-list likers-list">
-        {page?.items.map((person) => (
-          <li key={person.handle}>
-            <PersonLink {...person} />
-          </li>
-        ))}
-      </ul>
-      {page?.items.length === 0 && <p>No likes to show.</p>}
-      <nav className="actions" aria-label="Like pages">
-        {history.length > 1 && (
-          <button
-            disabled={loading}
-            onClick={() => {
-              setHistory(history.slice(0, -1));
-            }}
-          >
-            Previous
-          </button>
-        )}
-        {page?.next && (
-          <button
-            disabled={loading}
-            onClick={() => {
-              setHistory([...history, page.next!]);
-            }}
-          >
-            Next
-          </button>
-        )}
-      </nav>
+      {data && people.length === 0 && <p>No likes to show.</p>}
+      {more && typeof IntersectionObserver === 'undefined' && (
+        <button onClick={more}>Show more</button>
+      )}
     </Dialog>
   );
 }

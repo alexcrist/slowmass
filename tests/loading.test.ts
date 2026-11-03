@@ -1234,7 +1234,7 @@ const lists = [
     element: () => createElement(Notifications),
     path: '/api/notifications?',
     loading: 'Loading notifications…',
-    empty: 'No activity on this page.',
+    empty: 'No activity yet.',
     retry: 'Retry',
   },
 ];
@@ -2101,16 +2101,13 @@ it('paginates one activity timeline and resolves inline requests without leaving
     '/api/notifications?cursor=&includeJoined=1&includeEvents=1&includeHosting=1&includeComments=1',
   );
   await reply(pending('/api/notifications?'), { items: [], next: 'older' });
-  await click('Older');
+  await click('Show older activity');
   await reply(pending('/api/notifications?cursor=older'), {
     items: [],
     next: null,
   });
-  expect(visibleText()).toContain('No activity on this page.');
-  await click('Newer');
-  expect(pending('/api/notifications?').path).toBe(
-    '/api/notifications?cursor=&includeJoined=1&includeEvents=1&includeHosting=1&includeComments=1',
-  );
+  expect(visibleText()).toContain('No activity yet.');
+  expect(visibleText()).not.toContain('Show older activity');
   expect(
     requests.some(
       (item) =>
@@ -2242,11 +2239,6 @@ it.each([
     label: 'Profile',
     path: '/api/posts?handle=alice',
   },
-  {
-    route: '#notifications',
-    label: 'Activity',
-    path: '/api/notifications?',
-  },
 ])(
   'opens a separate post page from $label and returns to its current pagination cursor',
   async ({ route, label, path }) => {
@@ -2324,6 +2316,65 @@ it.each([
     ).toBe('');
   },
 );
+
+it('appends older Activity as it scrolls and reloads the loaded pages after a post visit', async () => {
+  location.hash = '#notifications';
+  await mount(
+    createElement(MemberApp, {
+      initialProfile: ownProfile,
+      onSignOut: vi.fn(),
+      signingOut: false,
+    }),
+  );
+  const item = (id: string, createdAt: number) => ({
+    key: `likes:${id}`,
+    kind: 'likes',
+    postId: id,
+    count: 1,
+    createdAt,
+  });
+  const cursor = (request: { path: string }) =>
+    new URL(request.path, location.origin).searchParams.get('cursor');
+  await reply(pending('/api/notifications?'), {
+    items: [item('first', 2)],
+    next: 'older',
+  });
+  await click('Show older activity');
+  expect(cursor(pending('/api/notifications?'))).toBe('older');
+  // The first page stays while the next one loads below it.
+  expect(renderer.root.findAllByProps({ href: '#post/first' })).toHaveLength(1);
+  await reply(pending('/api/notifications?'), {
+    items: [item('second', 1)],
+    next: null,
+  });
+  expect(renderer.root.findAllByProps({ href: '#post/first' })).toHaveLength(1);
+  await go('#post/second');
+  await reply(pending('/api/posts/second'), { post: post('second') });
+  await reply(pending('/api/interactions/second/comments?'), {
+    items: [],
+    next: null,
+  });
+  await go('#notifications');
+  // Returning rereads both pages as one fresh cursor chain.
+  expect(cursor(pending('/api/notifications?'))).toBe('');
+  expect(visibleText()).not.toContain('Loading older activity');
+  await reply(pending('/api/notifications?'), {
+    items: [item('first', 2)],
+    next: 'older',
+  });
+  expect(cursor(pending('/api/notifications?'))).toBe('older');
+  // A row that moved onto an earlier page is shown once.
+  await reply(pending('/api/notifications?'), {
+    items: [item('first', 2), item('second', 1)],
+    next: null,
+  });
+  expect(renderer.root.findAllByProps({ href: '#post/first' })).toHaveLength(1);
+  expect(renderer.root.findAllByProps({ href: '#post/second' })).toHaveLength(
+    1,
+  );
+  await selectTab('Activity');
+  expect(cursor(pending('/api/notifications?'))).toBe('');
+});
 
 it('supports direct post links, safe back navigation, unavailable posts, and retry', async () => {
   location.hash = '#post/direct';
@@ -2793,9 +2844,13 @@ it('shows flat comments with avatars, relative times, likes, and a modal likers 
   expect(
     renderer.root.findByType('dialog').findByProps({ href: '#profile/alice' }),
   ).toBeDefined();
-  await click('Next');
+  await click('Show more');
   expect(
     pending('/api/interactions/comments/comment/likes?after=alice'),
+  ).toBeDefined();
+  // Earlier likers stay listed while the next page loads below them.
+  expect(
+    renderer.root.findByType('dialog').findByProps({ href: '#profile/alice' }),
   ).toBeDefined();
   await click('Close liked by');
   expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
@@ -3293,8 +3348,8 @@ it('rereads the newest Activity page on return and new activity, and links older
   );
   expect(unsettled()).toBe(1);
   await reply(pending(path), { items: [], next: 'older' });
-  // An older page stays put and offers the latest page instead.
-  await click('Older');
+  // Once older activity is loaded, the list stays put and offers Latest.
+  await click('Show older activity');
   await reply(pending('/api/notifications?cursor=older'), {
     items: [],
     next: null,

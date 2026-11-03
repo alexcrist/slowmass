@@ -1535,6 +1535,7 @@ img.composer-avatar {
 }
 .likers-list > li {
   display: flex;
+  padding-block: 2px;
 }
 .likers-list > li:first-child {
   padding-top: 0;
@@ -1542,9 +1543,6 @@ img.composer-avatar {
 .likers-list > li:last-child {
   padding-bottom: 0;
   border-bottom: 0;
-}
-.likers-list ~ .actions:not(:empty) {
-  margin-top: 16px;
 }
 .dialog-actions {
   display: flex;
