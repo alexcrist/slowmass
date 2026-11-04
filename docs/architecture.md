@@ -4,7 +4,7 @@ Status: proposed design. Provider documentation reviewed October 10, 2026; accou
 
 ## Purpose
 
-Give people control over their attention and private social connections. The product serves relationships rather than engagement metrics: chronological feeds of own posts and accepted follows, finite pages, explicit consent to follow, no advertising or behavioral tracking. Cost decisions should preserve that purpose.
+Give people control over their attention and private social connections. The product serves relationships rather than engagement metrics: chronological feeds of own posts and accepted follows that end once you have seen them all, explicit consent to follow, no advertising or behavioral tracking. Cost decisions should preserve that purpose.
 
 ## Initial stack
 
@@ -54,7 +54,7 @@ If the image binding cannot meet the free-tier/runtime requirements, stop that i
 
 ## Feed and pagination
 
-Query the viewer’s own published posts and current accepted follows in descending `(published_at, id)` order. Include the viewer directly in the eligible author set without creating a self-follow; each author contributes the same bounded number of candidates. Use a validated cursor with a bounded page size and an upper snapshot boundary so newer inserts do not shift an ongoing pagination session. Preserve cursor history for Newer/Older navigation; a refresh starts a new snapshot. Current access and deletion always override the snapshot.
+Query the viewer’s own published posts and current accepted follows in descending `(published_at, id)` order. Include the viewer directly in the eligible author set without creating a self-follow; each author contributes the same bounded number of candidates. Use a validated cursor with a bounded page size and an upper snapshot boundary so newer inserts do not shift an ongoing pagination session. The client appends pages as the member scrolls and remembers only how many were loaded; returning rereads that many pages from a new snapshot, as does a refresh. Current access and deletion always override the snapshot.
 
 Index actual query patterns and inspect query plans/rows scanned. Batch aggregate like/comment counts and viewer-like state per page. Avoid one query per card. Comments and notifications also have bounded cursor pagination. Do not precompute timelines until measurements justify the additional writes and revocation work.
 

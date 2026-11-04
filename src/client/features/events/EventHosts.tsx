@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { api, jsonRequest } from '../../api';
-import { useApiResource } from '../../api/useApiResource';
+import { ScrollPagesEnd } from '../../navigation/ScrollPagesEnd';
+import { useScrollPages } from '../../navigation/useScrollPages';
 import { Dialog } from '../../ui/Dialog';
 import { PersonPhoto } from './EventSummary';
 import { guestPhoto } from './EventGuests';
@@ -23,19 +24,15 @@ export function EventHosts({
 }) {
   const field = useId();
   const [input, setInput] = useState('');
-  const [search, setSearch] = useState({ query: '', pages: [''] });
+  const [query, setQuery] = useState('');
+  // Successful host changes bump this so candidates are reread.
+  const [version, setVersion] = useState(0);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState('');
   const request = useRef<AbortController | null>(null);
   useEffect(() => () => request.current?.abort(), []);
   const spotsLeft = Math.max(0, maxHosts - hosts.length - pending.length);
   const full = spotsLeft === 0;
-  const { data, error, loading, reload } = useApiResource<{
-    items: HostMember[];
-    next: string | null;
-  }>(
-    `/api/events/${id}/host-candidates?q=${encodeURIComponent(search.query)}&after=${encodeURIComponent(search.pages.at(-1) ?? '')}`,
-  );
   async function run(
     action: (signal: AbortSignal) => Promise<unknown>,
     nextHosts: Host[],
@@ -50,8 +47,7 @@ export function EventHosts({
     try {
       await action(controller.signal);
       if (controller.signal.aborted) return;
-      setSearch((current) => ({ ...current, pages: [''] }));
-      reload();
+      setVersion((current) => current + 1);
       onChange(left, nextHosts, nextPending);
     } catch (error) {
       if (!controller.signal.aborted)
@@ -67,7 +63,7 @@ export function EventHosts({
   }
   function searchMembers(event: FormEvent) {
     event.preventDefault();
-    setSearch({ query: input.trim(), pages: [''] });
+    setQuery(input.trim());
   }
   return (
     <Dialog title="Hosts" busy={busy} onClose={onClose}>
@@ -231,102 +227,26 @@ export function EventHosts({
                 invitations.
               </p>
             )}
-            {loading && (
-              <p className="event-host-notice" role="status">
-                Loading connections…
-              </p>
-            )}
-            {error && (
-              <div className="event-host-notice">
-                <p role="alert">{error}</p>
-                <button type="button" onClick={reload} disabled={busy}>
-                  Try again
-                </button>
-              </div>
-            )}
-            {!loading &&
-              !error &&
-              data?.items.filter(
-                (member) => !pending.some((invite) => invite.id === member.id),
-              ).length === 0 && (
-                <p className="event-host-notice">
-                  No matching connections with a profile photo.
-                </p>
-              )}
-            <ul
-              className="event-guest-list event-host-list"
-              aria-label="Co-host connections"
-            >
-              {!loading &&
-                !error &&
-                data?.items
-                  .filter(
-                    (member) =>
-                      !pending.some((invite) => invite.id === member.id),
-                  )
-                  .map((member) => (
-                    <li key={member.id}>
-                      <PersonPhoto
-                        name={member.displayName}
-                        src={guestPhoto(member)}
-                        size={36}
-                      />
-                      <span className="event-host-pending">
-                        <strong>{member.displayName}</strong>
-                        <span className="event-list-meta">{member.handle}</span>
-                      </span>
-                      <button
-                        type="button"
-                        className="compact-button primary-button"
-                        aria-label={`Invite ${member.displayName} to co-host`}
-                        disabled={busy || full}
-                        onClick={() =>
-                          void run(
-                            (signal) =>
-                              api(`/api/events/${id}/hosts`, {
-                                ...jsonRequest('POST', { userId: member.id }),
-                                signal,
-                              }),
-                            hosts,
-                            [...pending, member],
-                          )
-                        }
-                      >
-                        <span>Invite</span>
-                      </button>
-                    </li>
-                  ))}
-            </ul>
-            <nav className="actions" aria-label="Co-host connection pages">
-              {search.pages.length > 1 && (
-                <button
-                  type="button"
-                  disabled={busy || loading}
-                  onClick={() =>
-                    setSearch((current) => ({
-                      ...current,
-                      pages: current.pages.slice(0, -1),
-                    }))
-                  }
-                >
-                  Previous
-                </button>
-              )}
-              {data?.next && (
-                <button
-                  type="button"
-                  disabled={busy || loading}
-                  onClick={() =>
-                    setSearch((current) => ({
-                      ...current,
-                      pages: [...current.pages, data.next!],
-                    }))
-                  }
-                >
-                  Next
-                </button>
-              )}
-            </nav>
+            <HostCandidates
+              key={query}
+              id={id}
+              query={query}
+              version={version}
+              pending={pending}
+              disabled={busy}
+              full={full}
+              onInvite={(member) =>
+                void run(
+                  (signal) =>
+                    api(`/api/events/${id}/hosts`, {
+                      ...jsonRequest('POST', { userId: member.id }),
+                      signal,
+                    }),
+                  hosts,
+                  [...pending, member],
+                )
+              }
+            />
           </div>
         </section>
         {failure && <p role="alert">{failure}</p>}
@@ -340,5 +260,94 @@ export function EventHosts({
         </button>
       </div>
     </Dialog>
+  );
+}
+
+const identify = (member: HostMember) => member.id;
+// Accepted followers and following with a profile photo, loaded as the
+// dialog scrolls. Remounted per search.
+function HostCandidates({
+  id,
+  query,
+  version,
+  pending,
+  disabled,
+  full,
+  onInvite,
+}: {
+  id: string;
+  query: string;
+  version: number;
+  pending: HostMember[];
+  disabled: boolean;
+  full: boolean;
+  onInvite: (member: HostMember) => void;
+}) {
+  const [history, setHistory] = useState(['']);
+  const pages = useScrollPages({
+    history: [history, setHistory],
+    path: (after) =>
+      `/api/events/${id}/host-candidates?q=${encodeURIComponent(query)}&after=${encodeURIComponent(after)}`,
+    identify,
+  });
+  const { items, loading, revalidating, revalidate } = pages;
+  const latest = useRef({ version, revalidate });
+  useEffect(() => {
+    latest.current.revalidate = revalidate;
+  });
+  useEffect(() => {
+    if (latest.current.version === version) return;
+    latest.current.version = version;
+    latest.current.revalidate();
+  }, [version]);
+  const members = items?.filter(
+    (member) => !pending.some((invite) => invite.id === member.id),
+  );
+  return (
+    <>
+      {loading && !items && (
+        <p className="event-host-notice" role="status">
+          Loading connections…
+        </p>
+      )}
+      {!loading && members?.length === 0 && (
+        <p className="event-host-notice">
+          No matching connections with a profile photo.
+        </p>
+      )}
+      <ul
+        className="event-guest-list event-host-list"
+        aria-label="Co-host connections"
+      >
+        {members?.map((member) => (
+          <li key={member.id}>
+            <PersonPhoto
+              name={member.displayName}
+              src={guestPhoto(member)}
+              size={36}
+            />
+            <span className="event-host-pending">
+              <strong>{member.displayName}</strong>
+              <span className="event-list-meta">{member.handle}</span>
+            </span>
+            <button
+              type="button"
+              className="compact-button primary-button"
+              aria-label={`Invite ${member.displayName} to co-host`}
+              disabled={disabled || full || revalidating}
+              onClick={() => onInvite(member)}
+            >
+              <span>Invite</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <ScrollPagesEnd
+        pages={pages}
+        loading="Loading more connections…"
+        more="Show more connections"
+        disabled={disabled}
+      />
+    </>
   );
 }

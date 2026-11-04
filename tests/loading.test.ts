@@ -580,7 +580,7 @@ it('loads the feed after one bootstrap request without login, onboarding, or red
     '/api/notifications/unread-count?includeJoined=1&includeEvents=1&includeHosting=1&includeComments=1&includeUnread=1',
   ]);
   await reply(pending('/api/posts?'), { items: [], next: null });
-  expect(visibleText()).toContain('No posts on this page.');
+  expect(visibleText()).toContain('No posts yet.');
   noLogin();
 });
 
@@ -906,7 +906,7 @@ it('times out stalled bootstrap, ignores late data, and retries without signing 
   await act(async () => {
     await vi.advanceTimersByTimeAsync(15_000);
   });
-  expect(visibleText()).toContain('No posts on this page.');
+  expect(visibleText()).toContain('No posts yet.');
   expect(visibleText()).not.toContain('We couldn’t load slowmass.');
   noLogin();
 });
@@ -931,7 +931,7 @@ it('bounds page reads and ignores a late result after retry without signing out'
   await reply(first, { items: [post('late')], next: null });
   expect(visibleText()).toContain('Loading posts…');
   await reply(pending('/api/posts?'), { items: [], next: null });
-  expect(visibleText()).toContain('No posts on this page.');
+  expect(visibleText()).toContain('No posts yet.');
   noLogin();
   expect(vi.getTimerCount()).toBe(0);
 });
@@ -1210,7 +1210,7 @@ const lists = [
     element: () => createElement(PostList),
     path: '/api/posts?',
     loading: 'Loading posts…',
-    empty: 'No posts on this page.',
+    empty: 'No posts yet.',
     retry: 'Retry',
   },
   {
@@ -1226,7 +1226,7 @@ const lists = [
     element: () => createElement(Connections, { kind: 'followers' }),
     path: '/api/people/connections?',
     loading: 'Loading…',
-    empty: 'No accounts on this page.',
+    empty: 'No accounts.',
     retry: 'Retry',
   },
   {
@@ -1471,67 +1471,119 @@ it('clears previous photo details during navigation and ignores a late, aborted 
   expect(visibleText()).not.toContain('Photo unavailable');
 });
 
-it('does not show an old feed page or end marker while paging', async () => {
+it('appends older feed pages below the loaded posts and ends with a marker', async () => {
+  const end = () =>
+    renderer.root.findAllByProps({ 'aria-label': 'End of posts' });
   await mount(createElement(PostList));
-  await reply(pending('/api/posts?'), {
-    items: [post('first')],
-    next: 'older',
+  await reply(pending('/api/posts?'), { items: [post('first')], next: 'b' });
+  expect(end()).toHaveLength(0);
+  expect(visibleText()).not.toContain('Newer');
+  expect(visibleText()).not.toContain('Page 1');
+  await click('Show more posts');
+  // Loaded posts stay while the next page loads below them.
+  expect(visibleText()).toContain('Photo first');
+  expect(visibleText()).toContain('Loading more posts…');
+  expect(visibleText()).not.toContain('Show more posts');
+  await reply(pending('/api/posts?cursor=b'), { error: 'Read failed' }, 503);
+  expect(visibleText()).toContain('Photo first');
+  expect(visibleText()).toContain('Read failed');
+  expect(end()).toHaveLength(0);
+  await click('Retry');
+  // A post that moved onto a later page is shown once.
+  await reply(pending('/api/posts?cursor=b'), {
+    items: [post('first'), post('second')],
+    next: null,
   });
-  await click('Older');
-  expect(visibleText()).toContain('Loading posts…');
-  expect(visibleText()).not.toContain('Photo first');
-  expect(
-    renderer.root.findAllByProps({ 'aria-label': 'End of posts' }),
-  ).toHaveLength(0);
-  await reply(pending('/api/posts?cursor=older'), { items: [], next: null });
-  expect(
-    renderer.root.findAllByProps({ 'aria-label': 'End of posts' }),
-  ).toHaveLength(1);
+  expect(renderer.root.findAllByType('article')).toHaveLength(2);
+  expect(visibleText()).not.toContain('Show more posts');
+  expect(end()).toHaveLength(1);
   expect(visibleText()).not.toContain('End of posts');
 });
 
-it('numbers feed pages and repeats controls above later pages', async () => {
-  const navs = () =>
-    renderer.root
-      .findAllByType('nav')
-      .filter((nav) => nav.props['aria-label'] === 'Post pages');
-  await mount(createElement(PostList));
-  await reply(pending('/api/posts?'), { items: [post('only')], next: null });
-  expect(navs()).toHaveLength(0);
-  expect(visibleText()).not.toContain('Page 1');
-
-  await mount(createElement(PostList));
+it('loads the next feed page when the end of the list nears the viewport', async () => {
+  const observers: {
+    callback: IntersectionObserverCallback;
+    margin?: string;
+    disconnected: boolean;
+  }[] = [];
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      entry: (typeof observers)[number];
+      constructor(
+        callback: IntersectionObserverCallback,
+        options?: IntersectionObserverInit,
+      ) {
+        this.entry = {
+          callback,
+          margin: options?.rootMargin,
+          disconnected: false,
+        };
+        observers.push(this.entry);
+      }
+      observe() {}
+      disconnect() {
+        this.entry.disconnected = true;
+      }
+    },
+  );
+  // The paging sentinel, not the photos' read-receipt observers.
+  const paging = () =>
+    observers.filter((item) => item.margin === '0px 0px 600px 0px');
+  const intersect = async () => {
+    const observer = paging().find((item) => !item.disconnected);
+    await act(async () =>
+      observer?.callback(
+        [{ isIntersecting: true }] as IntersectionObserverEntry[],
+        {} as IntersectionObserver,
+      ),
+    );
+  };
+  await act(async () => {
+    renderer = create(createElement(PostList), {
+      createNodeMock: () => ({ closest: () => null }),
+    });
+  });
   await reply(pending('/api/posts?'), { items: [post('first')], next: 'b' });
-  expect(navs()).toHaveLength(1);
-  expect(visibleText()).toContain('Page 1');
-  await click('Older');
+  expect(visibleText()).not.toContain('Show more posts');
+  await intersect();
   await reply(pending('/api/posts?cursor=b'), {
     items: [post('second')],
-    next: 'c',
-  });
-  expect(navs()).toHaveLength(2);
-  expect(navs()[0].props.className).toBe('page-nav page-nav-top');
-  expect(visibleText()).toContain('Page 2');
-  await click('Older');
-  await reply(pending('/api/posts?cursor=c'), {
-    items: [post('third')],
     next: null,
   });
-  expect(visibleText()).toContain('Page 3');
-  expect(
-    navs().map((nav) =>
-      nav.findAllByType('button').map((button) => button.props.className),
-    ),
-  ).toEqual([['page-newer'], ['page-newer']]);
-  expect(
-    renderer.root.findAllByProps({ 'aria-label': 'End of posts' }),
-  ).toHaveLength(1);
-  await click('Newer');
+  expect(renderer.root.findAllByType('article')).toHaveLength(2);
+  expect(paging()).toHaveLength(1);
+  expect(paging()[0].disconnected).toBe(true);
+});
+
+it('removes a deleted feed post and rereads every loaded page', async () => {
+  await mount(createElement(PostList));
+  await reply(pending('/api/posts?'), {
+    items: [{ ...post('mine'), isOwner: true }],
+    next: 'b',
+  });
+  await click('Show more posts');
   await reply(pending('/api/posts?cursor=b'), {
     items: [post('second')],
-    next: 'c',
+    next: null,
   });
-  expect(visibleText()).toContain('Page 2');
+  await click('Post options');
+  await click('Delete post');
+  await act(async () => {
+    renderer.root
+      .findByType('dialog')
+      .findByType('form')
+      .props.onSubmit({ preventDefault: vi.fn() });
+  });
+  await reply(pending('/api/posts/mine'), { ok: true });
+  expect(visibleText()).not.toContain('Photo mine');
+  expect(visibleText()).toContain('Photo second');
+  await reply(pending('/api/posts?'), { items: [], next: 'b' });
+  await reply(pending('/api/posts?cursor=b'), {
+    items: [post('second')],
+    next: null,
+  });
+  expect(renderer.root.findAllByType('article')).toHaveLength(1);
 });
 
 it('waits for profile authorization before showing private or empty states', async () => {
@@ -1838,7 +1890,7 @@ it('reselecting Feed reloads the newest page without another account read or a p
     items: [post('first')],
     next: 'older',
   });
-  await click('Older');
+  await click('Show more posts');
   await reply(pending('/api/posts?cursor=older'), {
     items: [post('older')],
     next: null,
@@ -2240,7 +2292,7 @@ it.each([
     path: '/api/posts?handle=alice',
   },
 ])(
-  'opens a separate post page from $label and returns to its current pagination cursor',
+  'opens a separate post page from $label and rereads its loaded pages on return',
   async ({ route, label, path }) => {
     location.hash = route;
     await mount(
@@ -2256,26 +2308,18 @@ it.each([
           profile: { ...ownProfile, relationship: 'self' },
         });
     }
-    function item(id: string) {
-      return label === 'Activity'
-        ? {
-            key: `likes:${id}`,
-            kind: 'likes',
-            postId: id,
-            count: 1,
-            createdAt: 1,
-          }
-        : post(id);
-    }
+    const item = post;
     await loadProfile();
+    const cursor = (request: { path: string }) =>
+      new URL(request.path, location.origin).searchParams.get('cursor') || '';
     await reply(pending(path), { items: [item('first')], next: 'older' });
-    await click('Older');
+    await click('Show more posts');
+    expect(cursor(pending(path))).toBe('older');
     await reply(pending(path), { items: [item('second')], next: null });
     await go(renderer.root.findByProps({ href: '#post/second' }).props.href);
     expect(renderer.root.findByType('h1').children).toEqual(['Post']);
     expect(renderer.root.findAllByType(PostList)).toHaveLength(0);
     expect(renderer.root.findAllByType(ProfilePage)).toHaveLength(0);
-    expect(renderer.root.findAllByType(Notifications)).toHaveLength(0);
     expect(visibleText()).toContain('Loading photo…');
     await reply(pending('/api/posts/second'), { post: post('second') });
     await reply(pending('/api/interactions/second/comments?'), {
@@ -2292,28 +2336,20 @@ it.each([
     expect(back.children.join(' ')).toContain(`Back to ${label.toLowerCase()}`);
     await go(back.props.href);
     await loadProfile();
-    const returned = pending(path);
-    expect(
-      new URL(returned.path, location.origin).searchParams.get('cursor'),
-    ).toBe('older');
+    // Returning rereads both loaded pages as one fresh cursor chain.
+    expect(cursor(pending(path))).toBe('');
     expect(visibleText()).not.toContain('Photo second');
-    await reply(returned, { items: [item('second')], next: null });
-    await click('Newer');
-    const newer = pending(path);
-    expect(
-      new URL(newer.path, location.origin).searchParams.get('cursor') || '',
-    ).toBe('');
-    await reply(newer, { items: [item('first')], next: 'older' });
-    await click('Older');
-    await reply(pending(path), { items: [], next: null });
+    await reply(pending(path), { items: [item('first')], next: 'older' });
+    expect(cursor(pending(path))).toBe('older');
+    await reply(pending(path), { items: [item('second')], next: null });
+    expect(renderer.root.findAllByProps({ href: '#post/second' })).toHaveLength(
+      1,
+    );
     await selectTab(label);
     const refreshed = requests[requests.length - 1];
     expect(refreshed.options?.signal?.aborted).not.toBe(true);
     await loadProfile();
-    expect(
-      new URL(pending(path).path, location.origin).searchParams.get('cursor') ||
-        '',
-    ).toBe('');
+    expect(cursor(pending(path))).toBe('');
   },
 );
 
@@ -2446,7 +2482,7 @@ it('deletes a focused post and refetches the originating feed when returning', a
   await go(renderer.root.findByProps({ className: 'back-control' }).props.href);
   await reply(pending('/api/posts?'), { items: [], next: null });
   expect(visibleText()).not.toContain('Photo mine');
-  expect(visibleText()).toContain('No posts on this page.');
+  expect(visibleText()).toContain('No posts yet.');
 });
 
 it('submits compact comments once, preserves failed drafts, and reuses the operation ID on retry', async () => {
@@ -2600,7 +2636,7 @@ it('keeps profile information mounted across tabs and returns to the selected ta
 });
 
 it.each(['following', 'followers'] as const)(
-  'opens another member’s %s tab, paginates read-only rows, and returns from a person visit',
+  'opens another member’s %s tab, appends read-only rows, and returns from a person visit',
   async (kind) => {
     location.hash = '#people';
     await mount(
@@ -2627,7 +2663,7 @@ it.each(['following', 'followers'] as const)(
     );
     const path = `/api/people/bob/connections?kind=${kind}&after=`;
     await reply(pending(path), { error: 'Please retry' }, 503);
-    expect(visibleText()).not.toContain('No accounts on this page.');
+    expect(visibleText()).not.toContain('No accounts.');
     await click('Retry');
     expect(visibleText()).not.toContain('Please retry');
     await reply(pending(path), {
@@ -2637,15 +2673,15 @@ it.each(['following', 'followers'] as const)(
     const row = renderer.root.findByProps({ className: 'connection-row' });
     expect(row.findAllByType('button')).toHaveLength(0);
     expect(row.findByType('img').props.src).toBe('/media/avatar/carol');
-    await click('Next');
-    expect(visibleText()).not.toContain('carol');
-    await reply(pending(`${path}carol`), { items: [], next: null });
-    expect(visibleText()).toContain('No accounts on this page.');
-    await click('Previous');
-    await reply(pending(path), {
-      items: [{ handle: 'carol', displayName: 'Carol' }],
-      next: 'carol',
+    await click('Show more accounts');
+    expect(visibleText()).toContain('carol');
+    await reply(pending(`${path}carol`), {
+      items: [{ handle: 'dave', displayName: 'Dave' }],
+      next: null,
     });
+    expect(visibleText()).toContain('carol');
+    expect(visibleText()).toContain('dave');
+    expect(visibleText()).not.toContain('Show more accounts');
     expect(
       requests.filter((item) => item.path === '/api/people/bob'),
     ).toHaveLength(1);
@@ -2668,6 +2704,7 @@ it.each(['following', 'followers'] as const)(
     expect(
       renderer.root.findByProps({ role: 'tabpanel' }).props['data-tab'],
     ).toBe(kind);
+    // Returning rereads both loaded pages, starting from the first.
     await reply(
       pending(path),
       { error: 'Follow this account to view its connections.' },
@@ -3290,7 +3327,7 @@ it('rebuilds Find from fresh reads with its previous shuffle and loaded depth', 
   expect(visibleText()).not.toContain('bob');
 });
 
-it('remembers open comments and their page without restoring old comment content', async () => {
+it('remembers open comments and how many pages were shown without restoring old comment content', async () => {
   const tree = (show: boolean) =>
     createElement(CommentHistoryProvider, {
       children: show
@@ -3306,15 +3343,20 @@ it('remembers open comments and their page without restoring old comment content
     items: [],
     next: 'older',
   });
-  await click('Older comments');
+  await click('Show more comments');
+  expect(pending('/api/interactions/one/comments?').path).toContain(
+    'after=older',
+  );
   await reply(pending('/api/interactions/one/comments?'), {
     items: [],
     next: null,
   });
+  expect(visibleText()).not.toContain('Show more comments');
   await act(async () => renderer.update(tree(false)));
   await act(async () => renderer.update(tree(true)));
-  expect(pending('/api/interactions/one/comments?').path).toContain(
-    'after=older',
+  // Both pages are reread fresh, from the first.
+  expect(pending('/api/interactions/one/comments?').path).toBe(
+    '/api/interactions/one/comments?after=',
   );
   expect(visibleText()).toContain('Loading comments');
   await reply(

@@ -46,3 +46,15 @@ Act when live post alerts exceed what one cleanup run per 15 minutes removes (1,
 **Fix.** Mark a post alert's receipt read once its last queued delivery finishes, which also takes it out of the badge's unread seek, and raise the cleanup batch.
 
 Comment-participant activity (migration 0041) writes one source and receipt per eligible prior commenter, capped at the 500 most recent participants per new comment, plus their opted-in delivery rows. The partial participant index avoids deleted history, but selecting distinct participants still reads live comments on that post. Measure comment-insert rows read/written and CPU, and push queue age; sustained large threads need a measured participant-summary or batched fan-out design before raising the cap. Comment likes add one source/receipt per non-self like.
+
+## Feed rereads after scrolling
+
+Recorded November 3, 2026, when the feed and profile grids moved to loading as you scroll.
+
+**Cause.** The client remembers how many feed pages were loaded, never their contents. Returning from a post, or deleting a post from the feed, rereads every loaded page sequentially from a new snapshot so the list stays contiguous and current. Each feed page reads up to one page plus a sentinel per eligible author before hydrating 12 posts.
+
+**Cost.** One feed query per loaded page per return, so rows read grow with scroll depth times follows. Every other list built on `useScrollPages` (profile grids, connections, Activity, events, guests, comments, event activity) rereads the same way, after mutations as well as on return, but each of its pages is a single indexed query and costs far less.
+
+**Signal.** Workers analytics or D1 query insights showing `/api/posts` requests per member session, or feed rows read per request, climbing well above the page count members actually view.
+
+**Fix.** Cap the reread depth, for example by rereading only the last few pages from the remembered cursor before them instead of the whole chain, accepting that earlier rows come from the older snapshot.

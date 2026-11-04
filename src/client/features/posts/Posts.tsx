@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { PersonLink } from '../../navigation/PersonLink';
 import { postHref, profileHref } from '../../navigation';
 import { usePageHistory } from '../../navigation/PageHistory';
+import { ScrollPagesEnd } from '../../navigation/ScrollPagesEnd';
+import { useScrollPages } from '../../navigation/useScrollPages';
 import { Interactions } from '../interactions';
 import { useSeenActivity } from '../notifications';
 import { useApiResource } from '../../api/useApiResource';
@@ -25,7 +27,7 @@ type Post = {
   commentCount: number;
   liked: number;
 };
-type Page = { items: Post[]; next: string | null };
+const identify = (post: Post) => post.id;
 export function PostList({
   handle,
   grid = false,
@@ -35,56 +37,31 @@ export function PostList({
   grid?: boolean;
   pending?: boolean;
 }) {
-  const [history, setHistory] = usePageHistory(
-    handle ? `posts:profile:${handle}` : 'posts:feed',
-  );
-  const cursor = history[history.length - 1];
-  const params = new URLSearchParams();
-  if (handle) params.set('handle', handle);
-  if (cursor) params.set('cursor', cursor);
-  const {
-    data: page,
-    error,
-    loading,
-    reload,
-    refresh,
-  } = useApiResource<Page>(`/api/posts?${params}`);
+  const pages = useScrollPages({
+    history: usePageHistory(handle ? `posts:profile:${handle}` : 'posts:feed'),
+    path: (cursor) => {
+      const params = new URLSearchParams();
+      if (handle) params.set('handle', handle);
+      if (cursor) params.set('cursor', cursor);
+      return `/api/posts?${params}`;
+    },
+    identify,
+  });
+  const { items, loading, complete, update } = pages;
   if (pending) return null;
-  const next = page?.next;
-  const pages = (top: boolean) =>
-    page && (
-      <PostPages
-        top={top}
-        number={history.length}
-        loading={loading}
-        onNewer={
-          history.length > 1 ? () => setHistory(history.slice(0, -1)) : null
-        }
-        onOlder={next ? () => setHistory([...history, next]) : null}
-      />
-    );
   return (
     <>
-      {history.length > 1 && pages(true)}
-      {loading && !page && <p role="status">Loading posts…</p>}
-      {error && (
-        <div>
-          <p role="alert" className="error-message">
-            {error}
-          </p>
-          <button onClick={reload}>Retry</button>
-        </div>
-      )}
-      {!loading && page?.items.length === 0 && (
+      {loading && !items && <p role="status">Loading posts…</p>}
+      {!loading && items?.length === 0 && (
         <p>
           {handle
-            ? 'No photos on this page.'
-            : 'No posts on this page. Posts from accepted follows appear here.'}
+            ? 'No photos yet.'
+            : 'No posts yet. Posts from accepted follows appear here.'}
         </p>
       )}
       {grid ? (
         <div className="post-grid">
-          {page?.items.map((post, index) => (
+          {items?.map((post, index) => (
             <a
               key={post.id}
               className="grid-photo"
@@ -107,91 +84,38 @@ export function PostList({
           ))}
         </div>
       ) : (
-        page?.items.map((post, index) => (
+        items?.map((post, index) => (
           <PostCard
             key={post.id}
             post={post}
             onDelete={() =>
-              refresh((current) => ({
-                ...current,
-                items: current.items.filter((item) => item.id !== post.id),
-              }))
+              update((items) => items.filter((item) => item.id !== post.id))
             }
             priority={index === 0}
           />
         ))
       )}
-      {page && (
-        <>
-          {!page.next && !loading && (
-            <svg
-              className="end-of-posts"
-              role="img"
-              aria-label="End of posts"
-              width={48}
-              height={16}
-              viewBox="0 0 48 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1}
-            >
-              <path d="M0 8h48" />
-            </svg>
-          )}
-          {(history.length > 1 || page.next) && pages(false)}
-        </>
+      <ScrollPagesEnd
+        pages={pages}
+        loading="Loading more posts…"
+        more="Show more posts"
+      />
+      {complete && (
+        <svg
+          className="end-of-posts"
+          role="img"
+          aria-label="End of posts"
+          width={48}
+          height={16}
+          viewBox="0 0 48 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1}
+        >
+          <path d="M0 8h48" />
+        </svg>
       )}
     </>
-  );
-}
-// Cursor pages have no total, so the number is the depth in this list's history.
-function PostPages({
-  top,
-  number,
-  loading,
-  onNewer,
-  onOlder,
-}: {
-  top: boolean;
-  number: number;
-  loading: boolean;
-  onNewer: (() => void) | null;
-  onOlder: (() => void) | null;
-}) {
-  return (
-    <nav
-      className={top ? 'page-nav page-nav-top' : 'page-nav'}
-      aria-label="Post pages"
-    >
-      {onNewer && (
-        <button className="page-newer" disabled={loading} onClick={onNewer}>
-          <Chevron path="m15 6-6 6 6 6" />
-          Newer
-        </button>
-      )}
-      <span className="page-number">{`Page ${number}`}</span>
-      {onOlder && (
-        <button className="page-older" disabled={loading} onClick={onOlder}>
-          Older
-          <Chevron path="m9 6 6 6-6 6" />
-        </button>
-      )}
-    </nav>
-  );
-}
-function Chevron({ path }: { path: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d={path} />
-    </svg>
   );
 }
 function PostCard({

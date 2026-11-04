@@ -1,6 +1,7 @@
 import { eventHref } from '../../navigation';
-import { useApiResource } from '../../api/useApiResource';
 import { usePageHistory } from '../../navigation/PageHistory';
+import { ScrollPagesEnd } from '../../navigation/ScrollPagesEnd';
+import { useScrollPages } from '../../navigation/useScrollPages';
 import {
   EventDateIcon,
   EventLocationIcon,
@@ -16,14 +17,6 @@ export function EventsPage({
   when: 'upcoming' | 'past';
   canCreate: boolean;
 }) {
-  const [history, setHistory] = usePageHistory(`events/${when}`);
-  const cursor = history[history.length - 1];
-  const { data, error, loading, reload } = useApiResource<{
-    items: EventItem[];
-    next: string | null;
-  }>(
-    `/api/events?when=${when}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
-  );
   return (
     <>
       {/* New event shares the tab row but sits apart: an action, not a view. */}
@@ -60,14 +53,30 @@ export function EventsPage({
           </a>
         )}
       </div>
-      {loading && !data && <p role="status">Loading events…</p>}
-      {error && (
-        <div>
-          <p role="alert">{error}</p>
-          <button onClick={reload}>Retry</button>
-        </div>
-      )}
-      {data?.items.length === 0 && (
+      <EventList key={when} when={when} canCreate={canCreate} />
+    </>
+  );
+}
+
+const identify = (event: EventItem) => event.id;
+function EventList({
+  when,
+  canCreate,
+}: {
+  when: 'upcoming' | 'past';
+  canCreate: boolean;
+}) {
+  const pages = useScrollPages({
+    history: usePageHistory(`events/${when}`),
+    path: (cursor) =>
+      `/api/events?when=${when}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+    identify,
+  });
+  const { items, loading } = pages;
+  return (
+    <>
+      {loading && !items && <p role="status">Loading events…</p>}
+      {!loading && items?.length === 0 && (
         <p>
           {when === 'past'
             ? 'No past events.'
@@ -77,7 +86,7 @@ export function EventsPage({
         </p>
       )}
       <ul className="notification-list event-list">
-        {data?.items.map((event) => (
+        {items?.map((event) => (
           <li key={event.id}>
             <a className="notification-post" href={eventHref(event.id)}>
               <img
@@ -118,24 +127,11 @@ export function EventsPage({
           </li>
         ))}
       </ul>
-      <nav className="actions" aria-label="Event pages">
-        {history.length > 1 && (
-          <button
-            disabled={loading}
-            onClick={() => setHistory(history.slice(0, -1))}
-          >
-            {when === 'past' ? 'Newer' : 'Earlier'}
-          </button>
-        )}
-        {data?.next && (
-          <button
-            disabled={loading}
-            onClick={() => setHistory([...history, data.next!])}
-          >
-            {when === 'past' ? 'Older' : 'Later'}
-          </button>
-        )}
-      </nav>
+      <ScrollPagesEnd
+        pages={pages}
+        loading="Loading more events…"
+        more="Show more events"
+      />
     </>
   );
 }

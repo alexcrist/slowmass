@@ -6,8 +6,9 @@ import {
   type ReactNode,
 } from 'react';
 import { api, jsonRequest } from '../../api';
-import { useApiResource } from '../../api/useApiResource';
 import { usePageHistory } from '../../navigation/PageHistory';
+import { ScrollPagesEnd } from '../../navigation/ScrollPagesEnd';
+import { useScrollPages } from '../../navigation/useScrollPages';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
 import { Composer } from '../../ui/Composer';
 import { RelativeTime } from '../../ui/RelativeTime';
@@ -28,6 +29,8 @@ type Entry = {
   hasAvatar: boolean;
   canDelete: boolean;
 };
+
+const identify = (entry: Entry) => entry.key;
 
 function entryText(entry: Entry) {
   if (entry.kind === 'response')
@@ -55,7 +58,8 @@ function EntryText({ entry, children }: { entry: Entry; children: ReactNode }) {
 }
 
 // Answers and messages, newest first, with a composer below for hosts and
-// guests.
+// guests. Older entries load through Show more so the composer stays
+// reachable.
 export function EventLog({
   id,
   linkProfiles,
@@ -67,26 +71,29 @@ export function EventLog({
   onPosted?: () => void;
   refreshVersion?: number;
 }) {
-  const [history, setHistory] = usePageHistory(`event/${id}/activity`);
-  const cursor = history[history.length - 1];
-  const { data, error, loading, reload, refresh } = useApiResource<{
-    items: Entry[];
-    next: string | null;
-  }>(
-    `/api/events/${id}/activity${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
-  );
+  const pages = useScrollPages({
+    history: usePageHistory(`event/${id}/activity`),
+    path: (cursor) =>
+      `/api/events/${id}/activity${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
+    identify,
+    automatic: false,
+  });
+  const { items, loading, revalidate, update } = pages;
   const [body, setBody] = useState('');
   const [messageId, setMessageId] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState('');
   const [deleting, setDeleting] = useState<Entry | null>(null);
-  const lastRefresh = useRef(refreshVersion);
+  const lastRefresh = useRef({ version: refreshVersion, revalidate });
   useEffect(() => {
-    if (lastRefresh.current === refreshVersion) return;
-    lastRefresh.current = refreshVersion;
-    if (history.length > 1) setHistory(['']);
-    else refresh();
-  }, [refreshVersion, history, setHistory, refresh]);
+    lastRefresh.current.revalidate = revalidate;
+  });
+  // A changed answer or cancellation on the event page rereads loaded entries.
+  useEffect(() => {
+    if (lastRefresh.current.version === refreshVersion) return;
+    lastRefresh.current.version = refreshVersion;
+    lastRefresh.current.revalidate();
+  }, [refreshVersion]);
   async function post(submit: FormEvent) {
     submit.preventDefault();
     if (busy || !body.trim()) return;
@@ -99,8 +106,7 @@ export function EventLog({
       );
       setBody('');
       setMessageId(crypto.randomUUID());
-      if (history.length > 1) setHistory(['']);
-      else refresh();
+      revalidate();
       onPosted?.();
     } catch (error) {
       setFailure(
@@ -118,10 +124,9 @@ export function EventLog({
       await api(`/api/events/${id}/messages/${deleting.id}`, {
         method: 'DELETE',
       });
-      refresh((page) => ({
-        ...page,
-        items: page.items.filter((entry) => entry.key !== deleting.key),
-      }));
+      update((entries) =>
+        entries.filter((entry) => entry.key !== deleting.key),
+      );
       setDeleting(null);
     } catch (error) {
       setFailure(
@@ -133,16 +138,10 @@ export function EventLog({
   }
   return (
     <>
-      {loading && !data && <p role="status">Loading activity…</p>}
-      {error && (
-        <div>
-          <p role="alert">{error}</p>
-          <button onClick={reload}>Retry</button>
-        </div>
-      )}
-      {data?.items.length === 0 && <p>No activity yet.</p>}
+      {loading && !items && <p role="status">Loading activity…</p>}
+      {!loading && items?.length === 0 && <p>No activity yet.</p>}
       <ul className="comment-list event-log">
-        {data?.items.map((entry) => (
+        {items?.map((entry) => (
           <li key={entry.key} className="comment-row">
             <PersonPhoto
               name={entry.displayName}
@@ -189,24 +188,11 @@ export function EventLog({
           </li>
         ))}
       </ul>
-      <nav className="actions" aria-label="Activity pages">
-        {history.length > 1 && (
-          <button
-            disabled={loading}
-            onClick={() => setHistory(history.slice(0, -1))}
-          >
-            Newer
-          </button>
-        )}
-        {data?.next && (
-          <button
-            disabled={loading}
-            onClick={() => setHistory([...history, data.next!])}
-          >
-            Older
-          </button>
-        )}
-      </nav>
+      <ScrollPagesEnd
+        pages={pages}
+        loading="Loading more activity…"
+        more="Show more activity"
+      />
       <Composer
         label="Write a message"
         placeholder="Write a message…"

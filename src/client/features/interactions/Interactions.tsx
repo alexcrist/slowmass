@@ -10,6 +10,8 @@ import {
 import { revealCommentComposer } from './comment-scroll';
 import { useCommentHistory } from './CommentHistory';
 import { PersonLink } from '../../navigation/PersonLink';
+import { ScrollPagesEnd } from '../../navigation/ScrollPagesEnd';
+import { useScrollPages } from '../../navigation/useScrollPages';
 import { profileHref } from '../../navigation';
 import { useSeenActivity } from '../notifications';
 import { api, jsonRequest } from '../../api';
@@ -29,7 +31,7 @@ type Comment = {
   likeCount: number;
   liked: number;
 };
-type Page = { items: Comment[]; next: string | null };
+const identify = (comment: Comment) => comment.id;
 export function Interactions({
   postId,
   initial,
@@ -169,21 +171,21 @@ function Comments({
     [id, setId] = useState(() => crypto.randomUUID()),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
-  const after = history[history.length - 1];
   const [confirming, setConfirming] = useState<Comment | null>(null);
-  const {
-    data: page,
-    error: loadError,
-    loading,
-    reload,
-    refresh,
-  } = useApiResource<Page>(
-    `/api/interactions/${postId}/comments?after=${encodeURIComponent(after)}`,
-  );
+  // Older comments load through Show more so the composer below stays
+  // reachable.
+  const pages = useScrollPages({
+    history: [history, setHistory],
+    path: (after) =>
+      `/api/interactions/${postId}/comments?after=${encodeURIComponent(after)}`,
+    identify,
+    automatic: false,
+  });
+  const { items, loading, revalidating, revalidate, update } = pages;
   const comments = useRef<HTMLDivElement>(null);
   const pendingReveal = useRef(revealOnOpen);
   useLayoutEffect(() => {
-    // Measure the loaded thread once per button opening, never on paging,
+    // Measure the loaded thread once per button opening, never on Show more,
     // editing, or count refreshes. Initially expanded detail pages stay put.
     if (loading || !pendingReveal.current) return;
     pendingReveal.current = false;
@@ -191,12 +193,12 @@ function Comments({
     if (composer && commentButton.current)
       return revealCommentComposer(commentButton.current, composer);
   }, [loading, commentButton]);
-  // An empty first page needs no message: the composer takes the first
-  // comment's place. A later page can empty out after deletions.
-  const empty = !loading && page?.items.length === 0;
+  // An empty thread needs no message: the composer takes the first comment's
+  // place.
+  const empty = !loading && items?.length === 0;
   async function add(event: FormEvent) {
     event.preventDefault();
-    if (busy || loading || !body.trim()) return;
+    if (busy || revalidating || !body.trim()) return;
     setBusy(true);
     setError('');
     try {
@@ -206,8 +208,7 @@ function Comments({
       );
       setBody('');
       setId(crypto.randomUUID());
-      if (after) setHistory(['']);
-      else refresh();
+      revalidate();
       try {
         await onChange();
       } catch {
@@ -220,16 +221,13 @@ function Comments({
     }
   }
   async function remove(id: string) {
-    if (busy || loading) return;
+    if (busy || revalidating) return;
     setBusy(true);
     setError('');
     try {
       await api(`/api/interactions/comments/${id}`, { method: 'DELETE' });
       setConfirming(null);
-      refresh((current) => ({
-        ...current,
-        items: current.items.filter((comment) => comment.id !== id),
-      }));
+      update((comments) => comments.filter((comment) => comment.id !== id));
       try {
         await onChange();
       } catch {
@@ -243,14 +241,13 @@ function Comments({
   }
   return (
     <div className="comments" ref={comments}>
-      {loading && !page && <p role="status">Loading comments…</p>}
-      {empty && after && <p>No comments on this page.</p>}
+      {loading && !items && <p role="status">Loading comments…</p>}
       <ul className="comment-list">
-        {page?.items.map((comment) => (
+        {items?.map((comment) => (
           <CommentRow
             key={comment.id}
             comment={comment}
-            busy={busy || loading}
+            busy={busy || revalidating}
             onDelete={() => {
               setError('');
               setConfirming(comment);
@@ -276,37 +273,19 @@ function Comments({
           </p>
         </ConfirmDialog>
       )}
-      <nav className="actions" aria-label="Comment pages">
-        {history.length > 1 && (
-          <button
-            disabled={busy || loading}
-            onClick={() => {
-              setHistory(history.slice(0, -1));
-            }}
-          >
-            Newer comments
-          </button>
-        )}
-        {page?.next && (
-          <button
-            disabled={busy || loading}
-            onClick={() => {
-              setHistory([...history, page.next!]);
-            }}
-          >
-            Older comments
-          </button>
-        )}
-      </nav>
+      <ScrollPagesEnd
+        pages={pages}
+        loading="Loading more comments…"
+        more="Show more comments"
+        disabled={busy}
+      />
       <Composer
         label="Add a comment"
-        placeholder={
-          empty && !after ? 'Add the first comment…' : 'Add a comment…'
-        }
+        placeholder={empty ? 'Add the first comment…' : 'Add a comment…'}
         maxLength={1000}
         value={body}
         busy={busy}
-        canSubmit={!loading}
+        canSubmit={!revalidating}
         submitLabel="Post comment"
         pendingLabel="Posting comment"
         onChange={(value) => {
@@ -316,12 +295,6 @@ function Comments({
         onSubmit={(e) => void add(e)}
       />
       {error && !confirming && <p role="alert">{error}</p>}
-      {loadError && (
-        <div>
-          <p role="alert">{loadError}</p>
-          <button onClick={reload}>Retry</button>
-        </div>
-      )}
     </div>
   );
 }

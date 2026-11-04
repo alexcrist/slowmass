@@ -45,7 +45,7 @@ Exit: two synthetic test users can establish and revoke a relationship; a third 
 - [x] Implement bounded upload reservation, trusted processing, private variants, retry-safe publication, and orphan cleanup.
 - [x] Build compose preview/caption/alt-text flow with progress, cancellation, failures, and safe retry.
 - [x] Implement own profile posts, private post detail, and chronological home feed from own posts and accepted follows.
-- [x] Add explicit cursor pagination, snapshot boundary, navigation history, viewport image loading, and caught-up state.
+- [x] Add cursor pagination loaded as the member scrolls, snapshot boundary, navigation history, viewport image loading, and caught-up state.
 - [x] Add post deletion with immediate access denial and durable retryable media cleanup.
 
 Exit: upload through the API, reload, and see exactly one published post. A follower sees it in order; pending/stranger/removed users cannot access it by API or saved media URL. Tied timestamps, concurrent inserts, and deletions do not break pagination.

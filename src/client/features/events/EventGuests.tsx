@@ -2,6 +2,8 @@ import { useId, useRef, useState } from 'react';
 import { useApiResource } from '../../api/useApiResource';
 import { profileHref } from '../../navigation';
 import { usePageHistory } from '../../navigation/PageHistory';
+import { ScrollPagesEnd } from '../../navigation/ScrollPagesEnd';
+import { useScrollPages } from '../../navigation/useScrollPages';
 import { Dialog } from '../../ui/Dialog';
 import { PersonPhoto } from './EventSummary';
 import { answerEmoji, answers, type Answer } from './types';
@@ -150,14 +152,6 @@ function GuestList({
   const tabs = useId();
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   const [selected, setSelected] = useState<Answer>('going');
-  const [history, setHistory] = usePageHistory(`event/${id}/${selected}`);
-  const cursor = history[history.length - 1];
-  const { data, error, loading, reload } = useApiResource<{
-    items: Guest[];
-    next: string | null;
-  }>(
-    `/api/events/${id}/guests?status=${selected}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
-  );
   function select(index: number) {
     setSelected(answers[index].value);
     buttons.current[index]?.focus();
@@ -201,46 +195,56 @@ function GuestList({
         role="tabpanel"
         aria-labelledby={`${tabs}-${selected}`}
       >
-        {loading && !data && <p role="status">Loading guests…</p>}
-        {error && (
-          <div>
-            <p role="alert">{error}</p>
-            <button onClick={reload}>Retry</button>
-          </div>
-        )}
-        {data?.items.length === 0 && <p>No one yet.</p>}
-        <ul className="event-guest-list">
-          {data?.items.map((guest) => (
-            <li key={guest.handle}>
-              <PersonPhoto
-                name={guest.displayName}
-                profileHandle={guest.hasAvatar ? guest.handle : undefined}
-                src={guestPhoto(guest)}
-                size={36}
-              />
-              <GuestName guest={guest} linkProfiles={linkProfiles} />
-            </li>
-          ))}
-        </ul>
-        <nav className="actions" aria-label="Guest pages">
-          {history.length > 1 && (
-            <button
-              disabled={loading}
-              onClick={() => setHistory(history.slice(0, -1))}
-            >
-              Newer
-            </button>
-          )}
-          {data?.next && (
-            <button
-              disabled={loading}
-              onClick={() => setHistory([...history, data.next!])}
-            >
-              Older
-            </button>
-          )}
-        </nav>
+        <GuestPanel
+          key={selected}
+          id={id}
+          selected={selected}
+          linkProfiles={linkProfiles}
+        />
       </div>
+    </>
+  );
+}
+
+const identifyGuest = (guest: Guest) => guest.handle;
+function GuestPanel({
+  id,
+  selected,
+  linkProfiles,
+}: {
+  id: string;
+  selected: Answer;
+  linkProfiles: boolean;
+}) {
+  const pages = useScrollPages({
+    history: usePageHistory(`event/${id}/${selected}`),
+    path: (cursor) =>
+      `/api/events/${id}/guests?status=${selected}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+    identify: identifyGuest,
+  });
+  const { items, loading } = pages;
+  return (
+    <>
+      {loading && !items && <p role="status">Loading guests…</p>}
+      {!loading && items?.length === 0 && <p>No one yet.</p>}
+      <ul className="event-guest-list">
+        {items?.map((guest) => (
+          <li key={guest.handle}>
+            <PersonPhoto
+              name={guest.displayName}
+              profileHandle={guest.hasAvatar ? guest.handle : undefined}
+              src={guestPhoto(guest)}
+              size={36}
+            />
+            <GuestName guest={guest} linkProfiles={linkProfiles} />
+          </li>
+        ))}
+      </ul>
+      <ScrollPagesEnd
+        pages={pages}
+        loading="Loading more guests…"
+        more="Show more guests"
+      />
     </>
   );
 }

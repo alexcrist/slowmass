@@ -10,7 +10,7 @@ Future features; not yet implemented.
 
 Partiful-inspired events for organizing get-togethers with friends on Slowmass. Requested October 14, 2026; wishlist discussion only, with no implementation scheduled. The ideas below are proposals, not an approved product contract.
 
-Members could organize dinners, birthdays, trips, or casual meetups with the friends they share photos with. Keep an Events area for invitations and upcoming/past gatherings, with explicit pagination; preserve the chronological photo feed.
+Members could organize dinners, birthdays, trips, or casual meetups with the friends they share photos with. Keep an Events area for invitations and upcoming/past gatherings that load more as you scroll; preserve the chronological photo feed.
 
 Possible first version:
 

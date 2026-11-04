@@ -1,10 +1,10 @@
 # slowmass
 
-Slowmass is a private photo-sharing app with a chronological feed of your own posts and accepted follows, with explicit pagination.
+Slowmass is a private photo-sharing app with a chronological feed of your own posts and accepted follows that loads more as you scroll and ends once you have seen everything.
 
 ## Status
 
-The app runs at https://slowmass.com. The repository implements email-link sign-in, member and event invitations with permanent provenance, private profiles and avatars, follows, single-photo posts, a paginated feed, likes, comments, Activity, optional Web Push, and events with hosts, guest answers, messages, appearance choices, calendar copies, and creator-only deletion. Members without a profile photo can use events, Activity, Settings, Find, and other members’ profile previews; following, posting, and the feed require completed account setup.
+The app runs at https://slowmass.com. The repository implements email-link sign-in, member and event invitations with permanent provenance, private profiles and avatars, follows, single-photo posts, a feed that loads as you scroll, likes, comments, Activity, optional Web Push, and events with hosts, guest answers, messages, appearance choices, calendar copies, and creator-only deletion. Members without a profile photo can use events, Activity, Settings, Find, and other members’ profile previews; following, posting, and the feed require completed account setup.
 
 Feature READMEs in the [client](src/client/README.md) and [server](src/server/README.md) describe implemented behavior. The [implementation plan](docs/implementation-plan.md) tracks remaining work and verification gaps. First-member email delivery, sign-in, and trusted remote image processing have been verified; a complete hosted multi-user flow and real-device calendar/push behavior still need confirmation.
 

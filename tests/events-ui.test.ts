@@ -12,6 +12,7 @@ import { MemberApp } from '../src/client/features/people/MemberApp';
 import { HeaderActions } from '../src/client/features/people/MemberNavigation';
 import { Notifications } from '../src/client/features/notifications/Notifications';
 import { EventPage, EventRoute } from '../src/client/features/events/EventPage';
+import { EventsPage } from '../src/client/features/events/EventsPage';
 import { EditEvent, EventForm } from '../src/client/features/events/EventForm';
 import { PostCropEditor, fullPhoto } from '../src/client/features/posts';
 import {
@@ -1480,7 +1481,7 @@ it('searches connections and invites members to co-host without email', async ()
   expect(visibleText()).not.toContain('Pending');
 });
 
-it('offers retry after connection loading fails and ignores an invite response after closing', async () => {
+it('offers retry after connection loading fails, appends more, and ignores an invite response after closing', async () => {
   await mount(
     createElement(EditEvent, { id, onSaved: vi.fn(), onCancel: vi.fn() }),
   );
@@ -1492,11 +1493,22 @@ it('offers retry after connection loading fails and ignores an invite response a
     503,
   );
   expect(visibleText()).toContain('Try later');
-  await click('Try again');
+  await click('Retry');
   await reply(pending(`/api/events/${id}/host-candidates`), {
     items: [{ id: 'bob', handle: 'bob', displayName: 'Bob', hasAvatar: true }],
+    next: 'bob',
+  });
+  await click('Show more connections');
+  expect(pending(`/api/events/${id}/host-candidates`).path).toContain(
+    'after=bob',
+  );
+  // Loaded connections stay invitable while the next page loads.
+  expect(button('Invite Bob to co-host').props.disabled).toBe(false);
+  await reply(pending(`/api/events/${id}/host-candidates`), {
+    items: [{ id: 'cat', handle: 'cat', displayName: 'Cat', hasAvatar: true }],
     next: null,
   });
+  expect(visibleText()).toContain('Cat');
   await click('Invite Bob to co-host');
   const request = pending(`/api/events/${id}/hosts`);
   await act(async () => renderer.unmount());
@@ -1679,6 +1691,121 @@ it('puts the message composer below the event activity', async () => {
     .filter((node) => node.type === 'p' || node.type === 'form')
     .map((node) => node.type);
   expect(order.indexOf('p')).toBeLessThan(order.indexOf('form'));
+});
+
+it('shows older event activity on request and rereads it after posting', async () => {
+  const entry = (key: string, body: string) => ({
+    key,
+    kind: 'message',
+    id: key,
+    status: null,
+    body,
+    createdAt: startsAt,
+    handle: 'alice',
+    displayName: 'Alice',
+    hasAvatar: true,
+    canDelete: false,
+  });
+  await mount(createElement(EventPage, { id, linkProfiles: true }));
+  await reply(pending(`/api/events/${id}`), {
+    event: view({ viewer: { ...host, response: 'going' } }),
+  });
+  await reply(pending(`/api/events/${id}/guests`), { items: [], next: null });
+  await reply(pending(`/api/events/${id}/activity`), {
+    items: [entry('m2', 'Newest')],
+    next: 'm2',
+  });
+  await click('Show more activity');
+  expect(pending(`/api/events/${id}/activity`).path).toContain('cursor=m2');
+  // Earlier entries stay while the next page loads.
+  expect(visibleText()).toContain('Newest');
+  await reply(pending(`/api/events/${id}/activity`), {
+    items: [entry('m1', 'Oldest')],
+    next: null,
+  });
+  expect(visibleText()).toContain('Oldest');
+  expect(visibleText()).not.toContain('Show more activity');
+  await act(async () =>
+    renderer.root
+      .findByType('textarea')
+      .props.onChange({ target: { value: 'Hello' } }),
+  );
+  await submit();
+  await reply(pending(`/api/events/${id}/messages`, 'POST'), { ok: true });
+  // Posting rereads both loaded pages as one fresh cursor chain.
+  expect(pending(`/api/events/${id}/activity`).path).toBe(
+    `/api/events/${id}/activity`,
+  );
+  await reply(pending(`/api/events/${id}/activity`), {
+    items: [entry('m3', 'Hello'), entry('m2', 'Newest')],
+    next: 'm2',
+  });
+  expect(pending(`/api/events/${id}/activity`).path).toContain('cursor=m2');
+  await reply(pending(`/api/events/${id}/activity`), {
+    items: [entry('m2', 'Newest'), entry('m1', 'Oldest')],
+    next: null,
+  });
+  const rows = renderer.root.findAll(
+    (node) => node.type === 'li' && node.props.className === 'comment-row',
+  );
+  expect(rows).toHaveLength(3);
+});
+
+it('appends guests and events as their lists are extended', async () => {
+  const guest = (handle: string) => ({
+    handle,
+    displayName: handle,
+    hasAvatar: false,
+  });
+  await mount(createElement(EventPage, { id, linkProfiles: true }));
+  await reply(pending(`/api/events/${id}`), {
+    event: view({
+      counts: { going: 30, maybe: 0, declined: 0 },
+      viewer: { ...host, response: 'going' },
+    }),
+  });
+  await reply(pending(`/api/events/${id}/guests`), {
+    items: [guest('ann')],
+    next: 'ann',
+  });
+  await reply(pending(`/api/events/${id}/activity`), { items: [], next: null });
+  await click('View all');
+  await reply(pending(`/api/events/${id}/guests`), {
+    items: [guest('ann')],
+    next: 'ann',
+  });
+  await click('Show more guests');
+  expect(pending(`/api/events/${id}/guests`).path).toContain('cursor=ann');
+  await reply(pending(`/api/events/${id}/guests`), {
+    items: [guest('ben')],
+    next: null,
+  });
+  const dialog = renderer.root.findByType('dialog');
+  expect(dialog.findAllByType('li')).toHaveLength(2);
+  expect(visibleText()).toContain('ben');
+  expect(visibleText()).not.toContain('Show more guests');
+  await act(async () => renderer.unmount());
+
+  const item = (eventId: string) => ({
+    ...details,
+    id: eventId,
+    title: `Event ${eventId}`,
+    isHost: false,
+    response: null,
+  });
+  await mount(createElement(EventsPage, { when: 'past', canCreate: false }));
+  await reply(pending('/api/events?when=past'), {
+    items: [item('e1')],
+    next: 'e1',
+  });
+  await click('Show more events');
+  await reply(pending('/api/events?when=past&cursor=e1'), {
+    items: [item('e2')],
+    next: null,
+  });
+  expect(visibleText()).toContain('Event e1');
+  expect(visibleText()).toContain('Event e2');
+  expect(visibleText()).not.toContain('Show more events');
 });
 
 it('shows a new member the event preview with a name field, then the event once named', async () => {
