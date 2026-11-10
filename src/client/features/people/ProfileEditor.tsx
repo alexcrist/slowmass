@@ -5,6 +5,7 @@ import {
   type PhotoProgressState,
 } from '../../images/PhotoProgress';
 import { InlineField, oneLine } from '../../ui/InlineField';
+import { PHOTO_ACCEPT } from '../../images/decode';
 import {
   AvatarCropDialog,
   uploadAvatar,
@@ -104,7 +105,7 @@ export function ProfileEditor({
                   id="avatar-file"
                   className="visually-hidden"
                   type="file"
-                  accept="image/jpeg,image/png,image/webp"
+                  accept={PHOTO_ACCEPT}
                   aria-label="Change profile photo"
                   disabled={busy}
                   onChange={(change) => {

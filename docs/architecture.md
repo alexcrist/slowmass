@@ -44,7 +44,7 @@ The Worker signs SES requests with a maintained SigV4 library using an IAM user 
 
 ## Photo lifecycle
 
-Client resizing improves upload speed but is not validation. Accept bounded uploads from authenticated eligible users, enforce per-user quotas, and reject oversized bodies while streaming. Restrict input formats to still formats verified by the processor; reject animation and SVG. Handle phone orientation and unsupported HEIC explicitly.
+Client resizing improves upload speed but is not validation. Accept bounded uploads from authenticated eligible users, enforce per-user quotas, and reject oversized bodies while streaming. Restrict input formats to still formats verified by the processor; reject animation and SVG. Handle phone orientation explicitly. HEIC originals are decoded in the browser before cropping and never uploaded; the server still rejects HEIC bytes.
 
 Use the Cloudflare Images binding to inspect/decode/re-encode private bytes and generate bounded WebP variants per post (1600px full and 480px grid, reusing the processed full image for small posts) or avatar (320px small and 1600px large, sharing the object for small inputs) at upload, storing the result in R2. Set pixel limits, output dimensions/quality, and metadata stripping explicitly. Retain no original after successful processing. Never resize on each view. Verify binding availability, remote test support, format detection, metadata removal, CPU usage, and free-tier accounting before committing to this path.
 

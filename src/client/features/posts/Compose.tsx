@@ -5,6 +5,7 @@ import {
   type PhotoProgressState,
 } from '../../images/PhotoProgress';
 import { InlineField } from '../../ui/InlineField';
+import { PHOTO_ACCEPT } from '../../images/decode';
 import { PostCropEditor } from './PostCropEditor';
 import { fullPhoto, type Rectangle } from './crop';
 
@@ -169,9 +170,8 @@ export function Compose({
             id="post-file"
             className="visually-hidden"
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept={PHOTO_ACCEPT}
             aria-label={preview ? 'Change photo' : 'Add photo'}
-            aria-describedby="post-file-help"
             disabled={locked}
             onChange={(event) => {
               const selected = event.target.files?.[0];
@@ -190,9 +190,6 @@ export function Compose({
               <span className="compose-photo-empty">
                 <PhotoIcon />
                 <strong>Add photo</strong>
-                <span id="post-file-help">
-                  One still JPEG, PNG, or WebP. Up to 32 MB and 40 megapixels.
-                </span>
               </span>
             )}
           </label>

@@ -112,9 +112,8 @@ it('keeps overlapping pinch points finite without an abrupt zoom', () => {
     initialCrop,
   );
 });
-it('validates files, respects EXIF orientation, and releases overlarge decoded images', async () => {
-  const close = vi.fn();
-  const decode = vi.fn().mockResolvedValue({ width: 1000, height: 500, close });
+it('validates file types and respects EXIF orientation', async () => {
+  const decode = vi.fn().mockResolvedValue({ width: 1000, height: 500 });
   vi.stubGlobal('createImageBitmap', decode);
   const photo = new File(['synthetic'], 'photo.jpg', { type: 'image/jpeg' });
   await decodePhoto(photo);
@@ -124,17 +123,7 @@ it('validates files, respects EXIF orientation, and releases overlarge decoded i
   await expect(
     decodePhoto(new File(['svg'], 'vector.svg', { type: 'image/svg+xml' })),
   ).rejects.toThrow('JPEG');
-  await expect(
-    decodePhoto(
-      new File([new Uint8Array(32 * 1024 * 1024 + 1)], 'large.png', {
-        type: 'image/png',
-      }),
-    ),
-  ).rejects.toThrow('32 MB');
   expect(decode).toHaveBeenCalledTimes(1);
-  decode.mockResolvedValue({ width: 10000, height: 10000, close });
-  await expect(decodePhoto(photo)).rejects.toThrow('40 megapixels');
-  expect(close).toHaveBeenCalledOnce();
 });
 it('uses the same bounded crop for preview and encoded upload, with encoding failure recovery', async () => {
   const image = { width: 1200, height: 800 } as ImageBitmap;

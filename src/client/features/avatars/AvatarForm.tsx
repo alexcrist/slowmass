@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { PHOTO_ACCEPT } from '../../images/decode';
 import { AvatarCropDialog, type PreparedAvatar } from './AvatarCropDialog';
 
 // Account setup's photo chooser. Use photo prepares a draft for the parent
@@ -39,7 +40,6 @@ export function AvatarForm({
           type="button"
           className="button-link"
           disabled={disabled}
-          aria-describedby="avatar-file-help"
           onClick={() => input.current?.click()}
         >
           {draft ? 'Change photo' : 'Choose profile photo'}
@@ -51,7 +51,7 @@ export function AvatarForm({
           hidden
           disabled={disabled}
           aria-label="Choose profile photo"
-          accept="image/jpeg,image/png,image/webp"
+          accept={PHOTO_ACCEPT}
           onChange={(event) => {
             const selected = event.target.files?.[0];
             event.target.value = '';
@@ -60,10 +60,6 @@ export function AvatarForm({
             setMessage('');
           }}
         />
-        <p id="avatar-file-help" className="avatar-help">
-          JPEG, PNG, or WebP. Up to 32 MB and 40 megapixels. Photos are resized
-          automatically before upload.
-        </p>
       </div>
       {message && <p role="status">{message}</p>}
       {file && (

@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { api, jsonRequest } from '../../api';
 import { InlineField, oneLine } from '../../ui/InlineField';
+import { PHOTO_ACCEPT } from '../../images/decode';
 import {
   PhotoProgress,
   type PhotoProgressState,
@@ -353,7 +354,7 @@ export function EventForm({
               id="event-photo"
               className="visually-hidden"
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept={PHOTO_ACCEPT}
               aria-label={
                 photoPreview ? 'Change cover photo' : 'Add cover photo'
               }
@@ -387,7 +388,6 @@ export function EventForm({
                 <span className="event-cover-empty">
                   <CoverIcon />
                   <strong>Add cover photo</strong>
-                  <span>One still JPEG, PNG, or WebP.</span>
                 </span>
               )}
             </label>
