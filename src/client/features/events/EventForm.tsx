@@ -627,9 +627,9 @@ export function EventForm({
           file={editing.file}
           initial={editing.crop}
           onClose={() => setEditing(null)}
-          onApply={(cropped, crop) => {
+          onApply={(cropped, crop, source) => {
             setFile(cropped);
-            setSource({ file: editing.file, crop });
+            setSource({ file: source, crop });
             setPreview(URL.createObjectURL(cropped));
             setPreviewSize(null);
             setUpload(crypto.randomUUID());

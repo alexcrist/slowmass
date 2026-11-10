@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { Dialog } from '../../ui/Dialog';
 import { decodePhoto } from '../../images/decode';
+import { recropSource } from '../../images/encode';
 import { PhotoProgress } from '../../images/PhotoProgress';
 import {
   adjustRectangle,
@@ -37,7 +38,8 @@ export function PostCropEditor({
 }: {
   file: File;
   initial: Rectangle;
-  onApply: (file: File, crop: Rectangle) => void;
+  // `source` is what to pass back as `file` when reopening this crop.
+  onApply: (cropped: File, crop: Rectangle, source: File) => void;
   onClose: () => void;
 }) {
   const help = useId();
@@ -157,7 +159,8 @@ export function PostCropEditor({
     setError('');
     try {
       const result = await encodePostCrop(image, crop);
-      if (active.current) onApply(result, crop);
+      const source = await recropSource(file, image);
+      if (active.current) onApply(result, crop, source);
     } catch (failure) {
       if (active.current)
         setError(

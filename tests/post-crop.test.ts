@@ -121,12 +121,11 @@ it('changes aspect ratio by dragging a corner, moves with keyboard, and saves on
     top: 0.1,
     bottom: 0.85,
   });
-  expect(onApply).toHaveBeenCalledWith(cropped, {
-    left: 0.01,
-    right: 0.51,
-    top: 0.1,
-    bottom: 0.85,
-  });
+  expect(onApply).toHaveBeenCalledWith(
+    cropped,
+    { left: 0.01, right: 0.51, top: 0.1, bottom: 0.85 },
+    source,
+  );
 });
 
 it('keeps the selected crop after an encoding failure and supports reset and cancel without saving', async () => {

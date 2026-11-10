@@ -54,7 +54,9 @@ async function mount(kind: 'post' | 'event', saved = vi.fn()) {
       .props.onChange({ target: { files: [file], value: '' } }),
   );
   await act(async () =>
-    renderer.root.findByType(PostCropEditor).props.onApply(file, fullPhoto),
+    renderer.root
+      .findByType(PostCropEditor)
+      .props.onApply(file, fullPhoto, file),
   );
   return saved;
 }
@@ -149,3 +151,46 @@ it('aborts an event upload on unmount and ignores its late success', async () =>
   await act(async () => finish(Response.json({ ok: true })));
   expect(saved).not.toHaveBeenCalled();
 });
+
+it.each(['post', 'event'] as const)(
+  'reopens the %s crop from the source the editor returned, not the original',
+  async (kind) => {
+    await act(async () => {
+      renderer = create(
+        kind === 'post'
+          ? createElement(Compose, {
+              handle: 'alice',
+              onPublished: vi.fn(),
+              onCancel: vi.fn(),
+            })
+          : createElement(EventForm, {
+              hosts: [],
+              onSaved: vi.fn(),
+              onCancel: vi.fn(),
+            }),
+      );
+    });
+    const original = new File(['heic'], 'photo.heic', { type: 'image/heic' });
+    const cropped = new File(['crop'], 'photo.webp', { type: 'image/webp' });
+    const copy = new File(['copy'], 'photo.jpg', { type: 'image/jpeg' });
+    const crop = { left: 0.1, right: 0.9, top: 0.2, bottom: 0.8 };
+    await act(async () =>
+      renderer.root
+        .findByProps({ type: 'file' })
+        .props.onChange({ target: { files: [original], value: '' } }),
+    );
+    const editor = () => renderer.root.findByType(PostCropEditor);
+    expect(editor().props.file).toBe(original);
+    await act(async () => editor().props.onApply(cropped, crop, copy));
+    await act(async () =>
+      renderer.root
+        .findAll(
+          (node) =>
+            node.type === 'button' && node.children.join('') === 'Adjust crop',
+        )[0]
+        .props.onClick(),
+    );
+    expect(editor().props.file).toBe(copy);
+    expect(editor().props.initial).toEqual(crop);
+  },
+);

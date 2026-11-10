@@ -304,7 +304,9 @@ it('previews creation appearance locally and preserves it through cover retries'
     }),
   );
   await act(async () =>
-    renderer.root.findByType(PostCropEditor).props.onApply(file, fullPhoto),
+    renderer.root
+      .findByType(PostCropEditor)
+      .props.onApply(file, fullPhoto, file),
   );
   await submit();
   const first = pending('/api/events', 'POST');
