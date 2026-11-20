@@ -165,24 +165,14 @@ function PostCard({
           />
         )}
       </header>
-      {focused ? (
-        <FocusedPhoto
-          src={post.mediaUrl}
-          alt={post.altText || `Photo by ${post.handle}`}
-          width={post.width}
-          height={post.height}
-        >
-          {photo}
-        </FocusedPhoto>
-      ) : (
-        <a
-          className="post-photo-link"
-          href={postHref(post.id)}
-          aria-label={`Open post by ${post.handle}`}
-        >
-          {photo}
-        </a>
-      )}
+      <FocusedPhoto
+        src={post.mediaUrl}
+        alt={post.altText || `Photo by ${post.handle}`}
+        width={post.width}
+        height={post.height}
+      >
+        {photo}
+      </FocusedPhoto>
       <div className="post-body">
         <Interactions
           key={post.id}

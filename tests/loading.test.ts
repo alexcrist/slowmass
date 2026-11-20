@@ -1352,16 +1352,8 @@ it.each(['self', 'none'])(
   },
 );
 
-it('opens the focused photo itself only on wider screens and closes it when resized or navigated away', async () => {
-  let onChange: (() => void) | undefined;
-  const media = {
-    matches: false,
-    addEventListener: vi.fn((_event: string, listener: () => void) => {
-      onChange = listener;
-    }),
-    removeEventListener: vi.fn(),
-  };
-  window.matchMedia = vi.fn(() => media) as unknown as typeof window.matchMedia;
+it('opens and dismisses the zoomable post photo at phone width', async () => {
+  Object.assign(window, { innerWidth: 400, innerHeight: 800 });
   await mount(createElement(PostDetail, { id: 'large' }));
   const large = {
     ...post('large'),
@@ -1370,19 +1362,9 @@ it('opens the focused photo itself only on wider screens and closes it when resi
     altText: 'A mountain',
   };
   await reply(pending('/api/posts/large'), { post: large });
-  expect(window.matchMedia).toHaveBeenCalledWith('(min-width: 900px)');
-  const triggers = () =>
-    renderer.root.findAllByProps({ 'aria-label': 'Enlarge post photo' });
-  expect(triggers()).toHaveLength(0);
-  expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
-  expect(renderer.root.findByProps({ className: 'post-photo' }).props.src).toBe(
-    large.mediaUrl,
-  );
-  await act(async () => {
-    media.matches = true;
-    onChange!();
+  const trigger = renderer.root.findByProps({
+    'aria-label': 'Enlarge post photo',
   });
-  const trigger = triggers()[0];
   expect(trigger.children).toHaveLength(1);
   expect(trigger.findByType('img').props.alt).toBe('A mountain');
   expect(trigger.props['aria-haspopup']).toBe('dialog');
@@ -1406,42 +1388,61 @@ it('opens the focused photo itself only on wider screens and closes it when resi
   await act(async () => dialog.props.onCancel({ preventDefault: vi.fn() }));
   expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
   await click('Enlarge post photo');
-  await act(async () => {
-    media.matches = false;
-    onChange!();
-  });
-  expect(triggers()).toHaveLength(0);
-  expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
-  await act(async () => {
-    media.matches = true;
-    onChange!();
-  });
-  expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
-  await click('Enlarge post photo');
+  expect(
+    renderer.root.findByType('dialog').findByType('img').props.style.transform,
+  ).toContain('scale(0.3125)');
+  await click('Zoom in');
+  expect(
+    renderer.root.findByType('dialog').findByType('img').props.style.transform,
+  ).toContain('scale(0.390625)');
   await click('Close post photo');
   await click('Enlarge post photo');
   await act(async () =>
     renderer.update(createElement(PostDetail, { id: 'other' })),
   );
   expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
-  expect(media.removeEventListener).toHaveBeenCalledWith('change', onChange);
 });
 
-it('keeps feed photos linked to their focused page on wider screens', async () => {
-  window.matchMedia = vi.fn(() => ({
-    matches: true,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-  })) as unknown as typeof window.matchMedia;
-  await mount(createElement(PostList));
-  await reply(pending('/api/posts?'), { items: [post('feed')], next: null });
-  const link = renderer.root.findByProps({ className: 'post-photo-link' });
-  expect(link.props.href).toBe('#post/feed');
-  expect(link.findByType('img').props.src).toBe(post('feed').mediaUrl);
-  expect(
-    renderer.root.findAllByProps({ 'aria-label': 'Enlarge post photo' }),
-  ).toHaveLength(0);
-  expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
+it('continues a feed pinch inside the viewer around the moving midpoint', async () => {
+  Object.assign(window, { innerWidth: 400, innerHeight: 800 });
+  await act(async () => {
+    renderer = create(createElement(PostList), {
+      createNodeMock: (element) =>
+        element.type === 'button'
+          ? {
+              querySelector: () => ({
+                clientWidth: 300,
+                clientHeight: 300,
+                getBoundingClientRect: () => ({
+                  left: 40,
+                  top: 100,
+                  width: 300,
+                  height: 300,
+                }),
+              }),
+            }
+          : null,
+    });
+  });
+  await reply(pending('/api/posts?'), {
+    items: [{ ...post('feed'), width: 400, height: 400 }],
+    next: null,
+  });
+  const trigger = renderer.root.findByProps({
+    'aria-label': 'Enlarge post photo',
+  });
+  const touches = (a: number, b: number) => ({
+    touches: [
+      { clientX: a, clientY: 300 },
+      { clientX: b, clientY: 300 },
+    ],
+  });
+  await act(async () => trigger.props.onTouchStart(touches(100, 200)));
+  await act(async () => trigger.props.onTouchMove(touches(75, 225)));
+  const image = renderer.root.findByType('dialog').findByType('img');
+  expect(image.props.style.transform).toBe(
+    'translate3d(-15px,0px,0) scale(1.125)',
+  );
 });
 
 it('clears previous photo details during navigation and ignores a late, aborted response', async () => {
@@ -2285,7 +2286,6 @@ async function go(hash: string) {
 }
 
 it.each([
-  { route: '#feed', label: 'Feed', path: '/api/posts?' },
   {
     route: '#profile/alice',
     label: 'Profile',

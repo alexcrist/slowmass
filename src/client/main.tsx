@@ -8,6 +8,18 @@ import { Unsubscribe } from './features/notifications';
 
 observePushWindow();
 
+// Trackpad pinches arrive as control-wheel events on desktop browsers.
+document.addEventListener(
+  'wheel',
+  (event) => {
+    if (event.ctrlKey) event.preventDefault();
+  },
+  { passive: false },
+);
+document.addEventListener('gesturestart', (event) => event.preventDefault(), {
+  passive: false,
+});
+
 // Email unsubscribe links work signed out, so they bypass the account shell.
 function unsubscribeToken() {
   return /^#unsubscribe\/([A-Za-z0-9._-]{1,200})$/.exec(location.hash)?.[1];

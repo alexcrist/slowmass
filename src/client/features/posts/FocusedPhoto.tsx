@@ -1,12 +1,59 @@
-import { useEffect, useState, type ReactElement } from 'react';
-import { ImageViewer } from '../../ui/ImageViewer';
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type ReactElement,
+  type TouchList,
+} from 'react';
+import { Dialog } from '../../ui/Dialog';
+import { ViewerImage } from '../../ui/ImageViewer';
+
+type Point = { x: number; y: number };
+type Frame = Point & { scale: number };
+type Gesture = Point & { distance: number };
+
+function fingers(touches: TouchList): Gesture | null {
+  const [a, b] = Array.from(touches);
+  if (!a) return null;
+  if (!b) return { x: a.clientX, y: a.clientY, distance: 0 };
+  return {
+    x: (a.clientX + b.clientX) / 2,
+    y: (a.clientY + b.clientY) / 2,
+    distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+  };
+}
+
+function fit(width: number, height: number) {
+  return Math.min(window.innerWidth / width, window.innerHeight / height);
+}
+function centered(width: number, height: number): Frame {
+  const scale = fit(width, height) * 1.25;
+  return {
+    scale,
+    x: (window.innerWidth - width * scale) / 2,
+    y: (window.innerHeight - height * scale) / 2,
+  };
+}
+
+// Limit a pan to the photo edges. An inline pinch can start partway outside
+// the viewport, so allow that starting position until the user moves inward.
+function bounded(
+  position: number,
+  previous: number,
+  viewport: number,
+  size: number,
+) {
+  const gap = viewport - size;
+  return Math.max(
+    Math.min(0, gap, previous),
+    Math.min(Math.max(0, gap, previous), position),
+  );
+}
 
 export function FocusedPhoto({
-  src,
-  alt,
-  width,
-  height,
   children,
+  ...photo
 }: {
   src: string;
   alt: string;
@@ -14,41 +61,215 @@ export function FocusedPhoto({
   height: number;
   children: ReactElement;
 }) {
-  // Below this breakpoint the photo screen is already edge-to-edge.
-  const [canEnlarge, setCanEnlarge] = useState(false);
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    const desktop = window.matchMedia('(min-width: 900px)');
-    const update = () => {
-      setCanEnlarge(desktop.matches);
-      if (!desktop.matches) setOpen(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+
+  const stage = useRef<HTMLDivElement>(null);
+  const trackpadScale = useRef(1);
+  const previous = useRef<Gesture | null>(null);
+  const mouse = useRef<Point | null>(null);
+  const [frame, setFrame] = useState<Frame | null>(null);
+  function inlineFrame() {
+    const image = trigger.current?.querySelector('img');
+    if (!image) return centered(photo.width, photo.height);
+    const rect = image.getBoundingClientRect();
+    const scale = Math.min(
+      image.clientWidth / photo.width,
+      image.clientHeight / photo.height,
+    );
+    return {
+      scale,
+      x: rect.left + (rect.width - photo.width * scale) / 2,
+      y: rect.top + (rect.height - photo.height * scale) / 2,
     };
-    update();
-    desktop.addEventListener('change', update);
-    return () => desktop.removeEventListener('change', update);
-  }, []);
-  if (!canEnlarge) return children;
+  }
+  function move(from: Point, to: Point, ratio: number) {
+    const base = frame ?? inlineFrame();
+    const fitted = fit(photo.width, photo.height);
+    setFrame((current) => {
+      const f = current ?? base;
+      const scale = Math.min(
+        Math.max(fitted * 8, f.scale),
+        Math.max(Math.min(fitted, f.scale), f.scale * ratio),
+      );
+      return {
+        scale,
+        x: bounded(
+          to.x - (from.x - f.x) * (scale / f.scale),
+          f.x,
+          window.innerWidth,
+          photo.width * scale,
+        ),
+        y: bounded(
+          to.y - (from.y - f.y) * (scale / f.scale),
+          f.y,
+          window.innerHeight,
+          photo.height * scale,
+        ),
+      };
+    });
+  }
+  function start(touches: TouchList) {
+    previous.current = fingers(touches);
+    if (!frame && touches.length === 2) setFrame(inlineFrame());
+  }
+  function drag(touches: TouchList) {
+    const now = fingers(touches),
+      last = previous.current;
+    if (now && last && (frame || now.distance))
+      move(
+        last,
+        now,
+        last.distance && now.distance ? now.distance / last.distance : 1,
+      );
+    previous.current = now;
+  }
+  function step(ratio: number) {
+    const center = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    move(center, center, ratio);
+  }
+  function close() {
+    previous.current = null;
+    mouse.current = null;
+    setFrame(null);
+    trigger.current?.focus({ preventScroll: true });
+  }
+  const open = frame !== null;
+  useEffect(() => {
+    if (!open) return;
+    const resize = () => {
+      setFrame(centered(photo.width, photo.height));
+    };
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, [open, photo.width, photo.height]);
+  const touchHandlers = {
+    onTouchStart: (e: React.TouchEvent) => start(e.touches),
+    onTouchMove: (e: React.TouchEvent) => drag(e.touches),
+    onTouchEnd: (e: React.TouchEvent) => {
+      previous.current = fingers(e.touches);
+    },
+    onTouchCancel: () => {
+      previous.current = null;
+    },
+  };
+  function wheel(e: React.WheelEvent) {
+    if (!e.ctrlKey) return;
+    const point = { x: e.clientX, y: e.clientY };
+    move(point, point, Math.exp(-e.deltaY * 0.01));
+  }
+  // Safari trackpads send cumulative gesture scales. Touchscreens already
+  // supply the individual contacts used by the touch handlers above.
+  const safariPinch = useEffectEvent((event: Event) => {
+    if (
+      previous.current ||
+      !(
+        'clientX' in event &&
+        typeof event.clientX === 'number' &&
+        'clientY' in event &&
+        typeof event.clientY === 'number'
+      ) ||
+      !('scale' in event) ||
+      typeof event.scale !== 'number' ||
+      event.scale <= 0
+    )
+      return;
+    event.preventDefault();
+    const point = { x: event.clientX, y: event.clientY };
+    if (event.type === 'gesturestart') trackpadScale.current = 1;
+    move(point, point, event.scale / trackpadScale.current);
+    trackpadScale.current = event.scale;
+  });
+  useEffect(() => {
+    if (!('GestureEvent' in window)) return;
+    const surfaces = [trigger.current, stage.current];
+    const handle = (event: Event) => safariPinch(event);
+    for (const surface of surfaces) {
+      surface?.addEventListener('gesturestart', handle);
+      surface?.addEventListener('gesturechange', handle);
+    }
+    return () => {
+      for (const surface of surfaces) {
+        surface?.removeEventListener('gesturestart', handle);
+        surface?.removeEventListener('gesturechange', handle);
+      }
+    };
+  }, [open]);
   return (
     <>
       <button
+        ref={trigger}
         type="button"
         className="post-photo-button"
         aria-label="Enlarge post photo"
         aria-haspopup="dialog"
-        aria-expanded={open}
-        onClick={() => setOpen(true)}
+        aria-expanded={!!frame}
+        {...touchHandlers}
+        onWheel={wheel}
+        onClick={() =>
+          setFrame((current) => current ?? centered(photo.width, photo.height))
+        }
       >
         {children}
       </button>
-      {open && (
-        <ImageViewer
-          title="Post photo"
-          src={src}
-          alt={alt}
-          width={width}
-          height={height}
-          onClose={() => setOpen(false)}
-        />
+      {frame && (
+        <Dialog title="Post photo" appearance="image" onClose={close}>
+          <div
+            ref={stage}
+            className="post-zoom-stage"
+            {...touchHandlers}
+            onWheel={wheel}
+            onPointerDown={(e) => {
+              if (
+                e.pointerType === 'touch' ||
+                e.button !== 0 ||
+                (e.target instanceof Element && e.target.closest('button'))
+              )
+                return;
+              e.currentTarget.setPointerCapture(e.pointerId);
+              mouse.current = { x: e.clientX, y: e.clientY };
+            }}
+            onPointerMove={(e) => {
+              if (mouse.current && e.pointerType !== 'touch') {
+                const next = { x: e.clientX, y: e.clientY };
+                move(mouse.current, next, 1);
+                mouse.current = next;
+              }
+            }}
+            onLostPointerCapture={() => {
+              mouse.current = null;
+            }}
+            onKeyDown={(e) => {
+              const offsets: Record<string, Point> = {
+                ArrowLeft: { x: 40, y: 0 },
+                ArrowRight: { x: -40, y: 0 },
+                ArrowUp: { x: 0, y: 40 },
+                ArrowDown: { x: 0, y: -40 },
+              };
+              if (offsets[e.key]) {
+                e.preventDefault();
+                move({ x: 0, y: 0 }, offsets[e.key], 1);
+              }
+            }}
+          >
+            <ViewerImage
+              title="Post photo"
+              {...photo}
+              style={{
+                width: photo.width,
+                height: photo.height,
+                transform: `translate3d(${frame.x}px,${frame.y}px,0) scale(${frame.scale})`,
+              }}
+            />
+            <div className="post-zoom-controls">
+              <button aria-label="Zoom out" onClick={() => step(0.8)}>
+                −
+              </button>
+              <button aria-label="Zoom in" onClick={() => step(1.25)}>
+                +
+              </button>
+            </div>
+          </div>
+        </Dialog>
       )}
     </>
   );

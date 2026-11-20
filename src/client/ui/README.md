@@ -6,7 +6,7 @@ Crop dialogs use `announceWhileBusy` so pending mutations still block dismissal 
 
 `RelativeTime` displays `now`, then whole minutes, hours, days, weeks, and 365-day years. Posts and comments keep an ISO datetime plus the full local date as the title and accessible name. A local minute timer refreshes the text and is cleared on unmount; it never requests server data.
 
-`ImageViewer` composes the image dialog for profile photos, event covers, and focused post photos. Callers supply an authorized media URL, dimensions, alt text, and title. It preserves aspect ratio within the viewport, hides incomplete images behind loading/error status, and allows retry. It mounts only when opened and is discarded on close or route changes; profile, event, and post features own their respective open/availability rules.
+`ImageViewer` composes the image dialog for profile photos and event covers. Callers supply an authorized media URL, dimensions, alt text, and title. It preserves aspect ratio within the viewport, hides incomplete images behind loading/error status, and allows retry. It mounts only when opened and is discarded on close or route changes; profile and event features own their respective open/availability rules.
 
 `OverflowMenu` owns the shared vertical three-dot trigger, keyboard navigation, outside dismissal, and focus restoration. Post owners supply Edit caption/Delete post actions; other profiles supply Unfollow for accepted follows and Block account. Event hosts put Edit event, Invite people, Send update blast, and Cancel event in this menu; creators also get Delete event. Host management opens from Edit event. Selecting an action restores trigger focus before opening a dialog.
 
