@@ -1390,12 +1390,31 @@ it('opens and dismisses the zoomable post photo at phone width', async () => {
   await click('Enlarge post photo');
   expect(
     renderer.root.findByType('dialog').findByType('img').props.style.transform,
-  ).toContain('scale(0.3125)');
-  await click('Zoom in');
+  ).toContain('scale(0.4375)');
+  const stage = renderer.root.findByProps({ className: 'post-zoom-stage' });
+  await act(async () =>
+    stage.props.onWheel({
+      clientX: 200,
+      clientY: 400,
+      deltaY: -Math.log(2) / 0.002,
+      deltaMode: 0,
+    }),
+  );
   expect(
     renderer.root.findByType('dialog').findByType('img').props.style.transform,
-  ).toContain('scale(0.390625)');
-  await click('Close post photo');
+  ).toContain('scale(0.875)');
+  const background = {};
+  const tap = {
+    target: background,
+    currentTarget: background,
+    clientX: 10,
+    clientY: 10,
+    button: 0,
+    isPrimary: true,
+  };
+  await act(async () => stage.props.onPointerDown(tap));
+  await act(async () => stage.props.onClick(tap));
+  expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
   await click('Enlarge post photo');
   await act(async () =>
     renderer.update(createElement(PostDetail, { id: 'other' })),

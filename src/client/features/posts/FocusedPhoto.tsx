@@ -28,7 +28,7 @@ function fit(width: number, height: number) {
   return Math.min(window.innerWidth / width, window.innerHeight / height);
 }
 function centered(width: number, height: number): Frame {
-  const scale = fit(width, height) * 1.25;
+  const scale = fit(width, height) * 1.75;
   return {
     scale,
     x: (window.innerWidth - width * scale) / 2,
@@ -64,6 +64,7 @@ export function FocusedPhoto({
   const trigger = useRef<HTMLButtonElement>(null);
 
   const stage = useRef<HTMLDivElement>(null);
+  const backdropPress = useRef<Point | null>(null);
   const trackpadScale = useRef(1);
   const previous = useRef<Gesture | null>(null);
   const mouse = useRef<Point | null>(null);
@@ -128,6 +129,7 @@ export function FocusedPhoto({
     move(center, center, ratio);
   }
   function close() {
+    backdropPress.current = null;
     previous.current = null;
     mouse.current = null;
     setFrame(null);
@@ -153,9 +155,11 @@ export function FocusedPhoto({
     },
   };
   function wheel(e: React.WheelEvent) {
-    if (!e.ctrlKey) return;
+    if (!open && !e.ctrlKey) return;
     const point = { x: e.clientX, y: e.clientY };
-    move(point, point, Math.exp(-e.deltaY * 0.01));
+    const unit =
+      e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1;
+    move(point, point, Math.exp(-e.deltaY * unit * (e.ctrlKey ? 0.01 : 0.002)));
   }
   // Safari trackpads send cumulative gesture scales. Touchscreens already
   // supply the individual contacts used by the touch handlers above.
@@ -219,22 +223,55 @@ export function FocusedPhoto({
             {...touchHandlers}
             onWheel={wheel}
             onPointerDown={(e) => {
+              const background =
+                e.target === e.currentTarget ||
+                (e.target instanceof Element &&
+                  e.target.classList.contains('image-viewer'));
+              backdropPress.current =
+                background && e.isPrimary && e.button === 0
+                  ? { x: e.clientX, y: e.clientY }
+                  : null;
               if (
+                background ||
                 e.pointerType === 'touch' ||
                 e.button !== 0 ||
-                (e.target instanceof Element && e.target.closest('button'))
+                !(e.target instanceof HTMLImageElement)
               )
                 return;
               e.currentTarget.setPointerCapture(e.pointerId);
               mouse.current = { x: e.clientX, y: e.clientY };
             }}
             onPointerMove={(e) => {
+              const press = backdropPress.current;
+              if (
+                press &&
+                Math.hypot(e.clientX - press.x, e.clientY - press.y) > 6
+              )
+                backdropPress.current = null;
               if (mouse.current && e.pointerType !== 'touch') {
                 const next = { x: e.clientX, y: e.clientY };
                 move(mouse.current, next, 1);
                 mouse.current = next;
               }
             }}
+            onPointerCancel={() => {
+              backdropPress.current = null;
+            }}
+            onClick={(e) => {
+              const press = backdropPress.current;
+              backdropPress.current = null;
+              if (
+                press &&
+                Math.hypot(e.clientX - press.x, e.clientY - press.y) <= 6 &&
+                (e.target === e.currentTarget ||
+                  (e.target instanceof Element &&
+                    e.target.classList.contains('image-viewer')))
+              )
+                close();
+            }}
+            tabIndex={0}
+            aria-label="Photo viewer. Use plus and minus to zoom and arrow keys to pan."
+            role="group"
             onLostPointerCapture={() => {
               mouse.current = null;
             }}
@@ -245,6 +282,10 @@ export function FocusedPhoto({
                 ArrowUp: { x: 0, y: 40 },
                 ArrowDown: { x: 0, y: -40 },
               };
+              if (['+', '=', '-'].includes(e.key)) {
+                e.preventDefault();
+                step(e.key === '-' ? 0.8 : 1.25);
+              }
               if (offsets[e.key]) {
                 e.preventDefault();
                 move({ x: 0, y: 0 }, offsets[e.key], 1);
@@ -260,14 +301,6 @@ export function FocusedPhoto({
                 transform: `translate3d(${frame.x}px,${frame.y}px,0) scale(${frame.scale})`,
               }}
             />
-            <div className="post-zoom-controls">
-              <button aria-label="Zoom out" onClick={() => step(0.8)}>
-                −
-              </button>
-              <button aria-label="Zoom in" onClick={() => step(1.25)}>
-                +
-              </button>
-            </div>
           </div>
         </Dialog>
       )}
