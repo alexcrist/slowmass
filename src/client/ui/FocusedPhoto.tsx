@@ -6,8 +6,8 @@ import {
   type ReactElement,
   type TouchList,
 } from 'react';
-import { Dialog } from '../../ui/Dialog';
-import { ViewerImage } from '../../ui/ImageViewer';
+import { Dialog } from './Dialog';
+import { ViewerImage } from './ImageViewer';
 
 type Point = { x: number; y: number };
 type Frame = Point & { scale: number };
@@ -27,8 +27,8 @@ function fingers(touches: TouchList): Gesture | null {
 function fit(width: number, height: number) {
   return Math.min(window.innerWidth / width, window.innerHeight / height);
 }
-function centered(width: number, height: number): Frame {
-  const scale = fit(width, height) * 1.75;
+function centered(width: number, height: number, zoom: number): Frame {
+  const scale = fit(width, height) * zoom;
   return {
     scale,
     x: (window.innerWidth - width * scale) / 2,
@@ -53,8 +53,16 @@ function bounded(
 
 export function FocusedPhoto({
   children,
+  title,
+  triggerLabel,
+  triggerClass,
+  openingZoom,
   ...photo
 }: {
+  title: string;
+  triggerLabel: string;
+  triggerClass: string;
+  openingZoom: number;
   src: string;
   alt: string;
   width: number;
@@ -65,13 +73,15 @@ export function FocusedPhoto({
 
   const stage = useRef<HTMLDivElement>(null);
   const backdropPress = useRef<Point | null>(null);
+  const lastTap = useRef<(Point & { time: number }) | null>(null);
+  const tapStart = useRef<(Point & { time: number }) | null>(null);
   const trackpadScale = useRef(1);
   const previous = useRef<Gesture | null>(null);
   const mouse = useRef<Point | null>(null);
   const [frame, setFrame] = useState<Frame | null>(null);
   function inlineFrame() {
     const image = trigger.current?.querySelector('img');
-    if (!image) return centered(photo.width, photo.height);
+    if (!image) return centered(photo.width, photo.height, openingZoom);
     const rect = image.getBoundingClientRect();
     const scale = Math.min(
       image.clientWidth / photo.width,
@@ -132,6 +142,7 @@ export function FocusedPhoto({
     backdropPress.current = null;
     previous.current = null;
     mouse.current = null;
+    lastTap.current = tapStart.current = null;
     setFrame(null);
     trigger.current?.focus({ preventScroll: true });
   }
@@ -139,11 +150,11 @@ export function FocusedPhoto({
   useEffect(() => {
     if (!open) return;
     const resize = () => {
-      setFrame(centered(photo.width, photo.height));
+      setFrame(centered(photo.width, photo.height, openingZoom));
     };
     window.addEventListener('resize', resize);
     return () => window.removeEventListener('resize', resize);
-  }, [open, photo.width, photo.height]);
+  }, [open, photo.width, photo.height, openingZoom]);
   const touchHandlers = {
     onTouchStart: (e: React.TouchEvent) => start(e.touches),
     onTouchMove: (e: React.TouchEvent) => drag(e.touches),
@@ -203,24 +214,75 @@ export function FocusedPhoto({
       <button
         ref={trigger}
         type="button"
-        className="post-photo-button"
-        aria-label="Enlarge post photo"
+        className={triggerClass}
+        aria-label={triggerLabel}
         aria-haspopup="dialog"
         aria-expanded={!!frame}
         {...touchHandlers}
         onWheel={wheel}
         onClick={() =>
-          setFrame((current) => current ?? centered(photo.width, photo.height))
+          setFrame(
+            (current) =>
+              current ?? centered(photo.width, photo.height, openingZoom),
+          )
         }
       >
         {children}
       </button>
       {frame && (
-        <Dialog title="Post photo" appearance="image" onClose={close}>
+        <Dialog title={title} appearance="image" onClose={close}>
           <div
             ref={stage}
-            className="post-zoom-stage"
-            {...touchHandlers}
+            className="photo-zoom-stage"
+            onTouchStart={(e) => {
+              start(e.touches);
+              const point = previous.current;
+              tapStart.current =
+                e.touches.length === 1 &&
+                point &&
+                e.target instanceof HTMLImageElement
+                  ? { ...point, time: e.timeStamp }
+                  : null;
+              if (!tapStart.current) lastTap.current = null;
+            }}
+            onTouchMove={(e) => {
+              drag(e.touches);
+              const point = previous.current;
+              const tap = tapStart.current;
+              if (
+                tap &&
+                point &&
+                Math.hypot(point.x - tap.x, point.y - tap.y) > 12
+              )
+                lastTap.current = tapStart.current = null;
+            }}
+            onTouchCancel={() => {
+              previous.current = lastTap.current = tapStart.current = null;
+            }}
+            onTouchEnd={(e) => {
+              previous.current = fingers(e.touches);
+              const tap = tapStart.current;
+              tapStart.current = null;
+              if (!tap || e.touches.length || e.timeStamp - tap.time > 300) {
+                lastTap.current = null;
+                return;
+              }
+              const last = lastTap.current;
+              if (
+                last &&
+                e.timeStamp - last.time <= 350 &&
+                Math.hypot(tap.x - last.x, tap.y - last.y) <= 30
+              ) {
+                setFrame(centered(photo.width, photo.height, 1));
+                lastTap.current = null;
+              } else {
+                lastTap.current = { ...tap, time: e.timeStamp };
+              }
+            }}
+            onDoubleClick={(e) => {
+              if (e.target instanceof HTMLImageElement)
+                setFrame(centered(photo.width, photo.height, 1));
+            }}
             onWheel={wheel}
             onPointerDown={(e) => {
               const background =
@@ -293,7 +355,7 @@ export function FocusedPhoto({
             }}
           >
             <ViewerImage
-              title="Post photo"
+              title={title}
               {...photo}
               style={{
                 width: photo.width,

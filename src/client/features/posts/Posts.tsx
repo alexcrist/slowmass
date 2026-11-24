@@ -9,7 +9,7 @@ import { useSeenActivity } from '../notifications';
 import { useApiResource } from '../../api/useApiResource';
 import { RelativeTime } from '../../ui/RelativeTime';
 import { PostActions } from './PostActions';
-import { FocusedPhoto } from './FocusedPhoto';
+import { FocusedPhoto } from '../../ui/FocusedPhoto';
 import { captionParagraphs } from './caption';
 type Post = {
   id: string;
@@ -166,6 +166,10 @@ function PostCard({
         )}
       </header>
       <FocusedPhoto
+        title="Post photo"
+        triggerLabel="Enlarge post photo"
+        triggerClass="post-photo-button"
+        openingZoom={1.75}
         src={post.mediaUrl}
         alt={post.altText || `Photo by ${post.handle}`}
         width={post.width}

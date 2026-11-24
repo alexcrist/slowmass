@@ -1302,6 +1302,7 @@ it.each([
 it.each(['self', 'none'])(
   'enlarges a profile photo on demand, supports retry, and discards it on navigation (%s)',
   async (relationship) => {
+    Object.assign(window, { innerWidth: 400, innerHeight: 800 });
     await mount(createElement(ProfilePage, { handle: 'alice' }));
     await reply(pending('/api/people/alice'), {
       profile: { ...ownProfile, relationship, bio: null },
@@ -1328,6 +1329,24 @@ it.each(['self', 'none'])(
     await act(async () => image.props.onLoad());
     expect(image.props.style.visibility).toBe('visible');
     expect(visibleText()).not.toContain('Loading profile photo…');
+    const stage = renderer.root.findByProps({ className: 'photo-zoom-stage' });
+    const touches = (xs: number[]) =>
+      xs.map((clientX) => ({ clientX, clientY: 400 }));
+    expect(image.props.style.transform).toBe(
+      'translate3d(0px,200px,0) scale(0.25)',
+    );
+    await act(async () =>
+      stage.props.onTouchStart({ touches: touches([150, 250]) }),
+    );
+    await act(async () =>
+      stage.props.onTouchMove({ touches: touches([100, 300]) }),
+    );
+    await act(async () => stage.props.onTouchEnd({ touches: [] }));
+    expect(image.props.style.transform).toContain('scale(0.5)');
+    await doubleTapPhoto();
+    expect(image.props.style.transform).toBe(
+      'translate3d(0px,200px,0) scale(0.25)',
+    );
     await click('Close profile photo');
     expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
     await click("Enlarge alice's profile photo");
@@ -1351,6 +1370,29 @@ it.each(['self', 'none'])(
     );
   },
 );
+
+async function doubleTapPhoto() {
+  const stage = renderer.root.findByProps({ className: 'photo-zoom-stage' });
+  class TestImage {}
+  vi.stubGlobal('HTMLImageElement', TestImage);
+  const target = new TestImage();
+  for (const timeStamp of [100, 250]) {
+    await act(async () =>
+      stage.props.onTouchStart({
+        target,
+        timeStamp,
+        touches: [{ clientX: 180, clientY: 390 }],
+      }),
+    );
+    await act(async () =>
+      stage.props.onTouchEnd({
+        target,
+        timeStamp: timeStamp + 40,
+        touches: [],
+      }),
+    );
+  }
+}
 
 it('opens and dismisses the zoomable post photo at phone width', async () => {
   Object.assign(window, { innerWidth: 400, innerHeight: 800 });
@@ -1391,7 +1433,7 @@ it('opens and dismisses the zoomable post photo at phone width', async () => {
   expect(
     renderer.root.findByType('dialog').findByType('img').props.style.transform,
   ).toContain('scale(0.4375)');
-  const stage = renderer.root.findByProps({ className: 'post-zoom-stage' });
+  const stage = renderer.root.findByProps({ className: 'photo-zoom-stage' });
   await act(async () =>
     stage.props.onWheel({
       clientX: 200,
@@ -1403,6 +1445,10 @@ it('opens and dismisses the zoomable post photo at phone width', async () => {
   expect(
     renderer.root.findByType('dialog').findByType('img').props.style.transform,
   ).toContain('scale(0.875)');
+  await doubleTapPhoto();
+  expect(
+    renderer.root.findByType('dialog').findByType('img').props.style.transform,
+  ).toBe('translate3d(0px,275px,0) scale(0.25)');
   const background = {};
   const tap = {
     target: background,

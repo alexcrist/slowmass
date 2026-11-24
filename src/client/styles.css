@@ -2970,11 +2970,11 @@ textarea::placeholder {
 html {
   touch-action: pan-x pan-y;
 }
-.app-dialog-image:has(.post-zoom-stage) .icon-button {
+.app-dialog-image:has(.photo-zoom-stage) .icon-button {
   z-index: 2;
   background: #222;
 }
-.post-zoom-stage {
+.photo-zoom-stage {
   position: fixed;
   inset: 0;
   overflow: hidden;
@@ -2982,13 +2982,13 @@ html {
   user-select: none;
   cursor: grab;
 }
-.post-zoom-stage:active {
+.photo-zoom-stage:active {
   cursor: grabbing;
 }
-.post-zoom-stage .image-viewer {
+.photo-zoom-stage .image-viewer {
   height: 100%;
 }
-.post-zoom-stage .image-viewer-photo {
+.photo-zoom-stage .image-viewer-photo {
   transform-origin: top left;
   will-change: transform;
   position: absolute;
