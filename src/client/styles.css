@@ -781,7 +781,7 @@ a.notification-person:hover {
   display: block;
   width: 100%;
   height: auto;
-  max-height: 200cqw;
+  max-height: min(400cqw, 200svh);
   object-fit: contain;
   background: var(--paper);
   border: 1px solid var(--line);
