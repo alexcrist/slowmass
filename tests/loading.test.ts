@@ -1347,6 +1347,11 @@ it.each(['self', 'none'])(
     expect(image.props.style.transform).toBe(
       'translate3d(0px,200px,0) scale(0.25)',
     );
+    await doubleTapPhoto();
+    expect(image.props.style.transform).toBe(
+      'translate3d(-180px,10px,0) scale(0.5)',
+    );
+    expect(stage.props['data-animate-zoom']).toBe(true);
     await click('Close profile photo');
     expect(renderer.root.findAllByType('dialog')).toHaveLength(0);
     await click("Enlarge alice's profile photo");
@@ -1449,6 +1454,11 @@ it('opens and dismisses the zoomable post photo at phone width', async () => {
   expect(
     renderer.root.findByType('dialog').findByType('img').props.style.transform,
   ).toBe('translate3d(0px,275px,0) scale(0.25)');
+  expect(stage.props['data-animate-zoom']).toBe(true);
+  await doubleTapPhoto();
+  expect(
+    renderer.root.findByType('dialog').findByType('img').props.style.transform,
+  ).toBe('translate3d(-180px,160px,0) scale(0.5)');
   const background = {};
   const tap = {
     target: background,

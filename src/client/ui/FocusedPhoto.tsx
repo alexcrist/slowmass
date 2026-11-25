@@ -77,6 +77,8 @@ export function FocusedPhoto({
   const tapStart = useRef<(Point & { time: number }) | null>(null);
   const trackpadScale = useRef(1);
   const previous = useRef<Gesture | null>(null);
+  const touchPointer = useRef(false);
+  const [animateZoom, setAnimateZoom] = useState(false);
   const mouse = useRef<Point | null>(null);
   const [frame, setFrame] = useState<Frame | null>(null);
   function inlineFrame() {
@@ -94,6 +96,7 @@ export function FocusedPhoto({
     };
   }
   function move(from: Point, to: Point, ratio: number) {
+    setAnimateZoom(false);
     const base = frame ?? inlineFrame();
     const fitted = fit(photo.width, photo.height);
     setFrame((current) => {
@@ -119,6 +122,24 @@ export function FocusedPhoto({
       };
     });
   }
+  function toggleZoom(point: Point) {
+    if (!frame) return;
+    const reset = centered(photo.width, photo.height, 1);
+    const atFit =
+      Math.abs(frame.scale / reset.scale - 1) < 0.001 &&
+      Math.abs(frame.x - reset.x) < 1 &&
+      Math.abs(frame.y - reset.y) < 1;
+    setAnimateZoom(true);
+    setFrame(
+      atFit
+        ? {
+            scale: reset.scale * 2,
+            x: 2 * reset.x - point.x,
+            y: 2 * reset.y - point.y,
+          }
+        : reset,
+    );
+  }
   function start(touches: TouchList) {
     previous.current = fingers(touches);
     if (!frame && touches.length === 2) setFrame(inlineFrame());
@@ -143,6 +164,7 @@ export function FocusedPhoto({
     previous.current = null;
     mouse.current = null;
     lastTap.current = tapStart.current = null;
+    setAnimateZoom(false);
     setFrame(null);
     trigger.current?.focus({ preventScroll: true });
   }
@@ -150,6 +172,7 @@ export function FocusedPhoto({
   useEffect(() => {
     if (!open) return;
     const resize = () => {
+      setAnimateZoom(false);
       setFrame(centered(photo.width, photo.height, openingZoom));
     };
     window.addEventListener('resize', resize);
@@ -234,6 +257,7 @@ export function FocusedPhoto({
           <div
             ref={stage}
             className="photo-zoom-stage"
+            data-animate-zoom={animateZoom || undefined}
             onTouchStart={(e) => {
               start(e.touches);
               const point = previous.current;
@@ -273,18 +297,19 @@ export function FocusedPhoto({
                 e.timeStamp - last.time <= 350 &&
                 Math.hypot(tap.x - last.x, tap.y - last.y) <= 30
               ) {
-                setFrame(centered(photo.width, photo.height, 1));
+                toggleZoom(tap);
                 lastTap.current = null;
               } else {
                 lastTap.current = { ...tap, time: e.timeStamp };
               }
             }}
             onDoubleClick={(e) => {
-              if (e.target instanceof HTMLImageElement)
-                setFrame(centered(photo.width, photo.height, 1));
+              if (!touchPointer.current && e.target instanceof HTMLImageElement)
+                toggleZoom({ x: e.clientX, y: e.clientY });
             }}
             onWheel={wheel}
             onPointerDown={(e) => {
+              touchPointer.current = e.pointerType === 'touch';
               const background =
                 e.target === e.currentTarget ||
                 (e.target instanceof Element &&
@@ -300,7 +325,7 @@ export function FocusedPhoto({
                 !(e.target instanceof HTMLImageElement)
               )
                 return;
-              e.currentTarget.setPointerCapture(e.pointerId);
+              e.target.setPointerCapture(e.pointerId);
               mouse.current = { x: e.clientX, y: e.clientY };
             }}
             onPointerMove={(e) => {

@@ -2996,3 +2996,8 @@ html {
   max-width: none;
   max-height: none;
 }
+@media (prefers-reduced-motion: no-preference) {
+  .photo-zoom-stage[data-animate-zoom] .image-viewer-photo {
+    transition: transform 200ms ease-out;
+  }
+}
