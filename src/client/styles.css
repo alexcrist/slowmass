@@ -135,11 +135,7 @@ button:disabled {
   font-size: 26px;
 }
 .member-shell {
-  --nav-safe-bottom: env(
-    safe-area-max-inset-bottom,
-    env(safe-area-inset-bottom, 0px)
-  );
-  padding-bottom: calc(90px + var(--nav-safe-bottom));
+  padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px));
 }
 .account-section {
   max-width: 640px;
@@ -1608,11 +1604,6 @@ img.composer-avatar {
   text-align: center;
 }
 @media (max-width: 899px) {
-  /* Reserve gesture space once as Android browser controls slide in and out. */
-  .app-navigation {
-    padding-bottom: var(--nav-safe-bottom);
-    bottom: calc(env(safe-area-inset-bottom, 0px) - var(--nav-safe-bottom));
-  }
   .profile-header {
     padding: 16px;
   }
